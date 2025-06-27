@@ -436,22 +436,40 @@ class DatabaseManager {
 
     migrateMerchantsTable() {
         try {
-            // 检查merchants表是否存在新字段
-            const tableInfo = this.db.prepare("PRAGMA table_info(merchants)").all();
-            const columnNames = tableInfo.map(col => col.name);
+            console.log('检查merchants表字段...');
             
-            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url'];
+            // 检查表结构
+            const columns = this.db.prepare("PRAGMA table_info(merchants)").all();
+            const columnNames = columns.map(col => col.name);
             
-            for (const column of requiredColumns) {
-                if (!columnNames.includes(column)) {
-                    console.log(`添加字段 ${column} 到 merchants 表`);
-                    if (column.startsWith('price') || column === 'channel_clicks') {
-                        this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);
-                    } else {
-                        this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} TEXT`);
+            console.log('当前merchants表字段:', columnNames);
+            
+            // 需要检查的字段列表 - 按照实际数据库定义的顺序
+            const requiredFields = ['advantages', 'disadvantages', 'price1', 'price2', 
+                                  'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 
+                                  'channel_link', 'channel_clicks', 'image_url'];
+            
+            // 添加缺失的字段
+            for (const field of requiredFields) {
+                if (!columnNames.includes(field)) {
+                    console.log(`添加缺失字段: ${field}`);
+                    try {
+                        if (field.startsWith('price') || field === 'channel_clicks') {
+                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${field} INTEGER DEFAULT 0`);
+                        } else {
+                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${field} TEXT`);
+                        }
+                        console.log(`✅ 成功添加字段: ${field}`);
+                    } catch (error) {
+                        if (!error.message.includes('duplicate column name')) {
+                            console.error(`添加字段 ${field} 失败:`, error);
+                        }
                     }
                 }
             }
+            
+            console.log('✅ merchants表字段迁移完成');
+            
         } catch (error) {
             console.error('迁移merchants表失败:', error);
         }
@@ -603,7 +621,9 @@ class DatabaseManager {
                         FOREIGN KEY (merchant_id) REFERENCES merchants (id)
                     );
                 `);
-                console.log('channel_clicks表创建完成');
+                console.log('✅ channel_clicks表创建完成');
+            } else {
+                console.log('channel_clicks表已存在，跳过创建');
             }
         } catch (error) {
             console.error('迁移channel_clicks表失败:', error);

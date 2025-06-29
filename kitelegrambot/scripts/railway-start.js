@@ -2,6 +2,7 @@
 
 // Railway部署专用启动脚本
 // 简化启动流程，确保快速响应健康检查
+// 完全不触碰数据库，让主应用自己处理所有初始化
 
 console.log('🚀 Railway部署启动脚本');
 console.log('📅 启动时间:', new Date().toISOString());
@@ -70,26 +71,9 @@ async function startApp() {
     // 等待权限修复完成
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // 初始化数据库表结构和示例数据
-    console.log('🔧 初始化数据库表结构和示例数据...');
-    try {
-        // 先尝试基础表结构初始化
-        const { initializeDatabase } = require('./init-database.js');
-        const basicSuccess = initializeDatabase();
-        
-        // 再尝试staging数据初始化
-        const { initializeDatabase: initStagingData } = require('./init-staging-data.js');
-        const stagingSuccess = initStagingData();
-        
-        if (basicSuccess && stagingSuccess) {
-            console.log('✅ 数据库和示例数据初始化成功');
-        } else {
-            console.log('⚠️ 数据库初始化部分失败，但继续启动');
-        }
-    } catch (error) {
-        console.log('⚠️ 数据库初始化异常:', error.message);
-        console.log('📋 继续启动应用...');
-    }
+    // 直接启动主应用，不做任何数据库操作
+    // 让app.js自己处理数据库初始化和数据迁移
+    console.log('🔄 开始启动完整应用服务...');
     
     require('../app.js');
 }

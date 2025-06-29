@@ -1295,6 +1295,7 @@ class ApiService {
                     m.teacher_name,
                     m.username,
                     r.name as region_name,
+                    m.channel_clicks,
                     COUNT(DISTINCT o.id) as totalOrders,
                     COUNT(DISTINCT CASE WHEN bs.user_course_status = 'completed' THEN o.id END) as completedOrders,
                     AVG(CASE WHEN e.overall_score IS NOT NULL THEN e.overall_score END) as avgRating,
@@ -1319,7 +1320,7 @@ class ApiService {
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 LEFT JOIN evaluations e ON bs.id = e.booking_session_id AND e.evaluator_type = 'user'
                 WHERE ${whereClause}
-                GROUP BY m.id, m.teacher_name, m.username, r.name
+                GROUP BY m.id, m.teacher_name, m.username, r.name, m.channel_clicks
                 ORDER BY completedOrders DESC, totalOrders DESC, avgRating DESC
                 LIMIT 50
             `;

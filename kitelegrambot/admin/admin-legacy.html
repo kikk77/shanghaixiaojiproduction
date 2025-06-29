@@ -206,6 +206,22 @@
                     <div class="stat-number" id="totalClicks">0</div>
                     <div>👆 总点击数</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalInteractions">0</div>
+                    <div>🔄 总交互次数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="uniqueUsers">0</div>
+                    <div>👥 独立用户数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="activeChats">0</div>
+                    <div>💬 活跃会话数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="userEngagement">0%</div>
+                    <div>📈 用户参与度</div>
+                </div>
             </div>
             
             <div class="card">
@@ -1384,6 +1400,19 @@
                 document.getElementById('totalRegions').textContent = basicStats.totalRegions || 0;
                 document.getElementById('totalTemplates').textContent = basicStats.totalTemplates || 0;
                 document.getElementById('totalClicks').textContent = basicStats.totalClicks || 0;
+                
+                // 更新新增的用户互动统计
+                document.getElementById('totalInteractions').textContent = (basicStats.totalInteractions || 0).toLocaleString();
+                document.getElementById('uniqueUsers').textContent = (basicStats.uniqueUsers || 0).toLocaleString();
+                document.getElementById('activeChats').textContent = (basicStats.activeChats || 0).toLocaleString();
+                document.getElementById('userEngagement').textContent = `${basicStats.userEngagement || 0}%`;
+                
+                console.log('用户互动统计更新完成:', {
+                    totalInteractions: basicStats.totalInteractions,
+                    uniqueUsers: basicStats.uniqueUsers,
+                    activeChats: basicStats.activeChats,
+                    userEngagement: basicStats.userEngagement
+                });
                 
                 console.log('统计数据加载完成');
             } catch (error) {

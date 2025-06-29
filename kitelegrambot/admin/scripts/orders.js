@@ -1007,7 +1007,11 @@ class OptimizedOrdersManager {
             'totalBindCodes': data.totalBindCodes || 0,
             'totalRegions': data.totalRegions || 0,
             'totalTemplates': data.totalTemplates || 0,
-            'totalClicks': data.totalClicks || 0
+            'totalClicks': data.totalClicks || 0,
+            // 新增的用户互动统计
+            'totalInteractions': data.totalInteractions || 0,
+            'uniqueUsers': data.uniqueUsers || 0,
+            'activeChats': data.activeChats || 0
         };
 
         console.log('🏪 处理后的基础数据映射:', basicElements);
@@ -1022,6 +1026,16 @@ class OptimizedOrdersManager {
                 console.log(`🏪 未找到基础统计元素: ${elementId}`);
             }
         });
+        
+        // 用户参与度需要特殊处理
+        const userEngagementElement = document.getElementById('userEngagement');
+        if (userEngagementElement) {
+            const engagement = data.userEngagement || 0;
+            userEngagementElement.textContent = `${engagement}次/人`;
+            console.log('🏪 userEngagement 更新为:', `${engagement}次/人`);
+        } else {
+            console.log('🏪 未找到基础统计元素: userEngagement');
+        }
 
         console.log('🏪 基础统计数据更新完成');
     }

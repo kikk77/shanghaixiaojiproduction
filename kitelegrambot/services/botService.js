@@ -2543,8 +2543,15 @@ async function handleEvaluationSubmit(userId, data, query) {
         
         // 先保存12项评价数据到数据库
         const scores = userState.scores;
-        dbOperations.updateEvaluation(evaluationId, null, scores, null, 'completed');
-        console.log(`📝 12项评价数据已保存到数据库: ${evaluationId}`, scores);
+        try {
+            const updateResult = dbOperations.updateEvaluation(evaluationId, null, scores, null, 'completed');
+            console.log(`📝 12项评价数据已保存到数据库: ${evaluationId}`, scores);
+            console.log('数据库更新结果:', updateResult);
+        } catch (error) {
+            console.error('保存12项评价数据失败:', error);
+            await bot.sendMessage(userId, '保存评价数据失败，请重试！');
+            return;
+        }
         
         // 删除评价消息
         if (userState.messageId) {
@@ -2566,7 +2573,9 @@ async function handleEvaluationSubmit(userId, data, query) {
         }
         
         // 显示用户文字评价步骤
+        console.log(`🔄 准备显示文字评价步骤: userId=${userId}, evaluationId=${evaluationId}`);
         await showUserTextCommentStep(userId, evaluationId, userState.scores);
+        console.log(`✅ 文字评价步骤已发送`);
         
     } catch (error) {
         console.error('处理评价提交失败:', error);
@@ -2628,6 +2637,9 @@ function getScoreKeyboard(step, evaluationId) {
 // 显示用户文字评价步骤
 async function showUserTextCommentStep(userId, evaluationId, scores) {
     try {
+        console.log(`📝 showUserTextCommentStep调用: userId=${userId}, evaluationId=${evaluationId}`);
+        console.log(`📊 用户评分数据:`, scores);
+        
         const message = `✅ 您的12项评价已提交成功！
 
 额外点评（额外输入文字点评，任何都行）：
@@ -2645,12 +2657,14 @@ async function showUserTextCommentStep(userId, evaluationId, scores) {
             ]
         };
         
-        await sendMessageWithoutDelete(userId, message, { 
+        console.log(`📤 准备发送文字评价消息给用户 ${userId}`);
+        const sentMessage = await sendMessageWithoutDelete(userId, message, { 
             reply_markup: keyboard 
         }, 'user_text_comment', {
             evaluationId,
             scores
         });
+        console.log(`✅ 文字评价消息已发送, messageId: ${sentMessage?.message_id}`);
         
     } catch (error) {
         console.error('显示用户文字评价步骤失败:', error);

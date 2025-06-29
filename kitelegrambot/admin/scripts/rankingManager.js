@@ -478,6 +478,12 @@ class RankingManager {
                 orderInfo = `${completedOrders}单`;
             }
             
+            // 添加点击数显示（在非点击排名模式下也显示）
+            let clickInfo = '';
+            if (rankingType !== 'channelClicks' && channelClicks > 0) {
+                clickInfo = ` • ${channelClicks}次点击`;
+            }
+            
             // 使用正确的商家ID字段
             const merchantId = merchant.merchantId || merchant.id;
             
@@ -485,7 +491,9 @@ class RankingManager {
                 rank: rankNumber,
                 teacher_name: merchantName,
                 completedOrders,
+                channelClicks,
                 orderInfo,
+                clickInfo,
                 merchantId
             });
             
@@ -496,7 +504,7 @@ class RankingManager {
                         <span class="merchant-name">${merchantName}</span>
                     </div>
                     <div class="rank-data">
-                        <span class="order-count">${orderInfo}</span>
+                        <span class="order-count">${orderInfo}${clickInfo}</span>
                         <button class="report-btn" onclick="window.rankingManager.generateMerchantReportFromRanking(${merchantId}, ${year}, ${month})" title="生成报告">
                             报告
                         </button>

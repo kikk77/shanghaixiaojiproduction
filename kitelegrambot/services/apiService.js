@@ -1575,7 +1575,16 @@ class ApiService {
             const attackClicks = db.prepare('SELECT COUNT(*) as count FROM interactions WHERE action_type = ?').get('attack_click').count;
             const totalClicks = attackClicks; // 总点击数就是预约按钮点击数
             
+            // 获取用户互动统计
+            const totalInteractions = db.prepare('SELECT COUNT(*) as count FROM interactions').get().count;
+            const uniqueUsers = db.prepare('SELECT COUNT(DISTINCT user_id) as count FROM interactions').get().count;
+            const activeChats = db.prepare('SELECT COUNT(DISTINCT chat_id) as count FROM interactions').get().count;
+            
+            // 计算用户参与度 (平均每用户交互次数)
+            const userEngagement = uniqueUsers > 0 ? Math.round((totalInteractions / uniqueUsers) * 10) / 10 : 0;
+            
             console.log(`点击统计详情: 预约点击=${attackClicks}, 总点击数=${totalClicks}`);
+            console.log(`用户互动统计: 总交互=${totalInteractions}, 独立用户=${uniqueUsers}, 活跃会话=${activeChats}, 参与度=${userEngagement}`);
             console.log(`商家统计: 总数=${totalMerchants}, 活跃=${activeMerchants}`);
             console.log(`订单统计: 总数=${totalOrders}, 完成=${completedOrders}, 待处理=${pendingOrders}`);
             
@@ -1593,6 +1602,11 @@ class ApiService {
                 pendingOrders,
                 totalClicks,
                 attackClicks,
+                // 新增的用户互动统计
+                totalInteractions,
+                uniqueUsers,
+                activeChats,
+                userEngagement,
                 lastUpdated: new Date().toISOString(),
                 ...interactionStats
             };

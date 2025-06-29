@@ -202,5 +202,65 @@
     "comments": null,
     "status": "completed",
     "created_at": 1751205343
+  },
+  {
+    "id": 22,
+    "booking_session_id": 701,
+    "evaluator_type": "user",
+    "evaluator_id": 6843026401,
+    "target_id": 7,
+    "overall_score": null,
+    "detailed_scores": null,
+    "comments": null,
+    "status": "pending",
+    "created_at": 1751213446
+  },
+  {
+    "id": 23,
+    "booking_session_id": 710,
+    "evaluator_type": "user",
+    "evaluator_id": 6843026401,
+    "target_id": 7,
+    "overall_score": null,
+    "detailed_scores": "{\"appearance\":7,\"breasts\":9,\"legs\":9,\"feet\":9,\"waist\":9,\"tightness\":10,\"temperament\":10,\"environment\":9,\"sexiness\":10,\"attitude\":9,\"voice\":10,\"initiative\":10}",
+    "comments": null,
+    "status": "completed",
+    "created_at": 1751219189
+  },
+  {
+    "id": 24,
+    "booking_session_id": 712,
+    "evaluator_type": "user",
+    "evaluator_id": 6843026401,
+    "target_id": 7,
+    "overall_score": null,
+    "detailed_scores": "{\"appearance\":9,\"breasts\":10,\"waist\":10,\"legs\":10,\"feet\":10,\"tightness\":10,\"temperament\":10,\"environment\":10,\"sexiness\":10,\"attitude\":10,\"voice\":10,\"initiative\":10}",
+    "comments": null,
+    "status": "completed",
+    "created_at": 1751219748
+  },
+  {
+    "id": 25,
+    "booking_session_id": 714,
+    "evaluator_type": "user",
+    "evaluator_id": 6843026401,
+    "target_id": 7,
+    "overall_score": null,
+    "detailed_scores": "{\"initiative\":10,\"voice\":9,\"attitude\":10,\"sexiness\":10,\"environment\":9,\"temperament\":10,\"feet\":9,\"legs\":10,\"waist\":10,\"breasts\":10,\"tightness\":10,\"appearance\":10}",
+    "comments": null,
+    "status": "completed",
+    "created_at": 1751219957
+  },
+  {
+    "id": 26,
+    "booking_session_id": 712,
+    "evaluator_type": "merchant",
+    "evaluator_id": 6853276574,
+    "target_id": 6843026401,
+    "overall_score": 9,
+    "detailed_scores": "{\"length\":8,\"hardness\":9,\"duration\":\"30min\"}",
+    "comments": null,
+    "status": "detail_completed",
+    "created_at": 1751221659
   }
 ]

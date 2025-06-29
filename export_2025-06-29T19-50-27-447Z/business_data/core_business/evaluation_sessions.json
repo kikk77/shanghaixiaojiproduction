@@ -169,5 +169,59 @@
     "temp_data": null,
     "created_at": 1751205343,
     "updated_at": 1751205343
+  },
+  {
+    "id": 27,
+    "user_id": 6843026401,
+    "evaluation_id": 22,
+    "current_step": "start",
+    "temp_data": null,
+    "created_at": 1751213446,
+    "updated_at": 1751213446
+  },
+  {
+    "id": 28,
+    "user_id": 6843026401,
+    "evaluation_id": 23,
+    "current_step": "start",
+    "temp_data": null,
+    "created_at": 1751219189,
+    "updated_at": 1751219189
+  },
+  {
+    "id": 29,
+    "user_id": 6843026401,
+    "evaluation_id": 24,
+    "current_step": "start",
+    "temp_data": null,
+    "created_at": 1751219748,
+    "updated_at": 1751219748
+  },
+  {
+    "id": 30,
+    "user_id": 6843026401,
+    "evaluation_id": 25,
+    "current_step": "start",
+    "temp_data": null,
+    "created_at": 1751219957,
+    "updated_at": 1751219957
+  },
+  {
+    "id": 31,
+    "user_id": 6853276574,
+    "evaluation_id": 26,
+    "current_step": "overall_score",
+    "temp_data": "{}",
+    "created_at": 1751221659,
+    "updated_at": 1751221660
+  },
+  {
+    "id": 32,
+    "user_id": 6853276574,
+    "evaluation_id": 26,
+    "current_step": "merchant_detail_comment",
+    "temp_data": "{\"length\":8,\"hardness\":9,\"duration\":\"30min\"}",
+    "created_at": 1751221667,
+    "updated_at": 1751221675
   }
 ]

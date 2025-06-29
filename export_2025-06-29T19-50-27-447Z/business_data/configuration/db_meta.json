@@ -5,15 +5,15 @@
   },
   {
     "key": "stats_merchants_total",
-    "value": "17"
+    "value": "19"
   },
   {
     "key": "stats_merchants_active",
-    "value": "17"
+    "value": "19"
   },
   {
     "key": "stats_orders_total",
-    "value": "1043"
+    "value": "1222"
   },
   {
     "key": "stats_orders_completed",
@@ -21,10 +21,10 @@
   },
   {
     "key": "stats_last_update",
-    "value": "1751170956781"
+    "value": "1751226383317"
   },
   {
     "key": "db_version",
-    "value": "1.1.2"
+    "value": "1.1.3"
   }
 ]

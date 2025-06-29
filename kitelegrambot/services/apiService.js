@@ -1289,6 +1289,34 @@ class ApiService {
             console.log('最终WHERE子句:', whereClause);
             console.log('查询参数:', params);
 
+            // 根据排名类型确定排序方式
+            const rankingType = query.type || 'monthlyOrders';
+            let orderByClause = '';
+            
+            switch (rankingType) {
+                case 'dailyRevenue':
+                    orderByClause = 'totalRevenue DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'dailyOrders':
+                case 'monthlyOrders':
+                    orderByClause = 'completedOrders DESC, totalRevenue DESC, avgRating DESC';
+                    break;
+                case 'dailyConsultations':
+                    orderByClause = 'totalOrders DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'avgRating':
+                    orderByClause = 'avgRating DESC, completedOrders DESC, totalOrders DESC';
+                    break;
+                case 'completionRate':
+                    orderByClause = 'completionRate DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'channelClicks':
+                    orderByClause = 'm.channel_clicks DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                default:
+                    orderByClause = 'completedOrders DESC, totalOrders DESC, avgRating DESC';
+            }
+
             const sql = `
                 SELECT 
                     m.id,
@@ -1321,7 +1349,7 @@ class ApiService {
                 LEFT JOIN evaluations e ON bs.id = e.booking_session_id AND e.evaluator_type = 'user'
                 WHERE ${whereClause}
                 GROUP BY m.id, m.teacher_name, m.username, r.name, m.channel_clicks
-                ORDER BY completedOrders DESC, totalOrders DESC, avgRating DESC
+                ORDER BY ${orderByClause}
                 LIMIT 50
             `;
             

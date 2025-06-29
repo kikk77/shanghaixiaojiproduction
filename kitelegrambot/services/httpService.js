@@ -1299,6 +1299,29 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
         }
     }
 
+    // 频道点击相关API
+    if (pathname === '/api/channel-clicks/recent' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getRecentChannelClicks({ query: data || {} });
+            return result;
+        } catch (error) {
+            console.error('获取最新频道点击失败:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    if (pathname === '/api/channel-clicks/stats' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getChannelClicksStats({ query: data || {} });
+            return result;
+        } catch (error) {
+            console.error('获取频道点击统计失败:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // 订单详情API
     if (pathname.match(/^\/api\/orders\/\d+$/) && method === 'GET') {
         try {

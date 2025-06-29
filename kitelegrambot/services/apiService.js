@@ -52,6 +52,10 @@ class ApiService {
         this.routes.set('GET /api/charts/price-distribution', this.getPriceDistributionChart.bind(this));
         this.routes.set('GET /api/charts/status-distribution', this.getStatusDistributionChart.bind(this));
 
+        // 频道点击相关接口
+        this.routes.set('GET /api/channel-clicks/recent', this.getRecentChannelClicks.bind(this));
+        this.routes.set('GET /api/channel-clicks/stats', this.getChannelClicksStats.bind(this));
+
         // 订单相关接口
         this.routes.set('GET /api/orders', this.getOrders.bind(this));
         this.routes.set('GET /api/orders/:id', this.getOrderById.bind(this));
@@ -520,7 +524,7 @@ class ApiService {
                         WHEN o.status = 'cancelled' THEN 'cancelled'
                         WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 'pending'
                         ELSE 'pending'
-                    END as status,
+                    END as order_status,
                     COUNT(*) as orderCount
                 FROM orders o
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
@@ -538,14 +542,14 @@ class ApiService {
                     ELSE 'pending'
                 END
                 ORDER BY 
-                    CASE status
-                        WHEN 'attempting' THEN 1
-                        WHEN 'pending' THEN 2
-                        WHEN 'confirmed' THEN 3
-                        WHEN 'completed' THEN 4
-                        WHEN 'incomplete' THEN 5
-                        WHEN 'failed' THEN 6
-                        WHEN 'cancelled' THEN 7
+                    CASE 
+                        WHEN bs.user_course_status = 'completed' THEN 4
+                        WHEN bs.user_course_status = 'incomplete' THEN 5
+                        WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 3
+                        WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 1
+                        WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 6
+                        WHEN o.status = 'cancelled' THEN 7
+                        WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 2
                         ELSE 8
                     END
             `).all(...whereConditions.params);
@@ -564,13 +568,128 @@ class ApiService {
 
             return {
                 data: {
-                    labels: statusData.map(d => statusLabels[d.status] || d.status),
+                    labels: statusData.map(d => statusLabels[d.order_status] || d.order_status),
                     values: statusData.map(d => d.orderCount)
                 }
             };
         } catch (error) {
             console.error('获取状态分布数据失败:', error);
             throw new Error('获取状态分布数据失败: ' + error.message);
+        }
+    }
+
+    // 获取最新频道点击记录
+    async getRecentChannelClicks({ query }) {
+        try {
+            const limit = query.limit || 20;
+            
+            const recentClicks = db.prepare(`
+                SELECT 
+                    cc.id,
+                    cc.user_id,
+                    cc.username,
+                    cc.first_name,
+                    cc.last_name,
+                    cc.merchant_id,
+                    cc.merchant_name,
+                    cc.channel_link,
+                    cc.clicked_at,
+                    datetime(cc.clicked_at, 'unixepoch', 'localtime') as formatted_time
+                FROM channel_clicks cc
+                ORDER BY cc.clicked_at DESC
+                LIMIT ?
+            `).all(limit);
+
+            return {
+                success: true,
+                data: recentClicks
+            };
+        } catch (error) {
+            console.error('获取最新频道点击失败:', error);
+            throw new Error('获取最新频道点击失败: ' + error.message);
+        }
+    }
+
+    // 获取频道点击统计
+    async getChannelClicksStats({ query }) {
+        try {
+            const filters = this.parseFilters(query);
+            let whereConditions = ['1=1'];
+            let params = [];
+
+            // 时间筛选
+            if (filters.timeRange && filters.timeRange !== '全部') {
+                const timeFilter = this.getTimeRangeFilter(filters.timeRange);
+                if (timeFilter) {
+                    whereConditions.push('cc.clicked_at >= ?');
+                    params.push(timeFilter.start);
+                    if (timeFilter.end) {
+                        whereConditions.push('cc.clicked_at <= ?');
+                        params.push(timeFilter.end);
+                    }
+                }
+            }
+
+            // 自定义日期范围
+            if (filters.dateFrom) {
+                const startTimestamp = Math.floor(new Date(filters.dateFrom + ' 00:00:00').getTime() / 1000);
+                whereConditions.push('cc.clicked_at >= ?');
+                params.push(startTimestamp);
+            }
+            if (filters.dateTo) {
+                const endTimestamp = Math.floor(new Date(filters.dateTo + ' 23:59:59').getTime() / 1000);
+                whereConditions.push('cc.clicked_at <= ?');
+                params.push(endTimestamp);
+            }
+
+            const whereClause = whereConditions.join(' AND ');
+
+            // 总点击数
+            const totalClicks = db.prepare(`
+                SELECT COUNT(*) as total
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+            `).get(...params);
+
+            // 独立用户数
+            const uniqueUsers = db.prepare(`
+                SELECT COUNT(DISTINCT cc.user_id) as unique_users
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+            `).get(...params);
+
+            // 最受欢迎的商家
+            const topMerchants = db.prepare(`
+                SELECT 
+                    cc.merchant_name,
+                    COUNT(*) as click_count
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+                GROUP BY cc.merchant_id, cc.merchant_name
+                ORDER BY click_count DESC
+                LIMIT 5
+            `).all(...params);
+
+            // 今日点击数
+            const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+            const todayClicks = db.prepare(`
+                SELECT COUNT(*) as today_total
+                FROM channel_clicks cc
+                WHERE cc.clicked_at >= ?
+            `).get(todayStart);
+
+            return {
+                success: true,
+                data: {
+                    totalClicks: totalClicks.total || 0,
+                    uniqueUsers: uniqueUsers.unique_users || 0,
+                    todayClicks: todayClicks.today_total || 0,
+                    topMerchants: topMerchants
+                }
+            };
+        } catch (error) {
+            console.error('获取频道点击统计失败:', error);
+            throw new Error('获取频道点击统计失败: ' + error.message);
         }
     }
 

@@ -236,7 +236,7 @@ class ApiService {
                 AND ${whereClause}
             `).get(...params);
 
-            // 4. 计算平均出击素质 - 基于evaluations表
+            // 4. 计算评价出击素质 - 所有商家（老师）给所有用户的"总体出击素质"评分的平均分
             const merchantRatingStats = db.prepare(`
                 SELECT AVG(e.overall_score) as avgMerchantRating
                 FROM evaluations e
@@ -245,7 +245,7 @@ class ApiService {
                 LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE e.evaluator_type = 'merchant' 
-                AND e.status = 'completed' 
+                AND e.status IN ('completed', 'detail_completed', 'overall_completed')
                 AND e.overall_score IS NOT NULL
                 AND ${whereClause}
             `).get(...params);
@@ -261,7 +261,7 @@ class ApiService {
                 completedOrders: orderStats.completedOrders || 0,  // 已完成订单
                 avgPrice: priceStats.avgPrice ? Math.round(priceStats.avgPrice) : 0,  // 平均订单价格
                 avgUserRating: userRatingStats.avgUserRating ? Math.round(userRatingStats.avgUserRating * 10) / 10 : 0,  // 平均用户评分
-                avgMerchantRating: merchantRatingStats.avgMerchantRating ? Math.round(merchantRatingStats.avgMerchantRating * 10) / 10 : 0,  // 平均出击素质
+                avgMerchantRating: merchantRatingStats.avgMerchantRating ? Math.round(merchantRatingStats.avgMerchantRating * 10) / 10 : 0,  // 评价出击素质：所有老师给所有用户的总体出击素质平均分
                 completionRate: Math.round(completionRate * 10) / 10  // 完成率
             };
             

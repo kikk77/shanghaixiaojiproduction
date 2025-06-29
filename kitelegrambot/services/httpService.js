@@ -1384,26 +1384,38 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             const rankingType = url.searchParams.get('type') || 'monthlyOrders';
             const regionId = url.searchParams.get('regionId');
             const period = url.searchParams.get('period') || 'month';
+            const dateFrom = url.searchParams.get('dateFrom');
+            const dateTo = url.searchParams.get('dateTo');
+            
+            console.log('商家排名API参数:', { rankingType, regionId, period, dateFrom, dateTo });
             
             let rankings = [];
             
-            if (rankingType === 'channelClicks') {
-                // 频道点击排名
-                rankings = dbOperations.getChannelClickRanking(50);
-                rankings = rankings.map((merchant, index) => ({
-                    ...merchant,
-                    rank: index + 1,
-                    displayValue: `${merchant.channel_clicks}次点击`,
-                    sortValue: merchant.channel_clicks
-                }));
-            } else {
-                // 其他排名类型的处理保持不变
-                const apiService = require('./apiService');
-                const result = await apiService.getMerchantRankings({
-                    query: { type: rankingType, regionId, period }
-                });
-                rankings = result.data || result.rankings || [];
-            }
+            // 统一使用apiService处理所有排名类型，包括频道点击排名
+            const apiService = require('./apiService');
+            const queryParams = {
+                type: rankingType,
+                regionId,
+                period
+            };
+            
+            // 添加时间参数
+            if (dateFrom) queryParams.dateFrom = dateFrom;
+            if (dateTo) queryParams.dateTo = dateTo;
+            
+            const result = await apiService.getMerchantRankings({
+                query: queryParams
+            });
+            
+            rankings = result.data || result.rankings || [];
+            
+            // 为每个商家添加排名序号
+            rankings = rankings.map((merchant, index) => ({
+                ...merchant,
+                rank: index + 1
+            }));
+            
+            console.log(`获取到 ${rankings.length} 个商家排名结果`);
             
             return {
                 success: true,

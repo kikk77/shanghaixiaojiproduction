@@ -94,26 +94,66 @@ class RankingManager {
             });
         }
 
-        // 商家排名筛选器事件监听
+        // 商家排名筛选器事件监听 - 统一处理所有筛选器变化
         const merchantRankingType = document.getElementById('merchantRankingType');
         const merchantRankingRegion = document.getElementById('merchantRankingRegion');
         const merchantRankingPeriod = document.getElementById('merchantRankingPeriod');
 
+        // 防抖函数，避免频繁触发
+        let updateTimeout = null;
+        const debouncedUpdate = () => {
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+            }
+            updateTimeout = setTimeout(() => {
+                this.updateMerchantRankings();
+            }, 300); // 300ms延迟
+        };
+
         if (merchantRankingType) {
             merchantRankingType.addEventListener('change', () => {
-                this.updateMerchantRankings();
+                console.log('排名类型变化:', merchantRankingType.value);
+                debouncedUpdate();
             });
         }
 
         if (merchantRankingRegion) {
             merchantRankingRegion.addEventListener('change', () => {
-                this.updateMerchantRankings();
+                console.log('地区筛选变化:', merchantRankingRegion.value);
+                debouncedUpdate();
             });
         }
 
         if (merchantRankingPeriod) {
             merchantRankingPeriod.addEventListener('change', () => {
-                this.updateMerchantRankings();
+                console.log('时间范围变化:', merchantRankingPeriod.value);
+                debouncedUpdate();
+            });
+        }
+
+        // 用户排名筛选器事件监听
+        const userRankingType = document.getElementById('userRankingType');
+        const userRankingPeriod = document.getElementById('userRankingPeriod');
+        const userMinOrders = document.getElementById('userMinOrders');
+
+        if (userRankingType) {
+            userRankingType.addEventListener('change', () => {
+                console.log('用户排名类型变化:', userRankingType.value);
+                this.updateUserRankings();
+            });
+        }
+
+        if (userRankingPeriod) {
+            userRankingPeriod.addEventListener('change', () => {
+                console.log('用户时间范围变化:', userRankingPeriod.value);
+                this.updateUserRankings();
+            });
+        }
+
+        if (userMinOrders) {
+            userMinOrders.addEventListener('change', () => {
+                console.log('最小订单数变化:', userMinOrders.value);
+                this.updateUserRankings();
             });
         }
     }
@@ -472,16 +512,41 @@ class RankingManager {
             
             // 根据排名类型显示不同信息
             let orderInfo = '';
-            if (rankingType === 'channelClicks') {
-                orderInfo = `${channelClicks}次点击`;
-            } else {
-                orderInfo = `${completedOrders}单`;
-            }
+            let extraInfo = '';
             
-            // 添加点击数显示（在非点击排名模式下也显示）
-            let clickInfo = '';
-            if (rankingType !== 'channelClicks' && channelClicks > 0) {
-                clickInfo = ` • ${channelClicks}次点击`;
+            switch (rankingType) {
+                case 'dailyRevenue':
+                    const revenue = merchant.totalRevenue || 0;
+                    orderInfo = `¥${Math.round(revenue)}`;
+                    extraInfo = ` • ${completedOrders}单`;
+                    break;
+                case 'dailyOrders':
+                case 'monthlyOrders':
+                    orderInfo = `${completedOrders}单`;
+                    extraInfo = channelClicks > 0 ? ` • ${channelClicks}次点击` : '';
+                    break;
+                case 'dailyConsultations':
+                    const totalOrders = merchant.totalOrders || 0;
+                    orderInfo = `${totalOrders}咨询`;
+                    extraInfo = ` • ${completedOrders}单成交`;
+                    break;
+                case 'avgRating':
+                    const avgRating = merchant.avgRating || 0;
+                    orderInfo = avgRating > 0 ? `${avgRating.toFixed(1)}分` : '暂无评分';
+                    extraInfo = ` • ${completedOrders}单`;
+                    break;
+                case 'completionRate':
+                    const completionRate = merchant.completionRate || 0;
+                    orderInfo = `${completionRate}%`;
+                    extraInfo = ` • ${completedOrders}单`;
+                    break;
+                case 'channelClicks':
+                    orderInfo = `${channelClicks}次点击`;
+                    extraInfo = completedOrders > 0 ? ` • ${completedOrders}单` : '';
+                    break;
+                default:
+                    orderInfo = `${completedOrders}单`;
+                    extraInfo = channelClicks > 0 ? ` • ${channelClicks}次点击` : '';
             }
             
             // 使用正确的商家ID字段
@@ -493,7 +558,7 @@ class RankingManager {
                 completedOrders,
                 channelClicks,
                 orderInfo,
-                clickInfo,
+                extraInfo,
                 merchantId
             });
             
@@ -504,7 +569,7 @@ class RankingManager {
                         <span class="merchant-name">${merchantName}</span>
                     </div>
                     <div class="rank-data">
-                        <span class="order-count">${orderInfo}${clickInfo}</span>
+                        <span class="order-count">${orderInfo}${extraInfo}</span>
                         <button class="report-btn" onclick="window.rankingManager.generateMerchantReportFromRanking(${merchantId}, ${year}, ${month})" title="生成报告">
                             报告
                         </button>
@@ -683,13 +748,63 @@ class RankingManager {
     }
 
     // 更新商家排名（兼容旧HTML调用）
-    updateMerchantRankings() {
-        this.loadRankings();
+    async updateMerchantRankings() {
+        try {
+            console.log('=== 更新商家排名 ===');
+            
+            if (window.loadingManager) {
+                window.loadingManager.show('更新排名中...');
+            }
+
+            // 重新加载商家排名数据
+            await this.loadMerchantRanking();
+            
+            // 显示更新后的排名
+            this.displayMerchantRanking();
+            
+            // 更新统计数据
+            this.updateRankingStats();
+
+        } catch (error) {
+            console.error('更新商家排名失败:', error);
+            if (window.notificationSystem) {
+                window.notificationSystem.show('更新排名失败: ' + error.message, 'error');
+            }
+        } finally {
+            if (window.loadingManager) {
+                window.loadingManager.hide();
+            }
+        }
     }
 
     // 更新用户排名（兼容旧HTML调用）
-    updateUserRankings() {
-        this.loadUserRanking();
+    async updateUserRankings() {
+        try {
+            console.log('=== 更新用户排名 ===');
+            
+            if (window.loadingManager) {
+                window.loadingManager.show('更新用户排名中...');
+            }
+
+            // 重新加载用户排名数据
+            await this.loadUserRanking();
+            
+            // 显示更新后的排名
+            this.displayUserRanking();
+            
+            // 更新统计数据
+            this.updateRankingStats();
+
+        } catch (error) {
+            console.error('更新用户排名失败:', error);
+            if (window.notificationSystem) {
+                window.notificationSystem.show('更新用户排名失败: ' + error.message, 'error');
+            }
+        } finally {
+            if (window.loadingManager) {
+                window.loadingManager.hide();
+            }
+        }
     }
 
     // 刷新所有排名（兼容旧HTML调用）

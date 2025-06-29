@@ -68,6 +68,8 @@ async function startFullApplication() {
             } catch (error) {
                 console.error('❌ EAV完整修复脚本运行失败:', error.message);
             }
+            
+
         }
         
         // 不关闭HTTP服务器，而是扩展其功能

@@ -1,0 +1,30 @@
+[
+  {
+    "key": "admin_password",
+    "value": "9229"
+  },
+  {
+    "key": "stats_merchants_total",
+    "value": "17"
+  },
+  {
+    "key": "stats_merchants_active",
+    "value": "17"
+  },
+  {
+    "key": "stats_orders_total",
+    "value": "1043"
+  },
+  {
+    "key": "stats_orders_completed",
+    "value": "0"
+  },
+  {
+    "key": "stats_last_update",
+    "value": "1751170956781"
+  },
+  {
+    "key": "db_version",
+    "value": "1.1.2"
+  }
+]

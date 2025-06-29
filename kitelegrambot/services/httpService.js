@@ -1258,7 +1258,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
     if (pathname === '/api/charts/orders-trend' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getOrdersTrendChart({ query: {} });
+            const result = await apiService.getOrdersTrendChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取订单趋势图表失败:', error);
@@ -1269,7 +1269,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
     if (pathname === '/api/charts/region-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getRegionDistributionChart({ query: {} });
+            const result = await apiService.getRegionDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取地区分布图表失败:', error);
@@ -1280,7 +1280,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
     if (pathname === '/api/charts/price-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getPriceDistributionChart({ query: {} });
+            const result = await apiService.getPriceDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取价格分布图表失败:', error);
@@ -1291,7 +1291,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
     if (pathname === '/api/charts/status-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getStatusDistributionChart({ query: {} });
+            const result = await apiService.getStatusDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取状态分布图表失败:', error);

@@ -368,19 +368,19 @@ class ApiService {
             switch (period) {
                 case 'hourly':
                     dateFormat = '%Y-%m-%d %H:00:00';
-                    groupBy = "strftime('%Y-%m-%d %H', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-%m-%d %H', datetime(o.created_at, 'unixepoch'))";
                     break;
                 case 'weekly':
                     dateFormat = '%Y-W%W';
-                    groupBy = "strftime('%Y-W%W', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-W%W', datetime(o.created_at, 'unixepoch'))";
                     break;
                 case 'monthly':
                     dateFormat = '%Y-%m';
-                    groupBy = "strftime('%Y-%m', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-%m', datetime(o.created_at, 'unixepoch'))";
                     break;
                 default: // daily
                     dateFormat = '%Y-%m-%d';
-                    groupBy = "date(datetime(o.created_at))";
+                    groupBy = "date(datetime(o.created_at, 'unixepoch'))";
             }
 
             const whereConditions = this.buildWhereConditions(filters);
@@ -396,11 +396,15 @@ class ApiService {
                     END) as completedCount
                 FROM orders o
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 WHERE ${whereClause}
                 GROUP BY ${groupBy}
                 ORDER BY period DESC
                 LIMIT 30
             `).all(...whereConditions.params);
+
+            console.log('订单趋势数据:', trendData);
 
             return {
                 data: {
@@ -457,25 +461,34 @@ class ApiService {
             const priceData = db.prepare(`
                 SELECT 
                     CASE 
-                        WHEN CAST(o.price_range AS REAL) < 500 THEN '0-500'
-                        WHEN CAST(o.price_range AS REAL) < 700 THEN '500-700'
-                        WHEN CAST(o.price_range AS REAL) < 900 THEN '700-900'
-                        WHEN CAST(o.price_range AS REAL) < 1100 THEN '900-1100'
-                        ELSE '1100+'
+                        WHEN CAST(o.price_range AS REAL) < 300 THEN '0-300'
+                        WHEN CAST(o.price_range AS REAL) < 500 THEN '300-500'
+                        WHEN CAST(o.price_range AS REAL) < 800 THEN '500-800'
+                        WHEN CAST(o.price_range AS REAL) < 1000 THEN '800-1000'
+                        WHEN CAST(o.price_range AS REAL) < 1500 THEN '1000-1500'
+                        WHEN CAST(o.price_range AS REAL) < 2000 THEN '1500-2000'
+                        ELSE '2000+'
                     END as price_range,
                     COUNT(*) as orderCount
                 FROM orders o
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
+                LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE ${whereClause}
                 GROUP BY price_range
                 ORDER BY 
                     CASE price_range
-                        WHEN '0-500' THEN 1
-                        WHEN '500-700' THEN 2
-                        WHEN '700-900' THEN 3
-                        WHEN '900-1100' THEN 4
-                        WHEN '1100+' THEN 5
+                        WHEN '0-300' THEN 1
+                        WHEN '300-500' THEN 2
+                        WHEN '500-800' THEN 3
+                        WHEN '800-1000' THEN 4
+                        WHEN '1000-1500' THEN 5
+                        WHEN '1500-2000' THEN 6
+                        WHEN '2000+' THEN 7
                     END
             `).all(...whereConditions.params);
+
+            console.log('价格分布数据:', priceData);
 
             return {
                 data: {
@@ -502,36 +515,52 @@ class ApiService {
                         WHEN bs.user_course_status = 'completed' THEN 'completed'
                         WHEN bs.user_course_status = 'incomplete' THEN 'incomplete'
                         WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 'confirmed'
-                        WHEN o.status = 'attempting' THEN 'attempting'
-                        WHEN o.status = 'failed' THEN 'failed'
+                        WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 'attempting'
+                        WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 'failed'
                         WHEN o.status = 'cancelled' THEN 'cancelled'
+                        WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 'pending'
                         ELSE 'pending'
                     END as status,
                     COUNT(*) as orderCount
                 FROM orders o
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 WHERE ${whereClause}
                 GROUP BY CASE 
                     WHEN bs.user_course_status = 'completed' THEN 'completed'
                     WHEN bs.user_course_status = 'incomplete' THEN 'incomplete'
                     WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 'confirmed'
-                    WHEN o.status = 'attempting' THEN 'attempting'
-                    WHEN o.status = 'failed' THEN 'failed'
+                    WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 'attempting'
+                    WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 'failed'
                     WHEN o.status = 'cancelled' THEN 'cancelled'
+                    WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 'pending'
                     ELSE 'pending'
                 END
-                ORDER BY orderCount DESC
+                ORDER BY 
+                    CASE status
+                        WHEN 'attempting' THEN 1
+                        WHEN 'pending' THEN 2
+                        WHEN 'confirmed' THEN 3
+                        WHEN 'completed' THEN 4
+                        WHEN 'incomplete' THEN 5
+                        WHEN 'failed' THEN 6
+                        WHEN 'cancelled' THEN 7
+                        ELSE 8
+                    END
             `).all(...whereConditions.params);
 
             const statusLabels = {
-                'attempting': '尝试预约',
-                'pending': '待确认',
-                'confirmed': '已确认',
-                'completed': '已完成',
-                'incomplete': '未完成',
-                'failed': '预约失败',
-                'cancelled': '已取消'
+                'attempting': '🔄 尝试预约',
+                'pending': '⏳ 待确认',
+                'confirmed': '✅ 已确认',
+                'completed': '🎉 已完成',
+                'incomplete': '❌ 未完成',
+                'failed': '💔 预约失败',
+                'cancelled': '🚫 已取消'
             };
+
+            console.log('状态分布数据:', statusData);
 
             return {
                 data: {
@@ -540,6 +569,7 @@ class ApiService {
                 }
             };
         } catch (error) {
+            console.error('获取状态分布数据失败:', error);
             throw new Error('获取状态分布数据失败: ' + error.message);
         }
     }

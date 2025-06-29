@@ -34,6 +34,11 @@ class OptimizedOrdersManager {
         // 防抖定时器
         this.debounceTimers = {};
         
+        // 频道点击相关
+        this.channelClicksAutoRefresh = true;
+        this.channelClicksInterval = null;
+        this.lastChannelClickId = 0;
+        
         this.init();
     }
 
@@ -962,6 +967,12 @@ class OptimizedOrdersManager {
                     this.lazyObserver.observe(canvas);
                 }
             });
+            
+            // 加载频道点击数据
+            await this.loadChannelClicksData();
+            
+            // 启动实时频道点击刷新
+            this.startChannelClicksAutoRefresh();
             
         } catch (error) {
             console.error('更新仪表板失败:', error);
@@ -2757,4 +2768,153 @@ window.applyAdvancedFilters = () => ordersManager.applyAdvancedFilters();
 window.clearAdvancedFilters = () => ordersManager.clearAdvancedFilters();
 window.refreshOrdersData = () => ordersManager.refreshOrdersData();
 
-console.log('订单管理系统优化版本已加载，全局访问已设置'); 
+console.log('订单管理系统优化版本已加载，全局访问已设置');
+
+// 为OptimizedOrdersManager类添加频道点击相关方法
+OptimizedOrdersManager.prototype.loadChannelClicksData = async function() {
+    try {
+        // 加载统计数据
+        const filters = this.getCurrentFilters();
+        const statsResponse = await fetch('/api/channel-clicks/stats?' + new URLSearchParams(filters));
+        const statsData = await statsResponse.json();
+        
+        if (statsData.success) {
+            this.updateChannelClicksStats(statsData.data);
+        }
+        
+        // 加载最新点击记录
+        await this.refreshChannelClicks();
+        
+    } catch (error) {
+        console.error('加载频道点击数据失败:', error);
+    }
+};
+
+OptimizedOrdersManager.prototype.updateChannelClicksStats = function(data) {
+    // 更新频道点击总数
+    const totalElement = document.getElementById('totalChannelClicks');
+    if (totalElement) {
+        totalElement.textContent = data.totalClicks.toLocaleString();
+    }
+
+    // 更新今日点击数
+    const todayElement = document.getElementById('todayChannelClicks');
+    if (todayElement) {
+        todayElement.textContent = data.todayClicks.toLocaleString();
+    }
+
+    // 更新独立用户数
+    const uniqueElement = document.getElementById('uniqueChannelUsers');
+    if (uniqueElement) {
+        uniqueElement.textContent = data.uniqueUsers.toLocaleString();
+    }
+};
+
+OptimizedOrdersManager.prototype.refreshChannelClicks = async function() {
+    try {
+        const response = await fetch('/api/channel-clicks/recent?limit=20');
+        const data = await response.json();
+        
+        if (data.success) {
+            this.renderChannelClicks(data.data);
+        }
+    } catch (error) {
+        console.error('刷新频道点击失败:', error);
+    }
+};
+
+OptimizedOrdersManager.prototype.renderChannelClicks = function(clicks) {
+    const container = document.getElementById('channelClicksTable');
+    if (!container) return;
+
+    if (!clicks || clicks.length === 0) {
+        container.innerHTML = '<div class="loading">暂无频道点击记录</div>';
+        return;
+    }
+
+    // 检查是否有新数据
+    const latestId = clicks[0]?.id || 0;
+    const hasNewData = latestId > this.lastChannelClickId;
+    this.lastChannelClickId = latestId;
+
+    const html = clicks.map((click, index) => {
+        const userName = this.formatUserName(click);
+        const timeStr = this.formatClickTime(click.clicked_at);
+        const isNew = hasNewData && index < 3; // 标记前3条为新数据
+        
+        return `
+            <div class="realtime-item ${isNew ? 'new' : ''}">
+                <div class="realtime-item-content">
+                    <div class="realtime-item-text">
+                        ${timeStr}：用户<span class="username">${userName}</span>查看了<span class="merchant">${click.merchant_name}</span>老师
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = html;
+};
+
+OptimizedOrdersManager.prototype.formatUserName = function(click) {
+    if (click.username) {
+        return `@${click.username}`;
+    }
+    
+    let name = '';
+    if (click.first_name) name += click.first_name;
+    if (click.last_name) name += ' ' + click.last_name;
+    
+    return name.trim() || `用户${click.user_id}`;
+};
+
+OptimizedOrdersManager.prototype.formatClickTime = function(timestamp) {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    
+    // 如果是今天，只显示时分秒
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+    
+    // 否则显示完整日期时间
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+};
+
+OptimizedOrdersManager.prototype.startChannelClicksAutoRefresh = function() {
+    if (this.channelClicksInterval) {
+        clearInterval(this.channelClicksInterval);
+    }
+
+    if (this.channelClicksAutoRefresh) {
+        this.channelClicksInterval = setInterval(() => {
+            this.refreshChannelClicks();
+        }, 5000); // 每5秒刷新一次
+    }
+};
+
+OptimizedOrdersManager.prototype.toggleChannelClicksAutoRefresh = function() {
+    this.channelClicksAutoRefresh = !this.channelClicksAutoRefresh;
+    const btn = document.getElementById('autoRefreshBtn');
+    
+    if (this.channelClicksAutoRefresh) {
+        btn.textContent = '⏸️ 暂停刷新';
+        this.startChannelClicksAutoRefresh();
+    } else {
+        btn.textContent = '▶️ 开始刷新';
+        if (this.channelClicksInterval) {
+            clearInterval(this.channelClicksInterval);
+            this.channelClicksInterval = null;
+        }
+    }
+}; 

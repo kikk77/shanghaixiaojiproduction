@@ -248,6 +248,15 @@
                         <div class="metric-change" id="completionRateChange">-</div>
                     </div>
                 </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon">👆</div>
+                    <div class="metric-content">
+                        <div class="metric-title">频道点击总数</div>
+                        <div class="metric-value" id="totalChannelClicks">-</div>
+                        <div class="metric-change" id="totalChannelClicksChange">-</div>
+                    </div>
+                </div>
             </div>
 
             <!-- 图表区域 -->
@@ -270,6 +279,37 @@
                 <div class="chart-container">
                     <h3>📋 状态分布</h3>
                     <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 实时频道点击 -->
+            <div class="realtime-section">
+                <h3>🔥 实时频道点击</h3>
+                <div class="realtime-stats">
+                    <div class="realtime-stat">
+                        <span class="stat-label">今日点击:</span>
+                        <span class="stat-value" id="todayChannelClicks">-</span>
+                    </div>
+                    <div class="realtime-stat">
+                        <span class="stat-label">独立用户:</span>
+                        <span class="stat-value" id="uniqueChannelUsers">-</span>
+                    </div>
+                </div>
+                <div class="realtime-table-container">
+                    <div class="realtime-table-header">
+                        <span>最新频道点击记录</span>
+                        <div class="realtime-controls">
+                            <button class="btn btn-sm" onclick="window.ordersManager.toggleChannelClicksAutoRefresh()" id="autoRefreshBtn">
+                                ⏸️ 暂停刷新
+                            </button>
+                            <button class="btn btn-sm" onclick="window.ordersManager.refreshChannelClicks()">
+                                🔄 立即刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="realtime-table" id="channelClicksTable">
+                        <div class="loading">加载中...</div>
+                    </div>
                 </div>
             </div>
         </section>

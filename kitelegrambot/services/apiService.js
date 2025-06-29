@@ -1365,15 +1365,19 @@ class ApiService {
         const conditions = ['1=1'];
         const params = [];
 
-        // 时间筛选 - 使用Unix时间戳
+        // 时间筛选 - 修复Unix时间戳转换
         if (filters.dateFrom) {
-            conditions.push('date(o.created_at, "unixepoch") >= ?');
-            params.push(filters.dateFrom);
+            // 将日期转换为Unix时间戳（当天开始）
+            const fromTimestamp = Math.floor(new Date(filters.dateFrom + ' 00:00:00').getTime() / 1000);
+            conditions.push('o.created_at >= ?');
+            params.push(fromTimestamp);
         }
 
         if (filters.dateTo) {
-            conditions.push('date(o.created_at, "unixepoch") <= ?');
-            params.push(filters.dateTo);
+            // 将日期转换为Unix时间戳（当天结束）
+            const toTimestamp = Math.floor(new Date(filters.dateTo + ' 23:59:59').getTime() / 1000);
+            conditions.push('o.created_at <= ?');
+            params.push(toTimestamp);
         }
 
         // 商家筛选 - 支持按商家ID或老师名称
@@ -1427,30 +1431,39 @@ class ApiService {
             }
         }
 
-        // 状态筛选 - 简化逻辑，主要基于orders表的status字段
+        // 状态筛选 - 基于实际的数据结构优化
         if (filters.status) {
             switch (filters.status) {
                 case 'confirmed':
-                    conditions.push("o.status = 'confirmed'");
+                    // 已确认：orders表status为confirmed 或 booking_sessions表user_course_status为confirmed
+                    conditions.push("(o.status = 'confirmed' OR bs.user_course_status = 'confirmed')");
                     break;
                 case 'pending':
-                    conditions.push("o.status = 'pending'");
+                    // 待确认：orders表status为pending 或 attempting
+                    conditions.push("(o.status IN ('pending', 'attempting'))");
                     break;
                 case 'attempting':
+                    // 尝试预约：orders表status为attempting
                     conditions.push("o.status = 'attempting'");
                     break;
                 case 'cancelled':
+                    // 已取消：orders表status为cancelled
                     conditions.push("o.status = 'cancelled'");
                     break;
                 case 'failed':
+                    // 预约失败：orders表status为failed
                     conditions.push("o.status = 'failed'");
                     break;
                 case 'completed':
-                    // 完成状态可能在booking_sessions中，也可能在orders中
-                    conditions.push("(o.status = 'completed' OR bs.user_course_status = 'completed')");
+                    // 已完成：booking_sessions表user_course_status为completed
+                    conditions.push("bs.user_course_status = 'completed'");
+                    break;
+                case 'incomplete':
+                    // 未完成：不是completed状态的其他状态
+                    conditions.push("(bs.user_course_status IS NULL OR bs.user_course_status != 'completed') AND o.status NOT IN ('cancelled', 'failed')");
                     break;
                 default:
-                    // 如果是其他状态，直接匹配
+                    // 如果是其他状态，直接匹配orders表的status
                     conditions.push("o.status = ?");
                     params.push(filters.status);
             }
@@ -1520,26 +1533,67 @@ class ApiService {
             params.push(filters.maxPrice, filters.maxPrice, filters.maxPrice, filters.maxPrice);
         }
 
-        // 评价状态筛选 - 基于orders表中的评价字段
+        // 评价状态筛选 - 基于evaluations表的实际数据
         if (filters.evaluationStatus) {
             switch (filters.evaluationStatus) {
                 case 'user_completed':
-                    conditions.push('o.user_evaluation IS NOT NULL');
+                    // 用户已评价：在evaluations表中存在用户评价记录
+                    conditions.push(`EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'user' 
+                        AND e.status IN ('completed', 'detail_completed')
+                    )`);
                     break;
                 case 'user_pending':
-                    conditions.push('o.user_evaluation IS NULL');
+                    // 用户未评价：在evaluations表中不存在用户评价记录
+                    conditions.push(`NOT EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'user' 
+                        AND e.status IN ('completed', 'detail_completed')
+                    )`);
                     break;
                 case 'merchant_completed':
-                    conditions.push('o.merchant_evaluation IS NOT NULL');
+                    // 商家已评价：在evaluations表中存在商家评价记录
+                    conditions.push(`EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'merchant' 
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
                 case 'merchant_pending':
-                    conditions.push('o.merchant_evaluation IS NULL');
+                    // 商家未评价：在evaluations表中不存在商家评价记录
+                    conditions.push(`NOT EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'merchant' 
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
                 case 'all_completed':
-                    conditions.push('o.user_evaluation IS NOT NULL AND o.merchant_evaluation IS NOT NULL');
+                    // 双方已评价：同时存在用户和商家评价记录
+                    conditions.push(`EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'user' 
+                        AND e.status IN ('completed', 'detail_completed')
+                    ) AND EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type = 'merchant' 
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
                 case 'none_completed':
-                    conditions.push('o.user_evaluation IS NULL AND o.merchant_evaluation IS NULL');
+                    // 双方未评价：不存在任何评价记录
+                    conditions.push(`NOT EXISTS (
+                        SELECT 1 FROM evaluations e 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type IN ('user', 'merchant')
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
             }
         }

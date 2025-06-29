@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
+const path = require('path');
 
-const dbPath = '/app/data/marketing_bot.db';
+const dbPath = path.join(__dirname, '..', 'data', 'marketing_bot.db');
 
 console.log('🔍 检查EAV表结构...');
 

@@ -4,6 +4,7 @@ const dbOperations = require('../models/dbOperations');
 const { db } = require('../config/database');
 const DataExportService = require('./dataExportService');
 const MerchantReportService = require('./merchantReportService');
+
 // statsService将在需要时延迟加载
 
 class ApiService {
@@ -654,15 +655,32 @@ class ApiService {
     // 获取用户评价状态
     getUserEvaluationStatus(bookingSessionId) {
         try {
-            // 由于evaluations表为空，直接通过orders表的booking_session_id查询
+            // 处理数据类型转换 - booking_session_id可能是字符串或数字
+            const sessionId = parseInt(bookingSessionId) || bookingSessionId;
+            
+            // 检查evaluations表中是否有用户评价
+            const evaluation = db.prepare(`
+                SELECT COUNT(*) as count
+                FROM evaluations e
+                WHERE (e.booking_session_id = ? OR e.booking_session_id = ?)
+                AND e.evaluator_type = 'user' 
+                AND e.status IN ('completed', 'detail_completed')
+            `).get(sessionId, String(sessionId));
+            
+            if (evaluation && evaluation.count > 0) {
+                return 'completed';
+            }
+            
+            // 兼容性：检查传统的orders表
             const order = db.prepare(`
                 SELECT user_evaluation 
                 FROM orders 
-                WHERE booking_session_id = ?
-            `).get(bookingSessionId);
+                WHERE booking_session_id = ? OR booking_session_id = ?
+            `).get(String(bookingSessionId), bookingSessionId);
             
             return (order && order.user_evaluation) ? 'completed' : 'pending';
         } catch (error) {
+            console.error('获取用户评价状态失败:', error);
             return 'pending';
         }
     }
@@ -670,15 +688,32 @@ class ApiService {
     // 获取商家评价状态
     getMerchantEvaluationStatus(bookingSessionId) {
         try {
-            // 由于evaluations表为空，直接通过orders表的booking_session_id查询
+            // 处理数据类型转换 - booking_session_id可能是字符串或数字
+            const sessionId = parseInt(bookingSessionId) || bookingSessionId;
+            
+            // 检查evaluations表中是否有商家评价
+            const evaluation = db.prepare(`
+                SELECT COUNT(*) as count
+                FROM evaluations e
+                WHERE (e.booking_session_id = ? OR e.booking_session_id = ?)
+                AND e.evaluator_type = 'merchant' 
+                AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+            `).get(sessionId, String(sessionId));
+            
+            if (evaluation && evaluation.count > 0) {
+                return 'completed';
+            }
+            
+            // 兼容性：检查传统的orders表
             const order = db.prepare(`
                 SELECT merchant_evaluation 
                 FROM orders 
-                WHERE booking_session_id = ?
-            `).get(bookingSessionId);
+                WHERE booking_session_id = ? OR booking_session_id = ?
+            `).get(String(bookingSessionId), bookingSessionId);
             
             return (order && order.merchant_evaluation) ? 'completed' : 'pending';
         } catch (error) {
+            console.error('获取商家评价状态失败:', error);
             return 'pending';
         }
     }
@@ -736,12 +771,32 @@ class ApiService {
                 realStatus = 'cancelled';
             }
 
-            // 获取评价数据 - 直接从orders表获取
+            // 获取评价数据 - 优先从evaluations表获取
             let userEvaluation = null;
             let merchantEvaluation = null;
             
-            // 解析用户评价
-            if (order.user_evaluation) {
+            // 处理booking_session_id数据类型
+            const sessionId = parseInt(order.booking_session_id) || order.booking_session_id;
+            
+            // 从evaluations表获取用户评价
+            const userEval = db.prepare(`
+                SELECT * FROM evaluations 
+                WHERE (booking_session_id = ? OR booking_session_id = ?)
+                AND evaluator_type = 'user' 
+                AND status IN ('completed', 'detail_completed')
+                ORDER BY created_at DESC LIMIT 1
+            `).get(sessionId, String(sessionId));
+            
+            if (userEval) {
+                userEvaluation = {
+                    overall_score: userEval.overall_score,
+                    detailed_scores: userEval.detailed_scores || '{}',
+                    text_comment: userEval.comments,
+                    status: userEval.status,
+                    created_at: userEval.created_at
+                };
+            } else if (order.user_evaluation) {
+                // 兼容性：从orders表获取
                 try {
                     const parsed = JSON.parse(order.user_evaluation);
                     userEvaluation = {
@@ -756,8 +811,25 @@ class ApiService {
                 }
             }
             
-            // 解析商家评价
-            if (order.merchant_evaluation) {
+            // 从evaluations表获取商家评价
+            const merchantEval = db.prepare(`
+                SELECT * FROM evaluations 
+                WHERE (booking_session_id = ? OR booking_session_id = ?)
+                AND evaluator_type = 'merchant' 
+                AND status IN ('completed', 'detail_completed', 'overall_completed')
+                ORDER BY created_at DESC LIMIT 1
+            `).get(sessionId, String(sessionId));
+            
+            if (merchantEval) {
+                merchantEvaluation = {
+                    overall_score: merchantEval.overall_score,
+                    detailed_scores: merchantEval.detailed_scores || '{}',
+                    text_comment: merchantEval.comments,
+                    status: merchantEval.status,
+                    created_at: merchantEval.created_at
+                };
+            } else if (order.merchant_evaluation) {
+                // 兼容性：从orders表获取
                 try {
                     const parsed = JSON.parse(order.merchant_evaluation);
                     merchantEvaluation = {

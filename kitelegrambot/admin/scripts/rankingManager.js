@@ -528,7 +528,7 @@ class RankingManager {
                 case 'dailyConsultations':
                     const totalOrders = merchant.totalOrders || 0;
                     orderInfo = `${totalOrders}咨询`;
-                    extraInfo = ` • ${completedOrders}单成交`;
+                    extraInfo = ''; // 移除成交单数显示
                     break;
                 case 'avgRating':
                     const avgRating = merchant.avgRating || 0;
@@ -542,7 +542,7 @@ class RankingManager {
                     break;
                 case 'channelClicks':
                     orderInfo = `${channelClicks}次点击`;
-                    extraInfo = completedOrders > 0 ? ` • ${completedOrders}单` : '';
+                    extraInfo = ''; // 移除成交单数显示
                     break;
                 default:
                     orderInfo = `${completedOrders}单`;

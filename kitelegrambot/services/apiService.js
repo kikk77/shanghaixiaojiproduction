@@ -2627,6 +2627,9 @@ class ApiService {
                 day: 'numeric'
             });
 
+            // 获取机器人用户名
+            const botUsername = 'xiaojisystembot'; // 固定使用这个用户名
+
             // 构建消息内容
             let message = `🔥 <b>${today} 当日热门老师 TOP${teachers.length}</b> 🔥\n\n`;
             message += `📊 <i>热度计算：频道点击1分 + 咨询2分</i>\n\n`;
@@ -2642,7 +2645,11 @@ class ApiService {
                     default: rankEmoji = `${index + 1}️⃣`;
                 }
 
-                message += `${rankEmoji} <b>${teacher.teacher_name}</b>\n`;
+                // 创建跳转机器人的链接
+                const merchantUrl = `https://t.me/${botUsername}?start=merchant_${teacher.id}`;
+                
+                // 将老师名字设置为可点击的链接
+                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a>\n`;
                 message += `   🔥 热度值：${teacher.hotScore}分\n`;
                 
                 if (teacher.todayClicks > 0) {

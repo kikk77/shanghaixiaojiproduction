@@ -2566,7 +2566,7 @@ class ApiService {
                 FROM merchants m
                 LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN channel_clicks cc ON m.id = cc.merchant_id 
-                    AND cc.created_at >= ? AND cc.created_at < ?
+                    AND cc.clicked_at >= ? AND cc.clicked_at < ?
                 LEFT JOIN orders o ON m.id = o.merchant_id 
                     AND o.created_at >= ? AND o.created_at < ?
                 WHERE m.status = 'active' 

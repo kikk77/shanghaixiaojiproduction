@@ -2648,19 +2648,19 @@ class ApiService {
                 // 创建跳转机器人的链接
                 const merchantUrl = `https://t.me/${botUsername}?start=merchant_${teacher.id}`;
                 
-                // 将老师名字设置为可点击的链接
-                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a>\n`;
-                message += `   🔥 热度值：${teacher.hotScore}分\n`;
+                // 简化排版：一行显示所有信息
+                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a> - 🔥${teacher.hotScore}分`;
                 
-                if (teacher.todayClicks > 0) {
-                    message += `   👁️ 今日点击：${teacher.todayClicks}次\n`;
+                // 添加详细信息（如果有的话）
+                const details = [];
+                if (teacher.todayClicks > 0) details.push(`👁️${teacher.todayClicks}`);
+                if (teacher.todayConsultations > 0) details.push(`💬${teacher.todayConsultations}`);
+                if (teacher.region_name) details.push(`📍${teacher.region_name}`);
+                
+                if (details.length > 0) {
+                    message += ` (${details.join(' ')})`;
                 }
-                if (teacher.todayConsultations > 0) {
-                    message += `   💬 今日咨询：${teacher.todayConsultations}次\n`;
-                }
-                if (teacher.region_name) {
-                    message += `   📍 地区：${teacher.region_name}\n`;
-                }
+                
                 message += '\n';
             });
 

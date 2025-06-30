@@ -148,7 +148,8 @@
             <button class="tab" onclick="showTab('tasks')">⏰ 定时任务</button>
             <button class="tab" onclick="showTab('buttons')">🔘 按钮管理</button>
             <button class="tab" onclick="showTab('test')">🧪 测试发送</button>
-            <button class="tab" onclick="window.open('admin/orders.html', '_blank')">📈 订单统计</button>
+            <button class="tab" onclick="window.open('channels.html', '_blank')">📺 频道管理</button>
+            <button class="tab" onclick="window.open('orders.html', '_blank')">📈 订单统计</button>
         </div>
 
         <!-- 仪表盘 -->
@@ -222,6 +223,18 @@
                     <div class="stat-number" id="userEngagement">0%</div>
                     <div>📈 用户参与度</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="channelConfigs">0</div>
+                    <div>📺 频道配置</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="clonedMessages">0</div>
+                    <div>📤 克隆消息数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="queuedMessages">0</div>
+                    <div>⏳ 队列消息数</div>
+                </div>
             </div>
             
             <div class="card">
@@ -231,6 +244,7 @@
                     <p>✅ 数据库连接正常</p>
                     <p>✅ 定时任务调度器运行中</p>
                     <p>✅ 触发词监听已启用</p>
+                    <p id="channelCloneStatus">🔄 检查频道克隆状态中...</p>
                 </div>
             </div>
 
@@ -1012,6 +1026,7 @@
                 loadMessageStats();
                 loadRecentBookings();
                 loadButtonStats();
+                checkChannelCloneStatus();
             } else if (tabName === 'bind-codes') {
                 // 强制清空缓存并重新加载绑定码数据
                 bindCodes = [];
@@ -1043,7 +1058,8 @@
                     loadTasks(),
                     loadBindCodes(),
                     loadRegions(),
-                    loadStats()
+                    loadStats(),
+                    checkChannelCloneStatus()  // 检查频道克隆功能状态
                 ]);
                 updateSelects();
                 // 确保测试发送页面的商家选择器也得到更新
@@ -1436,9 +1452,45 @@
                     userEngagement: basicStats.userEngagement
                 });
                 
+                // 加载频道管理统计数据
+                try {
+                    const channelStats = await apiRequest('/api/channel/stats/summary');
+                    console.log('获取频道管理统计数据:', channelStats);
+                    
+                    document.getElementById('channelConfigs').textContent = channelStats.totalConfigs || 0;
+                    document.getElementById('clonedMessages').textContent = (channelStats.totalClonedMessages || 0).toLocaleString();
+                    document.getElementById('queuedMessages').textContent = channelStats.queuedMessages || 0;
+                    
+                    console.log('频道管理统计更新完成:', channelStats);
+                } catch (channelError) {
+                    console.warn('加载频道管理统计失败（可能功能未启用）:', channelError);
+                    // 设置默认值，避免显示错误
+                    document.getElementById('channelConfigs').textContent = 0;
+                    document.getElementById('clonedMessages').textContent = 0;
+                    document.getElementById('queuedMessages').textContent = 0;
+                }
+                
                 console.log('统计数据加载完成');
             } catch (error) {
                 console.error('加载统计数据失败:', error);
+            }
+        }
+
+        // 检查频道克隆功能状态
+        async function checkChannelCloneStatus() {
+            try {
+                const response = await apiRequest('/api/channel/service/status');
+                const statusElement = document.getElementById('channelCloneStatus');
+                
+                if (response.enabled) {
+                    statusElement.innerHTML = '✅ 频道克隆功能已启用';
+                } else {
+                    statusElement.innerHTML = '⚠️ 频道克隆功能未启用';
+                }
+            } catch (error) {
+                console.warn('检查频道克隆状态失败:', error);
+                const statusElement = document.getElementById('channelCloneStatus');
+                statusElement.innerHTML = '❓ 频道克隆功能状态未知';
             }
         }
 

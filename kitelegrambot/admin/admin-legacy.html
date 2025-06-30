@@ -730,6 +730,7 @@
                                 <option value="">请选择发送模块</option>
                                 <option value="merchant">商家信息选择</option>
                                 <option value="template">消息模板选择</option>
+                                <option value="dailyHot">🔥 当日热门老师</option>
                                 <option value="custom">自定义消息内容</option>
                             </select>
                         </div>
@@ -756,6 +757,27 @@
                         <div id="templatePreviewTest" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; display: none;">
                             <h4>模板预览：</h4>
                             <div id="templatePreviewTestContent"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 当日热门老师 -->
+                    <div id="dailyHotModule" class="form-group" style="display: none;">
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #ff6b35;">
+                            <h4 style="margin: 0 0 10px 0; color: #ff6b35;">🔥 当日热门老师</h4>
+                            <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+                                📊 热度计算：频道点击1分 + 咨询2分<br>
+                                🏆 自动统计今日前5名热门老师
+                            </p>
+                            <button type="button" onclick="previewDailyHot()" class="btn btn-warning" style="margin-right: 10px;">
+                                👀 预览当日热门
+                            </button>
+                            <button type="button" onclick="refreshDailyHot()" class="btn btn-secondary">
+                                🔄 刷新数据
+                            </button>
+                        </div>
+                        <div id="dailyHotPreview" style="margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 5px; display: none;">
+                            <h4>📋 当日热门预览：</h4>
+                            <div id="dailyHotPreviewContent"></div>
                         </div>
                     </div>
                     
@@ -2498,6 +2520,7 @@
             // 隐藏所有模块
             document.getElementById('merchantModule').style.display = 'none';
             document.getElementById('templateModule').style.display = 'none';
+            document.getElementById('dailyHotModule').style.display = 'none';
             document.getElementById('customModule').style.display = 'none';
             
             // 显示选中的模块
@@ -2506,8 +2529,71 @@
                 updateMerchantSelect();
             } else if (moduleType === 'template') {
                 document.getElementById('templateModule').style.display = 'block';
+            } else if (moduleType === 'dailyHot') {
+                document.getElementById('dailyHotModule').style.display = 'block';
             } else if (moduleType === 'custom') {
                 document.getElementById('customModule').style.display = 'block';
+            }
+        }
+
+        // 预览当日热门
+        async function previewDailyHot() {
+            try {
+                showLoading();
+                
+                const response = await fetch('/api/daily-hot-message');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const previewDiv = document.getElementById('dailyHotPreview');
+                    const contentDiv = document.getElementById('dailyHotPreviewContent');
+                    
+                    // 转换HTML格式为可读格式用于预览
+                    let previewContent = data.message
+                        .replace(/<b>/g, '**').replace(/<\/b>/g, '**')
+                        .replace(/<i>/g, '*').replace(/<\/i>/g, '*')
+                        .replace(/<br>/g, '\n')
+                        .replace(/\n\n+/g, '\n\n');
+                    
+                    contentDiv.innerHTML = `
+                        <div style="white-space: pre-wrap; font-family: monospace; background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                            ${previewContent}
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                            📅 数据日期: ${data.date || '今日'} | 
+                            👥 上榜老师: ${data.data ? data.data.length : 0} 位
+                        </div>
+                    `;
+                    previewDiv.style.display = 'block';
+                    
+                    showAlert('当日热门数据加载成功！', 'success');
+                } else {
+                    showAlert('获取当日热门数据失败: ' + (data.message || '未知错误'), 'error');
+                }
+                
+            } catch (error) {
+                console.error('预览当日热门失败:', error);
+                showAlert('预览失败: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 刷新当日热门数据
+        async function refreshDailyHot() {
+            try {
+                showLoading();
+                
+                // 重新获取数据（这里可以添加缓存清除逻辑）
+                await previewDailyHot();
+                
+                showAlert('当日热门数据已刷新！', 'success');
+                
+            } catch (error) {
+                console.error('刷新当日热门失败:', error);
+                showAlert('刷新失败: ' + error.message, 'error');
+            } finally {
+                hideLoading();
             }
         }
 
@@ -2692,6 +2778,10 @@
                     }
                     sendData.type = 'template';
                     sendData.templateId = templateId;
+                    
+                } else if (moduleType === 'dailyHot') {
+                    // 当日热门老师模式
+                    sendData.type = 'dailyHot';
                     
                 } else if (moduleType === 'custom') {
                     // 自定义消息模式

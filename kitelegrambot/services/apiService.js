@@ -2632,7 +2632,6 @@ class ApiService {
 
             // 构建消息内容
             let message = `🔥 <b>${today} 当日热门老师 TOP${teachers.length}</b> 🔥\n\n`;
-            message += `📊 <i>热度计算：频道点击1分 + 咨询2分</i>\n\n`;
 
             teachers.forEach((teacher, index) => {
                 let rankEmoji = '';
@@ -2648,24 +2647,22 @@ class ApiService {
                 // 创建跳转机器人的链接
                 const merchantUrl = `https://t.me/${botUsername}?start=merchant_${teacher.id}`;
                 
-                // 简化排版：一行显示所有信息
-                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a> - 🔥${teacher.hotScore}分`;
-                
-                // 添加详细信息（如果有的话）
-                const details = [];
-                if (teacher.todayClicks > 0) details.push(`👁️${teacher.todayClicks}`);
-                if (teacher.todayConsultations > 0) details.push(`💬${teacher.todayConsultations}`);
-                if (teacher.region_name) details.push(`📍${teacher.region_name}`);
-                
-                if (details.length > 0) {
-                    message += ` (${details.join(' ')})`;
-                }
-                
-                message += '\n';
+                // 简化排版：只显示排名emoji和热度emoji
+                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a> - 🔥${teacher.hotScore}分\n`;
             });
 
-            message += `🌟 <i>数据统计时间：${today}</i>\n`;
-            message += `📈 <i>共有 ${teachers.length} 位老师上榜</i>`;
+            // 添加当前时间
+            const now = new Date();
+            const timeString = now.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }) + '  ' + now.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            message += `\n${timeString}`;
 
             return {
                 success: true,

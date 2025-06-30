@@ -2545,7 +2545,7 @@ async function handleEvaluationSubmit(userId, data, query) {
         const scores = userState.scores;
         try {
             const updateResult = dbOperations.updateEvaluation(evaluationId, null, scores, null, 'completed');
-            console.log(`📝 12项评价数据已保存到数据库: ${evaluationId}`, scores);
+        console.log(`📝 12项评价数据已保存到数据库: ${evaluationId}`, scores);
             console.log('数据库更新结果:', updateResult);
         } catch (error) {
             console.error('保存12项评价数据失败:', error);

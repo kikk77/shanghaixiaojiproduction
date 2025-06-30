@@ -251,6 +251,10 @@ async function startApp() {
             // 启动定时任务调度器
             initScheduler();
             
+            // 初始化频道克隆服务（如果启用）
+            const { initializeChannelServices } = require('../services/botService');
+            await initializeChannelServices();
+            
             console.log('✅ 完整功能启动完成！');
             console.log('🎯 Bot功能列表:');
             console.log('   - 商家绑定系统');
@@ -258,6 +262,11 @@ async function startApp() {
             console.log('   - 触发词自动回复');
             console.log('   - 定时发送消息');
             console.log('   - 消息模板管理');
+            
+            // 检查频道克隆功能状态
+            if (process.env.CHANNEL_CLONE_ENABLED === 'true') {
+                console.log('   - 📺 频道克隆功能已启用');
+            }
         } else {
             console.log('⚠️ Bot功能未启动 - 环境变量不完整');
             console.log('💡 管理后台仍然可用，请在Railway Variables中设置以下变量:');

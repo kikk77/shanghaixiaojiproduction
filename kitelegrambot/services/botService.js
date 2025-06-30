@@ -746,7 +746,7 @@ function initBotHandlers() {
                 
                 const successMessage2 = `📌 请置顶🐥小鸡管家机器人
 ⚠️ 避免错过小鸡的客人通知哦～
-❓ 如有问题请从群内联系客服 @xiaoji779`;
+❓ 如有问题请从群内联系客服 @xiaoji57`;
                 
                 bot.sendMessage(chatId, successMessage1);
                 setTimeout(() => {

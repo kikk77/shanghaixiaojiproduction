@@ -541,11 +541,11 @@ class RankingManager {
                     extraInfo = ` • ${completedOrders}单`;
                     break;
                 case 'channelClicks':
-                    orderInfo = `${channelClicks}次点击`;
+                orderInfo = `${channelClicks}次点击`;
                     extraInfo = ''; // 移除成交单数显示
                     break;
                 default:
-                    orderInfo = `${completedOrders}单`;
+                orderInfo = `${completedOrders}单`;
                     extraInfo = channelClicks > 0 ? ` • ${channelClicks}次点击` : '';
             }
             

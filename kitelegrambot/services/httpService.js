@@ -1404,7 +1404,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             let rankings = [];
             
             // 统一使用apiService处理所有排名类型，包括频道点击排名
-            const apiService = require('./apiService');
+                const apiService = require('./apiService');
             const queryParams = {
                 type: rankingType,
                 regionId,
@@ -1415,11 +1415,11 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             if (dateFrom) queryParams.dateFrom = dateFrom;
             if (dateTo) queryParams.dateTo = dateTo;
             
-            const result = await apiService.getMerchantRankings({
+                const result = await apiService.getMerchantRankings({
                 query: queryParams
-            });
+                });
             
-            rankings = result.data || result.rankings || [];
+                rankings = result.data || result.rankings || [];
             
             // 为每个商家添加排名序号
             rankings = rankings.map((merchant, index) => ({

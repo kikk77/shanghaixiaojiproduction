@@ -115,7 +115,8 @@ class ChannelEAVSchema {
                     valueData.value_integer = parseInt(value);
                     break;
                 case 'boolean':
-                    valueData.value_boolean = Boolean(value);
+                    // SQLite不支持布尔类型，转换为整数 (0/1)
+                    valueData.value_boolean = Boolean(value) ? 1 : 0;
                     break;
                 case 'json':
                     valueData.value_json = typeof value === 'string' ? value : JSON.stringify(value);
@@ -182,7 +183,8 @@ class ChannelEAVSchema {
                 case 'integer':
                     return result.value_integer;
                 case 'boolean':
-                    return result.value_boolean;
+                    // SQLite中布尔值存储为整数，需要转换回布尔值
+                    return Boolean(result.value_boolean);
                 case 'json':
                     try {
                         return result.value_json ? JSON.parse(result.value_json) : null;
@@ -232,7 +234,8 @@ class ChannelEAVSchema {
                             value = row.value_integer;
                             break;
                         case 'boolean':
-                            value = row.value_boolean;
+                            // SQLite中布尔值存储为整数，需要转换回布尔值
+                            value = Boolean(row.value_boolean);
                             break;
                         case 'json':
                             try {

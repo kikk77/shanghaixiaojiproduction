@@ -125,7 +125,7 @@ class ChannelDatabaseManager {
                 attribute_type TEXT NOT NULL, -- 'string', 'integer', 'boolean', 'json', 'datetime', 'text'
                 attribute_category TEXT, -- 属性分类
                 description TEXT, -- 属性描述
-                is_required BOOLEAN DEFAULT 0,
+                is_required INTEGER DEFAULT 0, -- SQLite不支持BOOLEAN，使用INTEGER (0/1)
                 default_value TEXT,
                 validation_rule TEXT, -- JSON格式验证规则
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -140,7 +140,7 @@ class ChannelDatabaseManager {
                 attribute_id INTEGER NOT NULL,
                 value_string TEXT,
                 value_integer INTEGER,
-                value_boolean BOOLEAN,
+                value_boolean INTEGER, -- SQLite不支持BOOLEAN，使用INTEGER (0/1)
                 value_json TEXT,
                 value_datetime DATETIME,
                 value_text TEXT,

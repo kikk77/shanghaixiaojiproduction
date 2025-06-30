@@ -69,8 +69,11 @@ async function apiRequest(url, options = {}) {
     const mergedOptions = { ...defaultOptions, ...options };
 
     try {
+        console.log(`🔗 API请求: ${options.method || 'GET'} ${url}`);
         const response = await fetch(url, mergedOptions);
         const data = await response.json();
+
+        console.log(`📡 API响应 (${response.status}):`, data);
 
         if (!response.ok) {
             throw new Error(data.error || `HTTP ${response.status}`);
@@ -78,7 +81,7 @@ async function apiRequest(url, options = {}) {
 
         return data;
     } catch (error) {
-        console.error('API请求失败:', error);
+        console.error(`❌ API请求失败 (${url}):`, error);
         throw error;
     }
 }
@@ -86,12 +89,21 @@ async function apiRequest(url, options = {}) {
 // 加载统计信息
 async function loadStats() {
     try {
+        console.log('📊 开始加载统计信息...');
+        
         const [configStats, queueStats, cloneStats, systemStats] = await Promise.all([
-            apiRequest('/api/channel/stats/configs'),
-            apiRequest('/api/channel/stats/queue'),
-            apiRequest('/api/channel/stats/clone'),
-            apiRequest('/api/channel/stats/system')
+            apiRequest('/api/channel/stats?id=configs'),
+            apiRequest('/api/channel/stats?id=queue'),
+            apiRequest('/api/channel/stats?id=clone'),
+            apiRequest('/api/channel/stats?id=system')
         ]);
+
+        console.log('📊 统计数据获取结果:', {
+            configStats,
+            queueStats,
+            cloneStats,
+            systemStats
+        });
 
         updateStatsDisplay({
             totalConfigs: configStats.data?.total || 0,
@@ -101,7 +113,7 @@ async function loadStats() {
         });
 
     } catch (error) {
-        console.warn('加载统计信息失败:', error);
+        console.error('加载统计信息失败:', error);
         // 即使统计加载失败也不影响主要功能
         updateStatsDisplay({
             totalConfigs: '-',
@@ -133,10 +145,14 @@ async function loadConfigs() {
     const configsList = document.getElementById('configsList');
     
     try {
+        console.log('📋 开始加载配置列表...');
         configsList.innerHTML = '<div class="loading">加载配置中...</div>';
         
         const response = await apiRequest('/api/channel/configs');
+        console.log('📋 配置列表响应:', response);
+        
         allConfigs = response.data || [];
+        console.log('📋 加载的配置数量:', allConfigs.length);
         
         displayConfigs(allConfigs);
         updateConfigFilter();

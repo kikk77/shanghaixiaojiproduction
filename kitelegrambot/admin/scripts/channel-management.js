@@ -176,7 +176,9 @@ function createConfigCard(config) {
         '已禁用';
 
     return `
-        <div class="config-card">
+        <div class="config-card" onclick="editConfig('${config.name}')" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.15)';"
+             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
             <div class="config-info">
                 <div class="config-details">
                     <h3>
@@ -211,21 +213,26 @@ function createConfigCard(config) {
                     </div>
                 </div>
 
-                <div class="config-actions">
-                    <button class="btn btn-primary" onclick="editConfig('${config.name}')">
+                <div class="config-actions" onclick="event.stopPropagation();">
+                    <button class="btn btn-primary" onclick="editConfig('${config.name}')" title="编辑配置">
                         ✏️ 编辑
                     </button>
                     <button class="btn ${config.settings.enabled ? 'btn-warning' : 'btn-success'}" 
-                            onclick="toggleConfig('${config.name}', ${!config.settings.enabled})">
+                            onclick="toggleConfig('${config.name}', ${!config.settings.enabled})"
+                            title="${config.settings.enabled ? '禁用配置' : '启用配置'}">
                         ${config.settings.enabled ? '⏸️ 禁用' : '▶️ 启用'}
                     </button>
-                    <button class="btn btn-secondary" onclick="testConfig('${config.name}')">
+                    <button class="btn btn-secondary" onclick="testConfig('${config.name}')" title="测试配置">
                         🔍 测试
                     </button>
-                    <button class="btn btn-danger" onclick="confirmDeleteConfig('${config.name}')">
+                    <button class="btn btn-danger" onclick="confirmDeleteConfig('${config.name}')" title="删除配置">
                         🗑️ 删除
                     </button>
                 </div>
+            </div>
+            
+            <div class="config-click-hint" style="position: absolute; top: 10px; right: 15px; font-size: 12px; color: #999; opacity: 0.7;">
+                💡 点击卡片编辑
             </div>
         </div>
     `;

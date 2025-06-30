@@ -4673,6 +4673,7 @@ module.exports = {
             messageQueueService.start();
         }
         console.log('📺 频道克隆服务已启动');
+        return { success: true, message: '频道克隆服务已启动' };
     },
     stopChannelServices: async () => {
         if (messageQueueService && messageQueueService.isRunning) {
@@ -4682,6 +4683,7 @@ module.exports = {
             channelCloneService.stop();
         }
         console.log('📺 频道克隆服务已停止');
+        return { success: true, message: '频道克隆服务已停止' };
     },
     reloadChannelConfigs: async () => {
         if (channelCloneService) {

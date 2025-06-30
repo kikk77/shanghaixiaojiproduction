@@ -334,6 +334,36 @@ async function handleChannelApiRequest(pathname, method, data) {
                 const stats = await mapper.getSystemStats();
                 return { success: true, data: stats };
             }
+
+            if (id === 'summary') {
+                // 汇总统计 - 用于admin主界面显示
+                try {
+                    const configStats = await configService.getConfigStats();
+                    const cloneStats = cloneService ? cloneService.getCloneStats() : {};
+                    const queueStats = queueService ? await queueService.getQueueStats() : {};
+                    
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: configStats.total || 0,
+                            enabledConfigs: configStats.enabled || 0,
+                            totalClonedMessages: cloneStats.totalCloned || 0,
+                            queuedMessages: queueStats.pendingTasks || 0
+                        }
+                    };
+                } catch (error) {
+                    console.error('获取频道管理汇总统计失败:', error);
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: 0,
+                            enabledConfigs: 0,
+                            totalClonedMessages: 0,
+                            queuedMessages: 0
+                        }
+                    };
+                }
+            }
         }
 
         // 日志API
@@ -431,11 +461,22 @@ async function handleChannelApiRequest(pathname, method, data) {
 
             if (method === 'GET' && id === 'status') {
                 // 获取服务状态
+                const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
+                
+                if (!channelCloneEnabled) {
+                    return { 
+                        success: true, 
+                        enabled: false,
+                        message: '频道克隆功能未启用，请设置 CHANNEL_CLONE_ENABLED=true'
+                    };
+                }
+                
                 const queueStats = queueService ? await queueService.getQueueStats() : { isRunning: false };
                 const cloneStats = cloneService ? cloneService.getCloneStats() : {};
                 
                 return { 
                     success: true, 
+                    enabled: true,
                     data: {
                         queueService: {
                             running: queueStats.isRunning,

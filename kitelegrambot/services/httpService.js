@@ -1046,6 +1046,18 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
                     sendOptions.caption = messageContent;
                     sendOptions.photo = imageUrl;
                 }
+            } else if (type === 'dailyHot') {
+                // 当日热门老师
+                const apiService = require('./apiService');
+                const hotResult = await apiService.generateDailyHotMessage({ query: {} });
+                
+                if (!hotResult.success) {
+                    return { success: false, error: hotResult.message || '获取当日热门数据失败' };
+                }
+                
+                messageContent = hotResult.message;
+                sendOptions.parse_mode = 'HTML';
+                
             } else if (type === 'template') {
                 if (!templateId) {
                     return { success: false, error: '请选择消息模板' };
@@ -1430,6 +1442,36 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
         }
     }
 
+    // 当日热门老师API
+    if (pathname === '/api/daily-hot-teachers' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getDailyHotTeachers({ query: data });
+            return result;
+        } catch (error) {
+            console.error('获取当日热门老师失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // 生成当日热门消息API
+    if (pathname === '/api/daily-hot-message' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.generateDailyHotMessage({ query: data });
+            return result;
+        } catch (error) {
+            console.error('生成当日热门消息失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
     // API路由不存在
     console.log(`❌ API路径不存在: ${pathname} (${method})`);
     return { 
@@ -1444,6 +1486,8 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             'GET /api/rankings/merchants',
             'GET /api/rankings/users',
             'GET /api/charts/*',
+            'GET /api/daily-hot-teachers',
+            'GET /api/daily-hot-message',
             'GET /api/bot-username'
         ]
     };

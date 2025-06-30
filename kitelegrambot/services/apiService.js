@@ -2527,6 +2527,154 @@ class ApiService {
             throw new Error('刷新用户排名失败: ' + error.message);
         }
     }
+
+    // 获取当日热门老师（点击1分 + 咨询2分）
+    async getDailyHotTeachers({ query }) {
+        try {
+            console.log('获取当日热门老师排名');
+            
+            // 获取今日开始和结束时间戳
+            const today = new Date();
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const todayEnd = new Date(todayStart);
+            todayEnd.setDate(todayEnd.getDate() + 1);
+            
+            const startTimestamp = Math.floor(todayStart.getTime() / 1000);
+            const endTimestamp = Math.floor(todayEnd.getTime() / 1000);
+            
+            console.log('今日时间范围:', {
+                start: todayStart.toISOString(),
+                end: todayEnd.toISOString(),
+                startTimestamp,
+                endTimestamp
+            });
+
+            // 查询当日数据：频道点击 + 咨询订单
+            const sql = `
+                SELECT 
+                    m.id,
+                    m.teacher_name,
+                    m.username,
+                    m.channel_link,
+                    r.name as region_name,
+                    -- 今日频道点击数（1分/次）
+                    COUNT(DISTINCT cc.id) as todayClicks,
+                    -- 今日咨询数（2分/次）
+                    COUNT(DISTINCT o.id) as todayConsultations,
+                    -- 计算热度分数：点击1分 + 咨询2分
+                    (COUNT(DISTINCT cc.id) * 1 + COUNT(DISTINCT o.id) * 2) as hotScore
+                FROM merchants m
+                LEFT JOIN regions r ON m.region_id = r.id
+                LEFT JOIN channel_clicks cc ON m.id = cc.merchant_id 
+                    AND cc.created_at >= ? AND cc.created_at < ?
+                LEFT JOIN orders o ON m.id = o.merchant_id 
+                    AND o.created_at >= ? AND o.created_at < ?
+                WHERE m.status = 'active' 
+                    AND m.teacher_name IS NOT NULL 
+                    AND m.teacher_name != ''
+                GROUP BY m.id, m.teacher_name, m.username, m.channel_link, r.name
+                HAVING hotScore > 0
+                ORDER BY hotScore DESC, todayClicks DESC, m.teacher_name ASC
+                LIMIT 5
+            `;
+            
+            const hotTeachers = db.prepare(sql).all(
+                startTimestamp, endTimestamp, // 频道点击时间范围
+                startTimestamp, endTimestamp  // 订单时间范围
+            );
+            
+            console.log(`查询到 ${hotTeachers.length} 位热门老师`);
+            console.log('热门老师数据:', hotTeachers);
+
+            // 为每位老师添加排名和详细信息
+            const rankedTeachers = hotTeachers.map((teacher, index) => ({
+                ...teacher,
+                rank: index + 1,
+                todayClicks: teacher.todayClicks || 0,
+                todayConsultations: teacher.todayConsultations || 0,
+                hotScore: teacher.hotScore || 0
+            }));
+
+            return { 
+                success: true,
+                data: rankedTeachers,
+                date: todayStart.toISOString().split('T')[0],
+                totalTeachers: rankedTeachers.length
+            };
+            
+        } catch (error) {
+            console.error('获取当日热门老师失败:', error);
+            throw new Error('获取当日热门老师失败: ' + error.message);
+        }
+    }
+
+    // 生成当日热门老师消息内容
+    async generateDailyHotMessage({ query }) {
+        try {
+            const hotData = await this.getDailyHotTeachers({ query });
+            
+            if (!hotData.success || !hotData.data || hotData.data.length === 0) {
+                return {
+                    success: false,
+                    message: '今日暂无热门老师数据'
+                };
+            }
+
+            const teachers = hotData.data;
+            const today = new Date().toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // 构建消息内容
+            let message = `🔥 <b>${today} 当日热门老师 TOP${teachers.length}</b> 🔥\n\n`;
+            message += `📊 <i>热度计算：频道点击1分 + 咨询2分</i>\n\n`;
+
+            teachers.forEach((teacher, index) => {
+                let rankEmoji = '';
+                switch (index) {
+                    case 0: rankEmoji = '🥇'; break;
+                    case 1: rankEmoji = '🥈'; break;
+                    case 2: rankEmoji = '🥉'; break;
+                    case 3: rankEmoji = '🏅'; break;
+                    case 4: rankEmoji = '⭐'; break;
+                    default: rankEmoji = `${index + 1}️⃣`;
+                }
+
+                message += `${rankEmoji} <b>${teacher.teacher_name}</b>\n`;
+                message += `   🔥 热度值：${teacher.hotScore}分\n`;
+                
+                if (teacher.todayClicks > 0) {
+                    message += `   👁️ 今日点击：${teacher.todayClicks}次\n`;
+                }
+                if (teacher.todayConsultations > 0) {
+                    message += `   💬 今日咨询：${teacher.todayConsultations}次\n`;
+                }
+                if (teacher.region_name) {
+                    message += `   📍 地区：${teacher.region_name}\n`;
+                }
+                message += '\n';
+            });
+
+            message += `🌟 <i>数据统计时间：${today}</i>\n`;
+            message += `📈 <i>共有 ${teachers.length} 位老师上榜</i>`;
+
+            return {
+                success: true,
+                message: message,
+                data: teachers,
+                date: hotData.date
+            };
+
+        } catch (error) {
+            console.error('生成当日热门消息失败:', error);
+            return {
+                success: false,
+                message: '生成当日热门消息失败: ' + error.message
+            };
+        }
+    }
 }
 
 module.exports = new ApiService(); 

@@ -2,6 +2,12 @@ const TelegramBot = require('node-telegram-bot-api');
 const dbOperations = require('../models/dbOperations');
 const evaluationService = require('./evaluationService');
 
+// 频道克隆服务导入
+const ChannelCloneService = require('./channelCloneService');
+const MessageQueueService = require('./messageQueueService');
+const ChannelConfigService = require('./channelConfigService');
+const ContentFilterService = require('./contentFilterService');
+
 // 环境变量
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
@@ -76,6 +82,12 @@ let regionsMap = new Map();
 
 // 播报倒计时管理器
 const broadcastTimers = new Map(); // 存储用户的播报倒计时
+
+// 频道克隆服务实例
+let channelCloneService = null;
+let messageQueueService = null;
+let channelConfigService = null;
+let contentFilterService = null;
 
 // 内存映射管理 - 添加自动清理机制
 // 用户绑定状态变量已移除（绑定流程已简化）
@@ -327,6 +339,59 @@ async function handleBackButton(userId, messageType, data = {}) {
         
     } catch (error) {
         console.error('处理返回按钮失败:', error);
+    }
+}
+
+// 初始化频道克隆服务
+async function initializeChannelServices() {
+    try {
+        if (!bot) {
+            console.log('⚠️ Bot未初始化，跳过频道克隆服务初始化');
+            return;
+        }
+
+        // 检查是否启用频道克隆功能
+        const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
+        if (!channelCloneEnabled) {
+            console.log('📺 频道克隆功能未启用，跳过初始化');
+            return;
+        }
+
+        console.log('📺 开始初始化频道克隆服务...');
+
+        // 初始化配置服务
+        channelConfigService = new ChannelConfigService();
+        
+        // 初始化内容过滤服务
+        contentFilterService = new ContentFilterService();
+        
+        // 初始化克隆服务
+        channelCloneService = new ChannelCloneService(bot);
+        
+        // 初始化消息队列服务
+        messageQueueService = new MessageQueueService(bot);
+        messageQueueService.start(); // 启动队列处理
+
+        // 获取启用的配置数量
+        const enabledConfigs = await channelConfigService.getEnabledConfigs();
+        
+        console.log(`✅ 频道克隆服务初始化完成`);
+        console.log(`📺 已启用 ${enabledConfigs.length} 个频道配置`);
+        
+        // 记录服务状态
+        if (enabledConfigs.length > 0) {
+            console.log('📺 频道克隆服务正在监听以下配置:');
+            for (const config of enabledConfigs) {
+                console.log(`   - ${config.name}: ${config.sourceChannel.id} -> ${config.targetChannel.id}`);
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ 频道克隆服务初始化失败:', error);
+        
+        // 即使初始化失败，也要确保服务实例存在（避免后续调用报错）
+        if (!channelConfigService) channelConfigService = new ChannelConfigService();
+        if (!contentFilterService) contentFilterService = new ContentFilterService();
     }
 }
 
@@ -746,7 +811,7 @@ function initBotHandlers() {
                 
                 const successMessage2 = `📌 请置顶🐥小鸡管家机器人
 ⚠️ 避免错过小鸡的客人通知哦～
-❓ 如有问题请从群内联系客服 @xiaoji779`;
+❓ 如有问题请从群内联系客服 @xiaoji57`;
                 
                 bot.sendMessage(chatId, successMessage1);
                 setTimeout(() => {
@@ -4593,5 +4658,35 @@ module.exports = {
         scheduledTasks,
         bindCodes,
         regions
-    })
+    }),
+    // 频道克隆服务相关
+    initializeChannelServices,
+    getChannelServices: () => ({
+        cloneService: channelCloneService,
+        queueService: messageQueueService,
+        configService: channelConfigService,
+        filterService: contentFilterService
+    }),
+    // 频道克隆服务管理
+    startChannelServices: async () => {
+        if (messageQueueService && !messageQueueService.isRunning) {
+            messageQueueService.start();
+        }
+        console.log('📺 频道克隆服务已启动');
+    },
+    stopChannelServices: async () => {
+        if (messageQueueService && messageQueueService.isRunning) {
+            messageQueueService.stop();
+        }
+        if (channelCloneService) {
+            channelCloneService.stop();
+        }
+        console.log('📺 频道克隆服务已停止');
+    },
+    reloadChannelConfigs: async () => {
+        if (channelCloneService) {
+            return await channelCloneService.reloadConfigs();
+        }
+        return { success: false, error: '频道克隆服务未初始化' };
+    }
 }; 

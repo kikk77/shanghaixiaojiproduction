@@ -226,6 +226,290 @@ function handleWebhookRequest(req, res) {
     });
 }
 
+// 频道管理API处理函数
+async function handleChannelApiRequest(pathname, method, data) {
+    try {
+        // 获取频道服务实例
+        const bs = getBotService();
+        if (!bs) {
+            return { success: false, error: 'Bot服务未初始化' };
+        }
+
+        const channelServices = bs.getChannelServices();
+        if (!channelServices.configService) {
+            return { success: false, error: '频道克隆服务未初始化' };
+        }
+
+        const { configService, cloneService, queueService, filterService } = channelServices;
+
+        // 路由匹配
+        const pathParts = pathname.split('/');
+        const endpoint = pathParts[3]; // /api/channel/{endpoint}
+        const id = pathParts[4]; // /api/channel/{endpoint}/{id}
+
+        // 配置管理API
+        if (endpoint === 'configs') {
+            if (method === 'GET' && !id) {
+                // 获取所有配置
+                const configs = await configService.getAllConfigs();
+                return { success: true, data: configs };
+            }
+
+            if (method === 'GET' && id) {
+                // 获取单个配置
+                const config = await configService.getConfig(id);
+                if (!config) {
+                    return { success: false, error: '配置不存在' };
+                }
+                return { success: true, data: config };
+            }
+
+            if (method === 'POST') {
+                // 创建或更新配置
+                const result = await configService.saveConfig(data);
+                return result;
+            }
+
+            if (method === 'PUT' && id) {
+                // 更新配置
+                const result = await configService.updateConfig(id, data);
+                return result;
+            }
+
+            if (method === 'DELETE' && id) {
+                // 删除配置
+                const result = await configService.deleteConfig(id);
+                return result;
+            }
+        }
+
+        // 配置操作API
+        if (endpoint === 'configs' && pathParts[5]) {
+            const action = pathParts[5]; // /api/channel/configs/{id}/{action}
+
+            if (action === 'toggle' && method === 'POST') {
+                // 启用/禁用配置
+                const { enabled } = data;
+                const result = await configService.toggleConfig(id, enabled);
+                return result;
+            }
+
+            if (action === 'test' && method === 'POST') {
+                // 测试配置
+                const result = await configService.testConfig(id, bs.getBotInstance());
+                return result;
+            }
+
+            if (action === 'status' && method === 'GET') {
+                // 获取配置状态
+                const status = await configService.getConfigStatus(id);
+                return { success: true, data: status };
+            }
+        }
+
+        // 统计信息API
+        if (endpoint === 'stats' && method === 'GET') {
+            if (id === 'configs') {
+                // 配置统计
+                const stats = await configService.getConfigStats();
+                return { success: true, data: stats };
+            }
+
+            if (id === 'clone') {
+                // 克隆统计
+                const stats = cloneService ? cloneService.getCloneStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (id === 'queue') {
+                // 队列统计
+                const stats = queueService ? await queueService.getQueueStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (id === 'system') {
+                // 系统统计
+                const channelDataMapper = require('../models/channelDataMapper');
+                const mapper = new channelDataMapper();
+                const stats = await mapper.getSystemStats();
+                return { success: true, data: stats };
+            }
+        }
+
+        // 日志API
+        if (endpoint === 'logs' && method === 'GET') {
+            const channelDataMapper = require('../models/channelDataMapper');
+            const mapper = new channelDataMapper();
+            
+            const configId = data.configId || null;
+            const limit = parseInt(data.limit) || 50;
+            
+            const logs = await mapper.getLogs(configId, limit);
+            return { success: true, data: logs };
+        }
+
+        // 队列管理API
+        if (endpoint === 'queue') {
+            if (method === 'GET') {
+                // 获取队列任务
+                const stats = queueService ? await queueService.getQueueStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (method === 'POST' && id === 'clear') {
+                // 清空队列
+                const { taskType } = data;
+                const result = queueService ? await queueService.clearQueue(taskType) : null;
+                return result || { success: false, error: '队列服务未初始化' };
+            }
+
+            if (method === 'POST' && id === 'add') {
+                // 添加任务到队列
+                const { configId, taskType, taskData, priority, delay } = data;
+                
+                if (!queueService) {
+                    return { success: false, error: '队列服务未初始化' };
+                }
+
+                let success = false;
+                switch (taskType) {
+                    case 'clone_message':
+                        success = await queueService.addCloneTask(
+                            configId, 
+                            taskData.sourceChannelId, 
+                            taskData.sourceMessageId, 
+                            priority, 
+                            delay
+                        );
+                        break;
+                    case 'sync_edit':
+                        success = await queueService.addEditSyncTask(
+                            configId,
+                            taskData.sourceChannelId,
+                            taskData.sourceMessageId,
+                            taskData.targetChannelId,
+                            taskData.targetMessageId,
+                            taskData.newContent,
+                            priority
+                        );
+                        break;
+                    case 'batch_clone':
+                        success = await queueService.addBatchCloneTask(
+                            configId,
+                            taskData.configName,
+                            taskData.messageIds,
+                            priority
+                        );
+                        break;
+                    default:
+                        return { success: false, error: '未知的任务类型' };
+                }
+
+                return { success, message: success ? '任务添加成功' : '任务添加失败' };
+            }
+        }
+
+        // 服务管理API
+        if (endpoint === 'service') {
+            if (method === 'POST' && id === 'start') {
+                // 启动服务
+                await bs.startChannelServices();
+                return { success: true, message: '频道克隆服务已启动' };
+            }
+
+            if (method === 'POST' && id === 'stop') {
+                // 停止服务
+                await bs.stopChannelServices();
+                return { success: true, message: '频道克隆服务已停止' };
+            }
+
+            if (method === 'POST' && id === 'reload') {
+                // 重新加载配置
+                const result = await bs.reloadChannelConfigs();
+                return result;
+            }
+
+            if (method === 'GET' && id === 'status') {
+                // 获取服务状态
+                const queueStats = queueService ? await queueService.getQueueStats() : { isRunning: false };
+                const cloneStats = cloneService ? cloneService.getCloneStats() : {};
+                
+                return { 
+                    success: true, 
+                    data: {
+                        queueService: {
+                            running: queueStats.isRunning,
+                            pendingTasks: queueStats.pendingTasks || 0
+                        },
+                        cloneService: {
+                            totalCloned: cloneStats.totalCloned || 0,
+                            totalErrors: cloneStats.totalErrors || 0,
+                            activeConfigs: cloneStats.activeConfigs || 0
+                        }
+                    }
+                };
+            }
+        }
+
+        // 批量操作API
+        if (endpoint === 'batch' && method === 'POST') {
+            if (id === 'configs') {
+                // 批量操作配置
+                const { operation, configNames } = data;
+                const result = await configService.batchOperation(operation, configNames);
+                return { success: true, data: result };
+            }
+        }
+
+        // 导入导出API
+        if (endpoint === 'export' && method === 'POST') {
+            // 导出配置
+            const { configNames } = data;
+            const exportData = await configService.exportConfigs(configNames);
+            return { success: true, data: exportData };
+        }
+
+        if (endpoint === 'import' && method === 'POST') {
+            // 导入配置
+            const { importData, options } = data;
+            const result = await configService.importConfigs(importData, options);
+            return result;
+        }
+
+        // 频道信息API
+        if (endpoint === 'info' && method === 'GET') {
+            if (id) {
+                // 获取频道信息
+                const channelInfo = await configService.getChannelInfo(id, bs.getBotInstance());
+                return { success: true, data: channelInfo };
+            }
+        }
+
+        // 过滤器API
+        if (endpoint === 'filters') {
+            if (method === 'GET' && !id) {
+                // 获取过滤器类型列表
+                const filterTypes = filterService ? filterService.getFilterTypes() : [];
+                return { success: true, data: filterTypes };
+            }
+
+            if (method === 'POST' && id === 'test') {
+                // 测试过滤规则
+                const { ruleData, testMessage } = data;
+                const result = filterService ? await filterService.testFilterRule(ruleData, testMessage) : null;
+                return result || { success: false, error: '过滤服务未初始化' };
+            }
+        }
+
+        // 404 - 未找到对应的API端点
+        return { success: false, error: '未找到对应的API端点', endpoint, method };
+
+    } catch (error) {
+        console.error('频道API处理错误:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 // 文件下载处理
 function handleFileDownload(req, res, pathname) {
     try {
@@ -494,6 +778,11 @@ async function processApiRequest(pathname, method, data) {
     
 
     
+    // 频道管理API路由 - 独立的API命名空间
+    if (pathname.startsWith('/api/channel/')) {
+        return await handleChannelApiRequest(pathname, method, data);
+    }
+
     // 绑定码管理API
     if (pathname === '/api/bind-codes') {
         if (method === 'GET') {

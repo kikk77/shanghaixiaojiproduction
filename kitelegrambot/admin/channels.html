@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>频道克隆管理 - 上海小鸡管家</title>
+    <link rel="stylesheet" href="/admin/styles/common.css">
+    <style>
+        .channel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .channel-header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .channel-header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .configs-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .configs-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .configs-header h2 {
+            margin: 0;
+            color: #333;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 300px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .config-card {
+            border-bottom: 1px solid #dee2e6;
+            padding: 20px;
+            transition: background-color 0.3s;
+        }
+
+        .config-card:hover {
+            background-color: #f8f9fa;
+        }
+
+        .config-card:last-child {
+            border-bottom: none;
+        }
+
+        .config-info {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .config-details h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-running {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-disabled {
+            background: #f1f3f4;
+            color: #6c757d;
+        }
+
+        .config-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .meta-item {
+            text-align: center;
+        }
+
+        .meta-item .label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .meta-item .value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .config-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .config-actions .btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            min-width: 80px;
+            justify-content: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+        }
+
+        .close {
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .config-info {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .config-actions {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            
+            .meta-item {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部 -->
+        <div class="channel-header">
+            <h1>📺 频道克隆管理</h1>
+            <p>管理Telegram频道的实时克隆配置</p>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <h3>总配置</h3>
+                <div class="value" id="totalConfigs">-</div>
+                <div class="label">个配置</div>
+            </div>
+            <div class="stat-card">
+                <h3>启用中</h3>
+                <div class="value" id="enabledConfigs">-</div>
+                <div class="label">个配置</div>
+            </div>
+            <div class="stat-card">
+                <h3>今日克隆</h3>
+                <div class="value" id="todayCloned">-</div>
+                <div class="label">条消息</div>
+            </div>
+            <div class="stat-card">
+                <h3>队列任务</h3>
+                <div class="value" id="queueTasks">-</div>
+                <div class="label">个任务</div>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="showCreateModal()">
+                ➕ 新建配置
+            </button>
+            <button class="btn btn-success" onclick="refreshData()">
+                🔄 刷新数据
+            </button>
+            <button class="btn btn-warning" onclick="showServiceModal()">
+                ⚙️ 服务管理
+            </button>
+            <button class="btn btn-secondary" onclick="showLogsModal()">
+                📊 查看日志
+            </button>
+            <button class="btn btn-secondary" onclick="exportConfigs()">
+                📥 导出配置
+            </button>
+            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigs(this)">
+            <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">
+                📤 导入配置
+            </button>
+        </div>
+
+        <!-- 配置列表 -->
+        <div class="configs-container">
+            <div class="configs-header">
+                <h2>配置列表</h2>
+                <input type="text" class="search-box" placeholder="搜索配置..." id="searchBox" onkeyup="filterConfigs()">
+            </div>
+            <div id="configsList" class="loading">
+                加载中...
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建/编辑配置模态框 -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">新建频道配置</h3>
+                <span class="close" onclick="closeModal('configModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="configForm">
+                    <div class="form-group">
+                        <label for="configName">配置名称 *</label>
+                        <input type="text" id="configName" name="name" required>
+                        <small>为这个克隆配置起一个容易识别的名称</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sourceChannelId">源频道ID *</label>
+                        <input type="text" id="sourceChannelId" name="sourceChannelId" required placeholder="-1001234567890">
+                        <small>要监听的频道ID，格式如：-1001234567890</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetChannelId">目标频道ID *</label>
+                        <input type="text" id="targetChannelId" name="targetChannelId" required placeholder="-1001234567891">
+                        <small>消息将被克隆到这个频道，格式如：-1001234567891</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="enabled" name="enabled" checked>
+                            <label for="enabled">启用配置</label>
+                        </div>
+                        <small>取消勾选可以暂时禁用此配置</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="syncEdits" name="syncEdits" checked>
+                            <label for="syncEdits">同步编辑</label>
+                        </div>
+                        <small>当源频道的消息被编辑时，同步更新目标频道的消息</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="filterEnabled" name="filterEnabled">
+                            <label for="filterEnabled">启用内容过滤</label>
+                        </div>
+                        <small>对克隆的消息应用内容过滤规则</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rateLimit">速率限制 (条/分钟)</label>
+                        <input type="number" id="rateLimit" name="rateLimit" value="30" min="1" max="1000">
+                        <small>每分钟最多克隆的消息数量，避免API限制</small>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">保存配置</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('configModal')">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 服务管理模态框 -->
+    <div id="serviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>服务管理</h3>
+                <span class="close" onclick="closeModal('serviceModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="serviceStatus" class="loading">获取服务状态中...</div>
+                <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="startService()">▶️ 启动服务</button>
+                    <button class="btn btn-danger" onclick="stopService()">⏹️ 停止服务</button>
+                    <button class="btn btn-warning" onclick="reloadService()">🔄 重新加载</button>
+                    <button class="btn btn-secondary" onclick="clearQueue()">🗑️ 清空队列</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志查看模态框 -->
+    <div id="logsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>操作日志</h3>
+                <span class="close" onclick="closeModal('logsModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 15px;">
+                    <select id="logConfigFilter" onchange="loadLogs()">
+                        <option value="">所有配置</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="loadLogs()" style="margin-left: 10px;">刷新日志</button>
+                </div>
+                <div id="logsList" class="loading">加载日志中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/admin/scripts/channel-management.js"></script>
+</body>
+</html> 

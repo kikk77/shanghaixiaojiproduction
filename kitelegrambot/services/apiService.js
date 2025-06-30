@@ -2651,15 +2651,17 @@ class ApiService {
                 message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a> - 🔥${teacher.hotScore}分\n`;
             });
 
-            // 添加当前时间
+            // 添加当前时间（中国时区）
             const now = new Date();
-            const timeString = now.toLocaleDateString('zh-CN', {
+            const chinaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Shanghai"}));
+            const timeString = chinaTime.toLocaleDateString('zh-CN', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
-            }) + '  ' + now.toLocaleTimeString('zh-CN', {
+            }) + '  ' + chinaTime.toLocaleTimeString('zh-CN', {
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
+                hour12: false
             });
             
             message += `\n${timeString}`;

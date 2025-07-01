@@ -565,6 +565,88 @@
             color: #721c24;
         }
 
+        /* 进度条样式 */
+        .progress-container {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2196F3, #1976D2);
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1d1d1f;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            border: 1px solid #2196F3;
+            color: #0d47a1;
+        }
+
         /* 响应式设计 */
         @media (max-width: 768px) {
             .container {
@@ -820,6 +902,7 @@
                     
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <button class="action-btn btn-primary" onclick="refreshHistoryMessages()">🔄 刷新消息</button>
+                        <button class="action-btn btn-info" onclick="showHistoryScanModal(currentHistoryConfig)">🔍 自动扫描</button>
                         <button class="action-btn btn-success" onclick="selectAllMessages()" id="selectAllBtn">✅ 全选</button>
                         <button class="action-btn btn-warning" onclick="clearSelection()">❌ 清空选择</button>
                         <button class="action-btn btn-danger" onclick="cloneSelectedMessages()" id="cloneBtn" disabled>🚀 克隆选中 (0)</button>

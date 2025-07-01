@@ -3,278 +3,349 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>频道克隆管理 - 上海小鸡管家</title>
-    <link rel="stylesheet" href="/admin/styles/common.css">
+    <title>频道克隆管理</title>
     <style>
-        .channel-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .channel-header h1 {
+        * {
             margin: 0;
-            font-size: 24px;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        .channel-header p {
-            margin: 5px 0 0 0;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #1d1d1f;
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
             opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        /* 统计卡片 */
+        .stats-section {
+            margin-bottom: 40px;
         }
 
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            gap: 20px;
             margin-bottom: 30px;
         }
 
         .stat-card {
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            color: #1d1d1f;
+            padding: 24px;
+            border-radius: 12px;
             text-align: center;
-            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #e5e5e7;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
         }
 
         .stat-card h3 {
-            margin: 0 0 10px 0;
-            color: #333;
-            font-size: 14px;
+            font-size: 0.9em;
+            margin-bottom: 12px;
+            color: #86868b;
+            font-weight: 500;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
 
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
+        .stat-value {
+            font-size: 2.2em;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #1d1d1f;
         }
 
-        .stat-card .label {
-            color: #666;
-            font-size: 12px;
+        .stat-label {
+            font-size: 0.85em;
+            color: #86868b;
+            font-weight: 400;
         }
 
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
+        /* 操作按钮区域 */
+        .actions-section {
+            margin-bottom: 40px;
         }
 
-        .btn {
-            padding: 10px 20px;
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .action-btn {
+            padding: 15px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 12px;
+            font-size: 1em;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             text-decoration: none;
-            display: inline-flex;
+            display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
         }
 
         .btn-primary {
-            background: #667eea;
+            background: #1d1d1f;
             color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5a6fd8;
-            transform: translateY(-2px);
         }
 
         .btn-success {
-            background: #28a745;
+            background: #4a4a4a;
             color: white;
-        }
-
-        .btn-success:hover {
-            background: #218838;
         }
 
         .btn-warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .btn-warning:hover {
-            background: #e0a800;
+            background: #6a6a6a;
+            color: white;
         }
 
         .btn-danger {
-            background: #dc3545;
+            background: #2a2a2a;
             color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c82333;
         }
 
         .btn-secondary {
-            background: #6c757d;
-            color: white;
+            background: #f5f5f5;
+            color: #1d1d1f;
+            border: 1px solid #d1d1d1;
         }
 
-        .btn-secondary:hover {
-            background: #5a6268;
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0.9;
+        }
+
+        /* 配置列表区域 */
+        .configs-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .search-box {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 30px;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s ease;
+            display: block;
+        }
+
+        .search-box:focus {
+            border-color: #1d1d1f;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
         }
 
         .configs-container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
-            overflow: hidden;
+            min-height: 200px;
         }
 
-        .configs-header {
-            background: #f8f9fa;
-            padding: 20px;
-            border-bottom: 1px solid #dee2e6;
+        .config-card {
+            background: white;
+            border: 1px solid #e5e5e7;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+        }
+
+        .config-card:hover {
+            border-color: #1d1d1f;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+
+        .config-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
+            margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
         }
 
-        .configs-header h2 {
-            margin: 0;
+        .config-name {
+            font-size: 1.4em;
+            font-weight: 700;
             color: #333;
         }
 
-        .search-box {
-            flex: 1;
-            max-width: 300px;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
+        .config-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
         }
 
-        .config-card {
-            border-bottom: 1px solid #dee2e6;
-            padding: 20px;
-            transition: background-color 0.3s;
+        .status-active {
+            background: #f0f0f0;
+            color: #1d1d1f;
         }
 
-        .config-card:hover {
-            background-color: #f8f9fa;
+        .status-inactive {
+            background: #e0e0e0;
+            color: #6a6a6a;
         }
 
-        .config-card:last-child {
-            border-bottom: none;
-        }
-
-        .config-info {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 20px;
-            align-items: start;
-        }
-
-        .config-details h3 {
-            margin: 0 0 10px 0;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .status-running {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-stopped {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .status-disabled {
-            background: #f1f3f4;
-            color: #6c757d;
-        }
-
-        .config-meta {
+        .config-details {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
+            gap: 20px;
+            margin-bottom: 25px;
         }
 
-        .meta-item {
-            text-align: center;
+        .detail-item {
+            background: #f8f8f8;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e8e8e8;
         }
 
-        .meta-item .label {
-            display: block;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
+        .detail-label {
+            font-size: 0.8em;
+            color: #86868b;
+            margin-bottom: 6px;
+            font-weight: 500;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .meta-item .value {
-            font-weight: bold;
-            color: #333;
+        .detail-value {
+            font-size: 1em;
+            font-weight: 500;
+            color: #1d1d1f;
+            word-break: break-all;
         }
 
         .config-actions {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        .config-actions .btn {
-            padding: 6px 12px;
-            font-size: 12px;
-            min-width: 80px;
-            justify-content: center;
+        .config-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
+        .config-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+        }
+
+        .empty-state p {
+            font-size: 1.1em;
+            margin-bottom: 25px;
+        }
+
+        /* 加载状态 */
         .loading {
             text-align: center;
             padding: 40px;
             color: #666;
+            font-size: 1.1em;
         }
 
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        /* 错误状态 */
         .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            border: 1px solid #f5c6cb;
+            background: #f0f0f0;
+            color: #1d1d1f;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #d0d0d0;
         }
 
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            border: 1px solid #c3e6cb;
+        .error h3 {
+            margin-bottom: 10px;
         }
 
+        .error p {
+            margin-bottom: 15px;
+        }
+
+        /* 模态框样式 */
         .modal {
             display: none;
             position: fixed;
@@ -284,78 +355,86 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
         }
 
         .modal-content {
             background-color: white;
             margin: 5% auto;
             padding: 0;
-            border-radius: 10px;
+            border-radius: 16px;
             width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
+            max-width: 600px;
+            max-height: 90vh;
             overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
 
         .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid #dee2e6;
+            background: #1d1d1f;
+            color: white;
+            padding: 24px;
+            border-radius: 16px 16px 0 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .modal-header h3 {
-            margin: 0;
+            font-size: 1.5em;
+            font-weight: 700;
         }
 
         .close {
-            font-size: 24px;
+            font-size: 2em;
             font-weight: bold;
             cursor: pointer;
-            color: #999;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
         }
 
         .close:hover {
-            color: #333;
+            opacity: 1;
         }
 
         .modal-body {
-            padding: 20px;
+            padding: 30px;
         }
 
+        /* 表单样式 */
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+            margin-bottom: 8px;
+            font-weight: 600;
             color: #333;
         }
 
         .form-group input,
-        .form-group select,
-        .form-group textarea {
+        .form-group select {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            box-sizing: border-box;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s ease;
         }
 
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #1d1d1f;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
         }
 
         .form-group small {
             display: block;
             margin-top: 5px;
             color: #666;
-            font-size: 12px;
+            font-size: 0.9em;
         }
 
         .checkbox-group {
@@ -366,29 +445,47 @@
 
         .checkbox-group input[type="checkbox"] {
             width: auto;
+            margin: 0;
         }
 
+        /* 响应式设计 */
         @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
-            
-            .action-buttons {
+
+            .actions-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .config-header {
                 flex-direction: column;
+                align-items: flex-start;
             }
-            
-            .config-info {
+
+            .config-details {
                 grid-template-columns: 1fr;
-                gap: 15px;
             }
-            
+
             .config-actions {
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
-            
-            .meta-item {
-                text-align: left;
+                justify-content: center;
             }
         }
     </style>
@@ -396,66 +493,73 @@
 <body>
     <div class="container">
         <!-- 页面头部 -->
-        <div class="channel-header">
+        <div class="header">
             <h1>📺 频道克隆管理</h1>
-            <p>管理Telegram频道的实时克隆配置</p>
+            <p>管理和监控您的Telegram频道克隆配置</p>
         </div>
 
-        <!-- 统计信息 -->
-        <div class="stats-grid" id="statsGrid">
-            <div class="stat-card">
-                <h3>总配置</h3>
-                <div class="value" id="totalConfigs">-</div>
-                <div class="label">个配置</div>
+        <div class="main-content">
+            <!-- 统计信息 -->
+            <div class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>总配置</h3>
+                        <div class="stat-value" id="totalConfigs">-</div>
+                        <div class="stat-label">个配置</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>启用中</h3>
+                        <div class="stat-value" id="enabledConfigs">-</div>
+                        <div class="stat-label">个配置</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>今日克隆</h3>
+                        <div class="stat-value" id="todayCloned">-</div>
+                        <div class="stat-label">条消息</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>队列任务</h3>
+                        <div class="stat-value" id="queueTasks">-</div>
+                        <div class="stat-label">个任务</div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>启用中</h3>
-                <div class="value" id="enabledConfigs">-</div>
-                <div class="label">个配置</div>
-            </div>
-            <div class="stat-card">
-                <h3>今日克隆</h3>
-                <div class="value" id="todayCloned">-</div>
-                <div class="label">条消息</div>
-            </div>
-            <div class="stat-card">
-                <h3>队列任务</h3>
-                <div class="value" id="queueTasks">-</div>
-                <div class="label">个任务</div>
-            </div>
-        </div>
 
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-            <button class="btn btn-primary" onclick="showCreateModal()">
-                ➕ 新建配置
-            </button>
-            <button class="btn btn-success" onclick="refreshData()">
-                🔄 刷新数据
-            </button>
-            <button class="btn btn-warning" onclick="showServiceModal()">
-                ⚙️ 服务管理
-            </button>
-            <button class="btn btn-secondary" onclick="showLogsModal()">
-                📊 查看日志
-            </button>
-            <button class="btn btn-secondary" onclick="exportConfigs()">
-                📥 导出配置
-            </button>
-            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigs(this)">
-            <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">
-                📤 导入配置
-            </button>
-        </div>
-
-        <!-- 配置列表 -->
-        <div class="configs-container">
-            <div class="configs-header">
-                <h2>配置列表</h2>
-                <input type="text" class="search-box" placeholder="搜索配置..." id="searchBox" onkeyup="filterConfigs()">
+            <!-- 操作按钮 -->
+            <div class="actions-section">
+                <div class="actions-grid">
+                    <button class="action-btn btn-primary" onclick="showCreateModal()">
+                        ➕ 新建配置
+                    </button>
+                    <button class="action-btn btn-success" onclick="refreshData()">
+                        🔄 刷新数据
+                    </button>
+                    <button class="action-btn btn-warning" onclick="showServiceModal()">
+                        ⚙️ 服务管理
+                    </button>
+                    <button class="action-btn btn-secondary" onclick="showLogsModal()">
+                        📊 查看日志
+                    </button>
+                    <button class="action-btn btn-secondary" onclick="exportConfigs()">
+                        📥 导出配置
+                    </button>
+                    <button class="action-btn btn-secondary" onclick="document.getElementById('importFile').click()">
+                        📤 导入配置
+                    </button>
+                </div>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigs(this)">
             </div>
-            <div id="configsList" class="loading">
-                加载中...
+
+            <!-- 配置列表 -->
+            <div class="configs-section">
+                <h2 class="section-title">配置列表</h2>
+                <input type="text" class="search-box" placeholder="🔍 搜索配置名称、频道ID..." id="searchBox" onkeyup="filterConfigs()">
+                
+                <div class="configs-container">
+                    <div id="configsList" class="loading">
+                        正在加载配置
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -471,20 +575,20 @@
                 <form id="configForm">
                     <div class="form-group">
                         <label for="configName">配置名称 *</label>
-                        <input type="text" id="configName" name="name" required>
+                        <input type="text" id="configName" name="name" required placeholder="例如：新闻频道克隆">
                         <small>为这个克隆配置起一个容易识别的名称</small>
                     </div>
 
                     <div class="form-group">
                         <label for="sourceChannelId">源频道ID *</label>
-                        <input type="text" id="sourceChannelId" name="sourceChannelId" required placeholder="-1001234567890">
-                        <small>要监听的频道ID，格式如：-1001234567890</small>
+                        <input type="text" id="sourceChannelId" name="sourceChannelId" required placeholder="-1002686133634">
+                        <small>要监听的频道ID，格式如：-1002686133634</small>
                     </div>
 
                     <div class="form-group">
                         <label for="targetChannelId">目标频道ID *</label>
-                        <input type="text" id="targetChannelId" name="targetChannelId" required placeholder="-1001234567891">
-                        <small>消息将被克隆到这个频道，格式如：-1001234567891</small>
+                        <input type="text" id="targetChannelId" name="targetChannelId" required placeholder="-1002763598790">
+                        <small>消息将被克隆到这个频道，格式如：-1002763598790</small>
                     </div>
 
                     <div class="form-group">
@@ -517,9 +621,9 @@
                         <small>每分钟最多克隆的消息数量，避免API限制</small>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-primary" style="flex: 1;">保存配置</button>
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('configModal')">取消</button>
+                    <div style="display: flex; gap: 15px; margin-top: 30px;">
+                        <button type="submit" class="action-btn btn-primary" style="flex: 1;">💾 保存配置</button>
+                        <button type="button" class="action-btn btn-secondary" onclick="closeModal('configModal')">❌ 取消</button>
                     </div>
                 </form>
             </div>
@@ -530,16 +634,16 @@
     <div id="serviceModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>服务管理</h3>
+                <h3>⚙️ 服务管理</h3>
                 <span class="close" onclick="closeModal('serviceModal')">&times;</span>
             </div>
             <div class="modal-body">
-                <div id="serviceStatus" class="loading">获取服务状态中...</div>
-                <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="startService()">▶️ 启动服务</button>
-                    <button class="btn btn-danger" onclick="stopService()">⏹️ 停止服务</button>
-                    <button class="btn btn-warning" onclick="reloadService()">🔄 重新加载</button>
-                    <button class="btn btn-secondary" onclick="clearQueue()">🗑️ 清空队列</button>
+                <div id="serviceStatus" class="loading">获取服务状态中</div>
+                <div style="display: flex; gap: 15px; margin-top: 25px; flex-wrap: wrap;">
+                    <button class="action-btn btn-success" onclick="startService()">▶️ 启动服务</button>
+                    <button class="action-btn btn-danger" onclick="stopService()">⏹️ 停止服务</button>
+                    <button class="action-btn btn-warning" onclick="reloadService()">🔄 重新加载</button>
+                    <button class="action-btn btn-secondary" onclick="clearQueue()">🗑️ 清空队列</button>
                 </div>
             </div>
         </div>
@@ -547,19 +651,19 @@
 
     <!-- 日志查看模态框 -->
     <div id="logsModal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3>操作日志</h3>
+                <h3>📊 操作日志</h3>
                 <span class="close" onclick="closeModal('logsModal')">&times;</span>
             </div>
             <div class="modal-body">
-                <div style="margin-bottom: 15px;">
-                    <select id="logConfigFilter" onchange="loadLogs()">
+                <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+                    <select id="logConfigFilter" onchange="loadLogs()" style="flex: 1;">
                         <option value="">所有配置</option>
                     </select>
-                    <button class="btn btn-secondary" onclick="loadLogs()" style="margin-left: 10px;">刷新日志</button>
+                    <button class="action-btn btn-secondary" onclick="loadLogs()">🔄 刷新日志</button>
                 </div>
-                <div id="logsList" class="loading">加载日志中...</div>
+                <div id="logsList" class="loading">加载日志中</div>
             </div>
         </div>
     </div>
@@ -567,35 +671,129 @@
     <script src="/admin/scripts/channel-management.js"></script>
     
     <script>
-        // 调试脚本 - 检查页面状态
+        // 调试脚本
         console.log('🔍 页面调试信息:');
         console.log('- 当前URL:', window.location.href);
-        console.log('- User Agent:', navigator.userAgent);
         console.log('- 页面加载时间:', new Date().toISOString());
         
-        // 检查关键元素是否存在
+        // 检查关键元素和API
         setTimeout(() => {
-            console.log('🔍 检查页面元素:');
+            console.log('🔍 检查页面状态:');
             console.log('- configsList元素:', document.getElementById('configsList'));
             console.log('- totalConfigs元素:', document.getElementById('totalConfigs'));
-            console.log('- 所有配置数量:', typeof allConfigs !== 'undefined' ? allConfigs.length : '未定义');
+            console.log('- allConfigs变量:', typeof allConfigs !== 'undefined' ? allConfigs : '未定义');
             
             // 手动测试API
-            console.log('🔍 手动测试API...');
+            console.log('🔍 测试API连接...');
             fetch('/api/channel/configs')
                 .then(response => {
-                    console.log('📡 手动API响应状态:', response.status);
+                    console.log('📡 API响应状态:', response.status);
                     return response.json();
                 })
                 .then(data => {
-                    console.log('📡 手动API响应数据:', data);
+                    console.log('📡 API响应数据:', data);
+                    if (data.success && data.data && data.data.length > 0) {
+                        console.log('✅ 发现配置数据，强制显示...');
+                        // 如果有数据但没显示，强制显示
+                        displayConfigsManually(data.data);
+                    }
                 })
                 .catch(error => {
-                    console.error('❌ 手动API请求失败:', error);
+                    console.error('❌ API请求失败:', error);
                 });
         }, 2000);
         
-        // 检查JavaScript错误
+        // 手动显示配置的备用函数
+        function displayConfigsManually(configs) {
+            const configsList = document.getElementById('configsList');
+            if (!configs || configs.length === 0) {
+                configsList.innerHTML = `
+                    <div class="empty-state">
+                        <h3>😴 暂无配置</h3>
+                        <p>点击"新建配置"开始创建您的第一个频道克隆配置</p>
+                        <button class="action-btn btn-primary" onclick="showCreateModal()">
+                            ➕ 立即创建
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            configs.forEach(config => {
+                const settings = config.settings || {};
+                const sourceChannel = config.sourceChannel || {};
+                const targetChannel = config.targetChannel || {};
+                
+                html += `
+                    <div class="config-card">
+                        <div class="config-header">
+                            <div class="config-name">${config.name || '未命名配置'}</div>
+                            <div class="config-status ${settings.enabled ? 'status-active' : 'status-inactive'}">
+                                ${settings.enabled ? '🟢 已启用' : '🔴 已禁用'}
+                            </div>
+                        </div>
+                        
+                        <div class="config-details">
+                            <div class="detail-item">
+                                <div class="detail-label">源频道ID</div>
+                                <div class="detail-value">${sourceChannel.id || '未设置'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">目标频道ID</div>
+                                <div class="detail-value">${targetChannel.id || '未设置'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">速率限制</div>
+                                <div class="detail-value">${settings.rateLimit || 30}/分钟</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">创建时间</div>
+                                <div class="detail-value">${formatDate(config.createdAt) || '未知'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-actions">
+                            <button class="config-btn btn-primary" onclick="editConfig('${config.name}')">
+                                ✏️ 编辑
+                            </button>
+                            <button class="config-btn ${settings.enabled ? 'btn-warning' : 'btn-success'}" 
+                                    onclick="toggleConfig('${config.name}', ${!settings.enabled})">
+                                ${settings.enabled ? '⏸️ 暂停' : '▶️ 启动'}
+                            </button>
+                            <button class="config-btn btn-secondary" onclick="testConfig('${config.name}')">
+                                🔍 测试
+                            </button>
+                            <button class="config-btn btn-danger" onclick="confirmDeleteConfig('${config.name}')">
+                                🗑️ 删除
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            configsList.innerHTML = html;
+            console.log('✅ 手动显示配置完成');
+        }
+        
+        // 格式化日期的简单函数
+        function formatDate(dateString) {
+            if (!dateString) return '未知';
+            try {
+                return new Date(dateString).toLocaleString('zh-CN');
+            } catch {
+                return '无效日期';
+            }
+        }
+        
+        // 确认删除配置
+        function confirmDeleteConfig(configName) {
+            if (confirm(`确定要删除配置"${configName}"吗？\n\n此操作不可撤销！`)) {
+                deleteConfig(configName);
+            }
+        }
+        
+        // JavaScript错误监听
         window.addEventListener('error', function(e) {
             console.error('🚨 JavaScript错误:', e.error);
             console.error('🚨 错误位置:', e.filename, '第', e.lineno, '行');

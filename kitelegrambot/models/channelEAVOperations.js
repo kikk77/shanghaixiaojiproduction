@@ -68,6 +68,12 @@ class ChannelEAVOperations {
             }
 
             const entity = entities[0];
+            
+            // 检查配置是否已删除
+            if (entity.status === 'deleted') {
+                return null;
+            }
+            
             const values = this.schema.getEntityAllValues(entity.id);
 
             return {
@@ -100,6 +106,11 @@ class ChannelEAVOperations {
             const configs = [];
 
             for (const entity of entities) {
+                // 过滤掉已删除的配置
+                if (entity.status === 'deleted') {
+                    continue;
+                }
+                
                 const values = this.schema.getEntityAllValues(entity.id);
                 configs.push({
                     id: entity.id,

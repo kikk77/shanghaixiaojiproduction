@@ -23,11 +23,35 @@ async function initializePage() {
         await loadInitialData();
         setupEventListeners();
         
-        // 将关键函数暴露到全局，便于调试
+        // 将关键函数暴露到全局，便于调试和HTML onclick调用
+        window.showCreateModal = showCreateModal;
+        window.refreshData = refreshData;
+        window.showServiceModal = showServiceModal;
+        window.showLogsModal = showLogsModal;
+        window.exportConfigs = exportConfigs;
+        window.importConfigs = importConfigs;
+        window.filterConfigs = filterConfigs;
+        window.editConfig = editConfig;
         window.toggleConfig = toggleConfig;
         window.testConfig = testConfig;
+        window.confirmDeleteConfig = confirmDeleteConfig;
+        window.deleteConfig = deleteConfig;
+        window.showHistoryModal = showHistoryModal;
+        window.closeModal = closeModal;
+        window.startService = startService;
+        window.stopService = stopService;
+        window.reloadService = reloadService;
+        window.clearQueue = clearQueue;
+        window.loadLogs = loadLogs;
+        window.refreshHistoryMessages = refreshHistoryMessages;
+        window.filterHistoryMessages = filterHistoryMessages;
+        window.showHistoryScanModal = showHistoryScanModal;
+        window.selectAllMessages = selectAllMessages;
+        window.clearSelection = clearSelection;
+        window.cloneSelectedMessages = cloneSelectedMessages;
+        window.stopCloning = stopCloning;
         window.apiRequest = apiRequest;
-        console.log('🔧 调试函数已暴露到全局作用域');
+        console.log('🔧 所有按钮函数已暴露到全局作用域');
     } catch (error) {
         console.error('页面初始化失败:', error);
         showError('页面初始化失败，请刷新重试');

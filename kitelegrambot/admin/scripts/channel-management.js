@@ -466,23 +466,32 @@ async function handleConfigSubmit(event) {
 
 // 切换配置状态
 async function toggleConfig(configName, enabled) {
+    console.log(`🔄 开始${enabled ? '启用' : '禁用'}配置:`, configName);
+    
     try {
         showLoading(enabled ? '启用配置中...' : '禁用配置中...');
         
-        const response = await apiRequest(`/api/channel/configs/${configName}/toggle`, {
+        const url = `/api/channel/configs/${encodeURIComponent(configName)}/toggle`;
+        console.log('📡 API请求URL:', url);
+        console.log('📡 请求数据:', { enabled });
+        
+        const response = await apiRequest(url, {
             method: 'POST',
             body: JSON.stringify({ enabled })
         });
+
+        console.log('📡 API响应:', response);
 
         if (response.success) {
             showSuccess(enabled ? '配置已启用' : '配置已禁用');
             await refreshData();
         } else {
+            console.error('❌ API返回错误:', response.error);
             showError(response.error || '操作失败');
         }
         
     } catch (error) {
-        console.error('切换配置状态失败:', error);
+        console.error('❌ 切换配置状态失败:', error);
         showError(`操作失败: ${error.message}`);
     } finally {
         hideLoading();
@@ -491,32 +500,42 @@ async function toggleConfig(configName, enabled) {
 
 // 测试配置
 async function testConfig(configName) {
+    console.log('🧪 开始测试配置:', configName);
+    
     try {
         showLoading('测试配置中...');
         
-        const response = await apiRequest(`/api/channel/configs/${configName}/test`, {
+        const url = `/api/channel/configs/${encodeURIComponent(configName)}/test`;
+        console.log('📡 测试API请求URL:', url);
+        
+        const response = await apiRequest(url, {
             method: 'POST'
         });
 
+        console.log('📡 测试API响应:', response);
+
         if (response.success) {
-            const results = response.results;
+            const results = response.results || response.data;
+            console.log('🧪 测试结果:', results);
+            
             let message = '配置测试完成:\n\n';
             
-            message += `源频道: ${results.sourceChannel.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
-            message += `目标频道: ${results.targetChannel.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
-            message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
-            
-            if (!response.success) {
-                message += '\n⚠️ 发现问题，请检查配置';
+            if (results) {
+                message += `源频道: ${results.sourceChannel?.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
+                message += `目标频道: ${results.targetChannel?.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
+                message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
+            } else {
+                message += '⚠️ 未获取到详细测试结果\n';
             }
             
             alert(message);
         } else {
+            console.error('❌ 测试API返回错误:', response.error);
             showError(response.error || '测试失败');
         }
         
     } catch (error) {
-        console.error('测试配置失败:', error);
+        console.error('❌ 测试配置失败:', error);
         showError(`测试失败: ${error.message}`);
     } finally {
         hideLoading();
@@ -855,7 +874,8 @@ async function importConfigs(input) {
 async function refreshData() {
     try {
         await loadInitialData();
-        showSuccess('数据刷新成功', 1000);
+        // 移除刷新成功提示，避免UI一直变化
+        console.log('数据刷新成功');
     } catch (error) {
         console.error('刷新数据失败:', error);
         showError('刷新数据失败');

@@ -496,9 +496,14 @@ async function toggleConfig(configName, enabled) {
             showSuccess(enabled ? '配置已启用' : '配置已禁用');
             await refreshData();
         } else {
-            console.error('❌ API返回错误:', response.error);
+            // 处理错误信息 - 支持 error 和 errors 字段
+            const errorMessage = response.error || 
+                                (response.errors && response.errors.length > 0 ? response.errors.join(', ') : null) ||
+                                '操作失败';
+            
+            console.error('❌ API返回错误:', errorMessage);
             console.error('❌ 完整响应对象:', JSON.stringify(response, null, 2));
-            showError(response.error || '操作失败');
+            showError(errorMessage);
         }
         
     } catch (error) {
@@ -544,8 +549,13 @@ async function testConfig(configName) {
             
             alert(message);
         } else {
-            console.error('❌ 测试API返回错误:', response.error);
-            showError(response.error || '测试失败');
+            // 处理错误信息 - 支持 error 和 errors 字段
+            const errorMessage = response.error || 
+                                (response.errors && response.errors.length > 0 ? response.errors.join(', ') : null) ||
+                                '测试失败';
+            
+            console.error('❌ 测试API返回错误:', errorMessage);
+            showError(errorMessage);
         }
         
     } catch (error) {

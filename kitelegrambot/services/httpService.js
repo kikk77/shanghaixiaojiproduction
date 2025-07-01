@@ -309,25 +309,28 @@ async function handleChannelApiRequest(pathname, method, data) {
 
         // 统计信息API
         if (endpoint === 'stats' && method === 'GET') {
-            if (id === 'configs') {
+            // 从查询参数获取统计类型
+            const statsType = data.id || id;
+            
+            if (statsType === 'configs') {
                 // 配置统计
                 const stats = await configService.getConfigStats();
                 return { success: true, data: stats };
             }
 
-            if (id === 'clone') {
+            if (statsType === 'clone') {
                 // 克隆统计
                 const stats = cloneService ? cloneService.getCloneStats() : null;
                 return { success: true, data: stats || {} };
             }
 
-            if (id === 'queue') {
+            if (statsType === 'queue') {
                 // 队列统计
                 const stats = queueService ? await queueService.getQueueStats() : null;
                 return { success: true, data: stats || {} };
             }
 
-            if (id === 'system') {
+            if (statsType === 'system') {
                 // 系统统计
                 const channelDataMapper = require('../models/channelDataMapper');
                 const mapper = new channelDataMapper();

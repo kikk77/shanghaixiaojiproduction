@@ -487,12 +487,17 @@ async function toggleConfig(configName, enabled) {
         });
 
         console.log('📡 API响应:', response);
+        console.log('📡 API响应类型:', typeof response);
+        console.log('📡 API响应键值:', Object.keys(response));
+        console.log('📡 response.success:', response.success);
+        console.log('📡 response.error:', response.error);
 
         if (response.success) {
             showSuccess(enabled ? '配置已启用' : '配置已禁用');
             await refreshData();
         } else {
             console.error('❌ API返回错误:', response.error);
+            console.error('❌ 完整响应对象:', JSON.stringify(response, null, 2));
             showError(response.error || '操作失败');
         }
         
@@ -519,6 +524,9 @@ async function testConfig(configName) {
         });
 
         console.log('📡 测试API响应:', response);
+        console.log('📡 测试API响应类型:', typeof response);
+        console.log('📡 测试API响应键值:', Object.keys(response));
+        console.log('📡 response.success:', response.success);
 
         if (response.success) {
             const results = response.results || response.data;

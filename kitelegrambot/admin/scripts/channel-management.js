@@ -154,12 +154,63 @@ async function loadConfigs() {
         allConfigs = response.data || [];
         console.log('📋 加载的配置数量:', allConfigs.length);
         
+        // 调试：打印每个配置的详细信息
+        allConfigs.forEach((config, index) => {
+            console.log(`配置 ${index + 1}:`, {
+                name: config.name,
+                sourceChannel: config.sourceChannel,
+                targetChannel: config.targetChannel,
+                settings: config.settings,
+                status: config.status,
+                createdAt: config.createdAt
+            });
+        });
+        
         displayConfigs(allConfigs);
         updateConfigFilter();
         
     } catch (error) {
         console.error('加载配置失败:', error);
-        configsList.innerHTML = `<div class="error">加载配置失败: ${error.message}</div>`;
+        configsList.innerHTML = `
+            <div class="error">
+                <h3>加载配置失败</h3>
+                <p>${error.message}</p>
+                <button class="btn btn-primary" onclick="loadConfigs()">重试</button>
+                <button class="btn btn-warning" onclick="clearAllConfigs()">清空所有配置</button>
+            </div>
+        `;
+    }
+}
+
+// 清空所有配置（紧急修复功能）
+async function clearAllConfigs() {
+    if (!confirm('⚠️ 危险操作！\n\n这将删除所有频道配置，包括有问题的配置。\n\n确定要继续吗？')) {
+        return;
+    }
+
+    try {
+        showLoading('清空所有配置中...');
+        
+        // 尝试获取所有配置并逐个删除
+        for (const config of allConfigs) {
+            try {
+                await apiRequest(`/api/channel/configs/${config.name}`, {
+                    method: 'DELETE'
+                });
+                console.log(`删除配置: ${config.name}`);
+            } catch (error) {
+                console.warn(`删除配置失败: ${config.name}`, error);
+            }
+        }
+        
+        showSuccess('所有配置已清空');
+        await refreshData();
+        
+    } catch (error) {
+        console.error('清空配置失败:', error);
+        showError(`清空失败: ${error.message}`);
+    } finally {
+        hideLoading();
     }
 }
 
@@ -183,75 +234,110 @@ function displayConfigs(configs) {
 
 // 创建配置卡片HTML
 function createConfigCard(config) {
-    const statusClass = config.settings.enabled ? 
-        (config.status === 'active' ? 'status-running' : 'status-stopped') : 
-        'status-disabled';
-    
-    const statusText = config.settings.enabled ? 
-        (config.status === 'active' ? '运行中' : '已停止') : 
-        '已禁用';
+    try {
+        // 安全地获取配置数据，防止undefined错误
+        const settings = config.settings || {};
+        const sourceChannel = config.sourceChannel || {};
+        const targetChannel = config.targetChannel || {};
+        
+        // 调试信息
+        console.log('创建配置卡片:', {
+            name: config.name,
+            settings: settings,
+            sourceChannel: sourceChannel,
+            targetChannel: targetChannel,
+            status: config.status
+        });
+        
+        const enabled = Boolean(settings.enabled);
+        const status = config.status || 'active';
+        
+        const statusClass = enabled ? 
+            (status === 'active' ? 'status-running' : 'status-stopped') : 
+            'status-disabled';
+        
+        const statusText = enabled ? 
+            (status === 'active' ? '运行中' : '已停止') : 
+            '已禁用';
 
-    return `
-        <div class="config-card" onclick="editConfig('${config.name}')" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
-             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.15)';"
-             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
-            <div class="config-info">
-                <div class="config-details">
-                    <h3>
-                        ${escapeHtml(config.name)}
-                        <span class="status-badge ${statusClass}">${statusText}</span>
-                    </h3>
-                    
-                    <div class="config-meta">
-                        <div class="meta-item">
-                            <span class="label">源频道</span>
-                            <div class="value">${config.sourceChannel.id}</div>
+        return `
+            <div class="config-card" onclick="editConfig('${escapeHtml(config.name || '')}')" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                 onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.15)';"
+                 onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
+                <div class="config-info">
+                    <div class="config-details">
+                        <h3>
+                            ${escapeHtml(config.name || '未命名配置')}
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </h3>
+                        
+                        <div class="config-meta">
+                            <div class="meta-item">
+                                <span class="label">源频道</span>
+                                <div class="value">${escapeHtml(sourceChannel.id || '未设置')}</div>
+                            </div>
+                            <div class="meta-item">
+                                <span class="label">目标频道</span>
+                                <div class="value">${escapeHtml(targetChannel.id || '未设置')}</div>
+                            </div>
+                            <div class="meta-item">
+                                <span class="label">速率限制</span>
+                                <div class="value">${settings.rateLimit || 30}/分钟</div>
+                            </div>
+                            <div class="meta-item">
+                                <span class="label">创建时间</span>
+                                <div class="value">${formatDate(config.createdAt) || '未知'}</div>
+                            </div>
                         </div>
-                        <div class="meta-item">
-                            <span class="label">目标频道</span>
-                            <div class="value">${config.targetChannel.id}</div>
-                        </div>
-                        <div class="meta-item">
-                            <span class="label">速率限制</span>
-                            <div class="value">${config.settings.rateLimit}/分钟</div>
-                        </div>
-                        <div class="meta-item">
-                            <span class="label">创建时间</span>
-                            <div class="value">${formatDate(config.createdAt)}</div>
+
+                        <div style="margin-top: 10px;">
+                            <small style="color: #666;">
+                                同步编辑: ${Boolean(settings.syncEdits) ? '✅' : '❌'} | 
+                                内容过滤: ${Boolean(settings.filterEnabled) ? '✅' : '❌'}
+                            </small>
                         </div>
                     </div>
 
-                    <div style="margin-top: 10px;">
-                        <small style="color: #666;">
-                            同步编辑: ${config.settings.syncEdits ? '✅' : '❌'} | 
-                            内容过滤: ${config.settings.filterEnabled ? '✅' : '❌'}
-                        </small>
+                    <div class="config-actions" onclick="event.stopPropagation();">
+                        <button class="btn btn-primary" onclick="editConfig('${escapeHtml(config.name || '')}')" title="编辑配置">
+                            ✏️ 编辑
+                        </button>
+                        <button class="btn ${enabled ? 'btn-warning' : 'btn-success'}" 
+                                onclick="toggleConfig('${escapeHtml(config.name || '')}', ${!enabled})"
+                                title="${enabled ? '禁用配置' : '启用配置'}">
+                            ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
+                        </button>
+                        <button class="btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
+                            🔍 测试
+                        </button>
+                        <button class="btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
+                            🗑️ 删除
+                        </button>
                     </div>
                 </div>
-
-                <div class="config-actions" onclick="event.stopPropagation();">
-                    <button class="btn btn-primary" onclick="editConfig('${config.name}')" title="编辑配置">
-                        ✏️ 编辑
-                    </button>
-                    <button class="btn ${config.settings.enabled ? 'btn-warning' : 'btn-success'}" 
-                            onclick="toggleConfig('${config.name}', ${!config.settings.enabled})"
-                            title="${config.settings.enabled ? '禁用配置' : '启用配置'}">
-                        ${config.settings.enabled ? '⏸️ 禁用' : '▶️ 启用'}
-                    </button>
-                    <button class="btn btn-secondary" onclick="testConfig('${config.name}')" title="测试配置">
-                        🔍 测试
-                    </button>
-                    <button class="btn btn-danger" onclick="confirmDeleteConfig('${config.name}')" title="删除配置">
-                        🗑️ 删除
-                    </button>
+                
+                <div class="config-click-hint" style="position: absolute; top: 10px; right: 15px; font-size: 12px; color: #999; opacity: 0.7;">
+                    💡 点击卡片编辑
                 </div>
             </div>
-            
-            <div class="config-click-hint" style="position: absolute; top: 10px; right: 15px; font-size: 12px; color: #999; opacity: 0.7;">
-                💡 点击卡片编辑
+        `;
+    } catch (error) {
+        console.error('创建配置卡片失败:', error, config);
+        return `
+            <div class="config-card" style="border: 2px solid #dc3545;">
+                <div class="config-info">
+                    <div class="config-details">
+                        <h3 style="color: #dc3545;">配置显示错误</h3>
+                        <p>配置名: ${config.name || '未知'}</p>
+                        <p>错误: ${error.message}</p>
+                        <button class="btn btn-danger" onclick="deleteConfig('${escapeHtml(config.name || '')}')">
+                            🗑️ 删除错误配置
+                        </button>
+                    </div>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 // 过滤配置
@@ -292,25 +378,42 @@ function showCreateModal() {
 
 // 编辑配置
 function editConfig(configName) {
+    console.log('编辑配置:', configName);
+    console.log('所有配置:', allConfigs);
+    
     const config = allConfigs.find(c => c.name === configName);
     if (!config) {
+        console.error('配置不存在:', configName);
         showError('配置不存在');
         return;
     }
 
+    console.log('找到配置:', config);
     currentEditingConfig = configName;
     
-    // 填充表单
-    document.getElementById('configName').value = config.name;
-    document.getElementById('sourceChannelId').value = config.sourceChannel.id;
-    document.getElementById('targetChannelId').value = config.targetChannel.id;
-    document.getElementById('enabled').checked = config.settings.enabled;
-    document.getElementById('syncEdits').checked = config.settings.syncEdits;
-    document.getElementById('filterEnabled').checked = config.settings.filterEnabled;
-    document.getElementById('rateLimit').value = config.settings.rateLimit;
+    // 安全地获取配置数据
+    const settings = config.settings || {};
+    const sourceChannel = config.sourceChannel || {};
+    const targetChannel = config.targetChannel || {};
     
-    document.getElementById('modalTitle').textContent = '编辑频道配置';
-    showModal('configModal');
+    try {
+        // 填充表单
+        document.getElementById('configName').value = config.name || '';
+        document.getElementById('sourceChannelId').value = sourceChannel.id || '';
+        document.getElementById('targetChannelId').value = targetChannel.id || '';
+        document.getElementById('enabled').checked = Boolean(settings.enabled);
+        document.getElementById('syncEdits').checked = Boolean(settings.syncEdits);
+        document.getElementById('filterEnabled').checked = Boolean(settings.filterEnabled);
+        document.getElementById('rateLimit').value = settings.rateLimit || 30;
+        
+        document.getElementById('modalTitle').textContent = '编辑频道配置';
+        showModal('configModal');
+        
+        console.log('表单填充完成');
+    } catch (error) {
+        console.error('填充表单失败:', error);
+        showError('填充表单失败: ' + error.message);
+    }
 }
 
 // 处理配置表单提交

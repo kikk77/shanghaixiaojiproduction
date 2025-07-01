@@ -486,36 +486,113 @@ class ChannelConfigService {
      */
     async getChannelHistory(channelId, bot, limit) {
         try {
-            // 模拟获取历史消息，实际实现需要根据Telegram Bot API
-            // 由于Bot API限制，我们创建一些示例数据
-            const sampleMessages = [];
-            const now = Math.floor(Date.now() / 1000);
+            console.log(`📜 尝试获取频道 ${channelId} 的历史消息`);
             
-            for (let i = 0; i < Math.min(limit, 20); i++) {
-                sampleMessages.push({
-                    message_id: 1000 + i,
-                    date: now - (i * 3600), // 每小时一条消息
-                    text: `这是示例消息 #${1000 + i}，用于演示历史消息功能。`,
-                    from: {
-                        id: 123456789,
-                        is_bot: false,
-                        first_name: "示例用户"
-                    },
-                    chat: {
-                        id: parseInt(channelId),
-                        type: "channel"
-                    }
+            // 方法1: 尝试使用getUpdates获取最近的更新
+            // 注意：这只能获取到Bot启动后的消息，无法获取历史消息
+            let messages = [];
+            
+            try {
+                // 获取最近的更新，包括频道消息
+                const updates = await bot.getUpdates({
+                    limit: Math.min(limit, 100),
+                    allowed_updates: ['channel_post', 'edited_channel_post']
                 });
+                
+                console.log(`📜 获取到 ${updates.length} 个更新`);
+                
+                // 过滤出指定频道的消息
+                for (const update of updates) {
+                    if (update.channel_post && update.channel_post.chat.id.toString() === channelId.toString()) {
+                        messages.push(update.channel_post);
+                    }
+                }
+                
+                console.log(`📜 过滤后得到 ${messages.length} 条频道消息`);
+                
+                // 如果没有获取到足够的消息，添加一些说明性消息
+                if (messages.length === 0) {
+                    const now = Math.floor(Date.now() / 1000);
+                    messages = [
+                        {
+                            message_id: 9001,
+                            date: now - 3600,
+                            text: `⚠️ 无法获取频道历史消息\n\nTelegram Bot API限制：\n• Bot只能获取启动后收到的消息\n• 无法获取Bot启动前的历史消息\n• 建议使用实时监听功能\n\n频道ID: ${channelId}`,
+                            from: {
+                                id: 0,
+                                is_bot: true,
+                                first_name: "系统提示"
+                            },
+                            chat: {
+                                id: parseInt(channelId),
+                                type: "channel"
+                            }
+                        },
+                        {
+                            message_id: 9002,
+                            date: now - 1800,
+                            text: `💡 建议操作：\n\n1. 确保Bot已加入源频道\n2. 给Bot管理员权限\n3. 启用实时克隆功能\n4. 新消息将自动克隆\n\n如需克隆历史消息，请考虑：\n• 手动转发重要消息\n• 使用Telegram客户端导出数据`,
+                            from: {
+                                id: 0,
+                                is_bot: true,
+                                first_name: "系统提示"
+                            },
+                            chat: {
+                                id: parseInt(channelId),
+                                type: "channel"
+                            }
+                        }
+                    ];
+                }
+                
+            } catch (error) {
+                console.error('使用getUpdates获取消息失败:', error);
+                
+                // 如果getUpdates失败，返回错误说明
+                const now = Math.floor(Date.now() / 1000);
+                messages = [
+                    {
+                        message_id: 9000,
+                        date: now,
+                        text: `❌ 获取历史消息失败\n\n错误信息: ${error.message}\n\n可能的原因：\n• Bot未加入频道\n• Bot权限不足\n• 频道ID错误\n• 网络连接问题\n\n请检查配置并重试。`,
+                        from: {
+                            id: 0,
+                            is_bot: true,
+                            first_name: "错误提示"
+                        },
+                        chat: {
+                            id: parseInt(channelId),
+                            type: "channel"
+                        }
+                    }
+                ];
             }
             
-            // 实际实现中，这里应该调用Telegram Bot API
-            // 例如：const messages = await bot.getUpdates({limit, allowed_updates: ['channel_post']});
+            // 按消息ID排序（最新的在前）
+            messages.sort((a, b) => b.message_id - a.message_id);
             
-            console.log(`📜 模拟返回 ${sampleMessages.length} 条历史消息`);
-            return sampleMessages;
+            console.log(`📜 最终返回 ${messages.length} 条消息`);
+            return messages.slice(0, limit);
+            
         } catch (error) {
             console.error('获取频道历史失败:', error);
-            return [];
+            
+            // 返回错误信息作为消息
+            const now = Math.floor(Date.now() / 1000);
+            return [{
+                message_id: 9999,
+                date: now,
+                text: `🚨 系统错误\n\n${error.message}\n\n请联系管理员检查系统配置。`,
+                from: {
+                    id: 0,
+                    is_bot: true,
+                    first_name: "系统错误"
+                },
+                chat: {
+                    id: parseInt(channelId),
+                    type: "channel"
+                }
+            }];
         }
     }
 

@@ -482,6 +482,279 @@ class ChannelConfigService {
     }
 
     /**
+     * 扫描并克隆历史消息
+     */
+    async scanAndCloneHistory(configName, bot, options = {}) {
+        try {
+            const config = await this.getConfig(configName);
+            if (!config) {
+                return {
+                    success: false,
+                    error: '配置不存在'
+                };
+            }
+
+            const {
+                startMessageId = 1,
+                endMessageId = null,
+                maxMessages = 100,
+                delayMs = 1000,
+                skipExisting = true
+            } = options;
+
+            const sourceChannelId = config.sourceChannel.id;
+            const targetChannelId = config.targetChannel.id;
+            
+            console.log(`🔍 开始扫描历史消息: ${sourceChannelId} -> ${targetChannelId}`);
+            console.log(`📊 扫描范围: ${startMessageId} 到 ${endMessageId || '最新'}`);
+
+            let scannedCount = 0;
+            let foundCount = 0;
+            let clonedCount = 0;
+            let errorCount = 0;
+            let currentMessageId = startMessageId;
+
+            // 如果没有指定结束ID，尝试获取最新消息ID
+            let maxMessageId = endMessageId;
+            if (!maxMessageId) {
+                maxMessageId = await this.getLatestMessageId(sourceChannelId, bot);
+                if (!maxMessageId) {
+                    maxMessageId = startMessageId + maxMessages;
+                }
+            }
+
+            const results = [];
+
+            while (currentMessageId <= maxMessageId && foundCount < maxMessages) {
+                try {
+                    // 尝试获取特定消息
+                    const message = await this.getMessageById(sourceChannelId, currentMessageId, bot);
+                    
+                    if (message) {
+                        foundCount++;
+                        console.log(`📨 找到消息 #${currentMessageId}: ${message.text?.substring(0, 50) || '[媒体消息]'}...`);
+
+                        // 检查是否已经克隆过
+                        if (skipExisting) {
+                            const existingMapping = await this.dataMapper.getMessageMapping(currentMessageId, config.id);
+                            if (existingMapping) {
+                                console.log(`⏭️ 跳过已克隆的消息 #${currentMessageId}`);
+                                results.push({
+                                    messageId: currentMessageId,
+                                    status: 'skipped',
+                                    reason: '已存在'
+                                });
+                                currentMessageId++;
+                                continue;
+                            }
+                        }
+
+                        // 克隆消息
+                        const cloneResult = await this.cloneHistoryMessage(
+                            config,
+                            message,
+                            bot
+                        );
+
+                        if (cloneResult.success) {
+                            clonedCount++;
+                            results.push({
+                                messageId: currentMessageId,
+                                status: 'success',
+                                targetMessageId: cloneResult.targetMessageId
+                            });
+                            console.log(`✅ 成功克隆消息 #${currentMessageId} -> #${cloneResult.targetMessageId}`);
+                        } else {
+                            errorCount++;
+                            results.push({
+                                messageId: currentMessageId,
+                                status: 'error',
+                                error: cloneResult.error
+                            });
+                            console.log(`❌ 克隆失败 #${currentMessageId}: ${cloneResult.error}`);
+                        }
+
+                        // 添加延迟避免API限制
+                        if (delayMs > 0) {
+                            await new Promise(resolve => setTimeout(resolve, delayMs));
+                        }
+                    }
+
+                    scannedCount++;
+                    currentMessageId++;
+
+                } catch (error) {
+                    console.log(`🔍 消息 #${currentMessageId} 不存在或无法访问`);
+                    currentMessageId++;
+                    scannedCount++;
+                }
+
+                // 每扫描100条消息输出进度
+                if (scannedCount % 100 === 0) {
+                    console.log(`📊 扫描进度: ${scannedCount}/${maxMessageId - startMessageId + 1}, 找到: ${foundCount}, 克隆: ${clonedCount}`);
+                }
+            }
+
+            // 记录扫描日志
+            await this.dataMapper.logAction(
+                config.id,
+                'history_scan',
+                'success',
+                null,
+                0,
+                {
+                    scanned_count: scannedCount,
+                    found_count: foundCount,
+                    cloned_count: clonedCount,
+                    error_count: errorCount,
+                    scan_range: `${startMessageId}-${currentMessageId - 1}`
+                }
+            );
+
+            console.log(`🎉 历史消息扫描完成!`);
+            console.log(`📊 统计: 扫描${scannedCount}条, 找到${foundCount}条, 克隆${clonedCount}条, 失败${errorCount}条`);
+
+            return {
+                success: true,
+                data: {
+                    scannedCount,
+                    foundCount,
+                    clonedCount,
+                    errorCount,
+                    results
+                }
+            };
+
+        } catch (error) {
+            console.error('扫描历史消息失败:', error);
+            return {
+                success: false,
+                error: '扫描失败: ' + error.message
+            };
+        }
+    }
+
+    /**
+     * 获取特定消息ID的消息
+     */
+    async getMessageById(channelId, messageId, bot) {
+        try {
+            // 方法1: 尝试转发消息到自己来获取消息内容
+            const botInfo = await bot.getMe();
+            const forwardResult = await bot.forwardMessage(
+                botInfo.id, // 转发给bot自己
+                channelId,
+                messageId
+            );
+
+            if (forwardResult) {
+                // 获取转发的消息内容
+                const message = {
+                    message_id: messageId,
+                    date: forwardResult.date,
+                    text: forwardResult.text,
+                    caption: forwardResult.caption,
+                    photo: forwardResult.photo,
+                    video: forwardResult.video,
+                    document: forwardResult.document,
+                    audio: forwardResult.audio,
+                    voice: forwardResult.voice,
+                    sticker: forwardResult.sticker,
+                    animation: forwardResult.animation,
+                    from: forwardResult.forward_origin?.sender_user || forwardResult.forward_origin?.sender_chat,
+                    chat: { id: channelId, type: 'channel' }
+                };
+
+                // 删除转发给自己的消息
+                try {
+                    await bot.deleteMessage(botInfo.id, forwardResult.message_id);
+                } catch (deleteError) {
+                    console.warn('删除临时转发消息失败:', deleteError.message);
+                }
+
+                return message;
+            }
+
+            return null;
+        } catch (error) {
+            // 如果转发失败，说明消息不存在或无权限
+            return null;
+        }
+    }
+
+    /**
+     * 获取频道最新消息ID
+     */
+    async getLatestMessageId(channelId, bot) {
+        try {
+            // 尝试获取频道信息
+            const chat = await bot.getChat(channelId);
+            
+            // 如果是频道，尝试获取最近的消息
+            // 这里我们使用一个大概的数字，实际应用中可以根据频道创建时间估算
+            const now = Date.now();
+            const channelCreatedTime = new Date('2020-01-01').getTime(); // 假设频道创建时间
+            const daysSinceCreated = Math.floor((now - channelCreatedTime) / (1000 * 60 * 60 * 24));
+            
+            // 估算最大消息ID (每天平均10条消息)
+            const estimatedMaxId = Math.min(daysSinceCreated * 10, 10000);
+            
+            console.log(`📊 估算频道 ${channelId} 最大消息ID: ${estimatedMaxId}`);
+            return estimatedMaxId;
+            
+        } catch (error) {
+            console.warn('获取最新消息ID失败:', error.message);
+            return 1000; // 默认值
+        }
+    }
+
+    /**
+     * 克隆历史消息
+     */
+    async cloneHistoryMessage(config, message, bot) {
+        try {
+            const sourceChannelId = config.sourceChannel.id;
+            const targetChannelId = config.targetChannel.id;
+            const messageId = message.message_id;
+
+            console.log(`🚀 克隆历史消息 ${messageId} 从 ${sourceChannelId} 到 ${targetChannelId}`);
+
+            // 使用copyMessage API克隆消息
+            const result = await bot.copyMessage(
+                targetChannelId,
+                sourceChannelId,
+                messageId
+            );
+
+            if (result && result.message_id) {
+                // 记录消息映射
+                await this.dataMapper.createMessageMapping(
+                    config.id,
+                    messageId,
+                    result.message_id,
+                    'history_clone'
+                );
+
+                return {
+                    success: true,
+                    targetMessageId: result.message_id
+                };
+            } else {
+                return {
+                    success: false,
+                    error: '克隆失败，未获取到目标消息ID'
+                };
+            }
+
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * 获取频道历史消息的辅助方法
      */
     async getChannelHistory(channelId, bot, limit) {
@@ -778,6 +1051,168 @@ class ChannelConfigService {
                 recentActivity: []
             };
         }
+    }
+
+    /**
+     * 导出频道消息
+     */
+    async exportChannelMessages(configName, bot, format = 'json') {
+        try {
+            const config = await this.getConfig(configName);
+            if (!config) {
+                return {
+                    success: false,
+                    error: '配置不存在'
+                };
+            }
+
+            console.log(`📤 开始导出频道 ${config.sourceChannel.id} 的消息`);
+            
+            // 获取所有可用的消息
+            const messages = await this.getChannelHistory(config.sourceChannel.id, bot, 1000);
+            
+            // 准备导出数据
+            const exportData = {
+                export_info: {
+                    channel_id: config.sourceChannel.id,
+                    channel_name: config.name,
+                    export_time: new Date().toISOString(),
+                    total_messages: messages.length,
+                    format: format
+                },
+                messages: messages.map(msg => ({
+                    message_id: msg.message_id,
+                    date: new Date(msg.date * 1000).toISOString(),
+                    text: msg.text || '',
+                    caption: msg.caption || '',
+                    media_type: this.getMessageMediaType(msg),
+                    from: {
+                        id: msg.from?.id,
+                        first_name: msg.from?.first_name,
+                        username: msg.from?.username,
+                        is_bot: msg.from?.is_bot
+                    },
+                    chat: {
+                        id: msg.chat?.id,
+                        type: msg.chat?.type,
+                        title: msg.chat?.title
+                    }
+                }))
+            };
+
+            // 根据格式生成不同的导出内容
+            let exportContent;
+            let filename;
+            let contentType;
+
+            switch (format.toLowerCase()) {
+                case 'json':
+                    exportContent = JSON.stringify(exportData, null, 2);
+                    filename = `channel_export_${configName}_${new Date().toISOString().split('T')[0]}.json`;
+                    contentType = 'application/json';
+                    break;
+                
+                case 'csv':
+                    exportContent = this.convertToCSV(exportData.messages);
+                    filename = `channel_export_${configName}_${new Date().toISOString().split('T')[0]}.csv`;
+                    contentType = 'text/csv';
+                    break;
+                
+                case 'txt':
+                    exportContent = this.convertToText(exportData);
+                    filename = `channel_export_${configName}_${new Date().toISOString().split('T')[0]}.txt`;
+                    contentType = 'text/plain';
+                    break;
+                
+                default:
+                    exportContent = JSON.stringify(exportData, null, 2);
+                    filename = `channel_export_${configName}_${new Date().toISOString().split('T')[0]}.json`;
+                    contentType = 'application/json';
+            }
+
+            console.log(`📤 导出完成，包含 ${messages.length} 条消息`);
+
+            return {
+                success: true,
+                data: {
+                    content: exportContent,
+                    filename: filename,
+                    contentType: contentType,
+                    messageCount: messages.length
+                }
+            };
+
+        } catch (error) {
+            console.error('导出频道消息失败:', error);
+            return {
+                success: false,
+                error: '导出失败: ' + error.message
+            };
+        }
+    }
+
+    /**
+     * 获取消息媒体类型
+     */
+    getMessageMediaType(message) {
+        if (message.photo) return 'photo';
+        if (message.video) return 'video';
+        if (message.document) return 'document';
+        if (message.audio) return 'audio';
+        if (message.voice) return 'voice';
+        if (message.sticker) return 'sticker';
+        if (message.animation) return 'animation';
+        if (message.location) return 'location';
+        if (message.contact) return 'contact';
+        if (message.poll) return 'poll';
+        return 'text';
+    }
+
+    /**
+     * 转换为CSV格式
+     */
+    convertToCSV(messages) {
+        const headers = ['Message ID', 'Date', 'From', 'Text', 'Media Type'];
+        const rows = [headers.join(',')];
+
+        messages.forEach(msg => {
+            const row = [
+                msg.message_id,
+                msg.date,
+                `"${msg.from?.first_name || 'Unknown'}"`,
+                `"${(msg.text || '').replace(/"/g, '""')}"`,
+                msg.media_type
+            ];
+            rows.push(row.join(','));
+        });
+
+        return rows.join('\n');
+    }
+
+    /**
+     * 转换为文本格式
+     */
+    convertToText(exportData) {
+        let content = `频道消息导出\n`;
+        content += `===============\n`;
+        content += `频道ID: ${exportData.export_info.channel_id}\n`;
+        content += `配置名称: ${exportData.export_info.channel_name}\n`;
+        content += `导出时间: ${exportData.export_info.export_time}\n`;
+        content += `消息总数: ${exportData.export_info.total_messages}\n`;
+        content += `===============\n\n`;
+
+        exportData.messages.forEach((msg, index) => {
+            content += `消息 #${msg.message_id}\n`;
+            content += `时间: ${msg.date}\n`;
+            content += `发送者: ${msg.from?.first_name || 'Unknown'}\n`;
+            content += `类型: ${msg.media_type}\n`;
+            if (msg.text) {
+                content += `内容: ${msg.text}\n`;
+            }
+            content += `---\n\n`;
+        });
+
+        return content;
     }
 
     /**

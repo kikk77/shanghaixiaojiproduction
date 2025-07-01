@@ -1329,6 +1329,219 @@ function filterHistoryMessages() {
     displayHistoryMessages(filteredMessages);
 }
 
+// 显示历史消息扫描模态框
+function showHistoryScanModal(configName) {
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('historyScanModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHtml = `
+        <div id="historyScanModal" class="modal" style="display: block;">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header">
+                    <h2>🔍 自动扫描历史消息 - ${configName}</h2>
+                    <span class="close" onclick="closeModal('historyScanModal')">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>功能说明：</strong>
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li>自动扫描源频道的历史消息并克隆到目标频道</li>
+                            <li>使用消息ID范围扫描，自动跳过不存在的消息</li>
+                            <li>支持设置扫描范围、数量限制和延迟时间</li>
+                            <li>自动去重，避免重复克隆已存在的消息</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="startMessageId">起始消息ID</label>
+                            <input type="number" id="startMessageId" value="1" min="1">
+                            <small>从哪个消息ID开始扫描</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="endMessageId">结束消息ID</label>
+                            <input type="number" id="endMessageId" placeholder="留空自动估算">
+                            <small>扫描到哪个消息ID，留空自动估算</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="maxMessages">最大消息数量</label>
+                            <input type="number" id="maxMessages" value="100" min="1" max="1000">
+                            <small>最多克隆多少条消息</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="delayMs">延迟时间(毫秒)</label>
+                            <input type="number" id="delayMs" value="1000" min="100" max="10000">
+                            <small>每条消息间的延迟，避免API限制</small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="skipExisting" checked>
+                            跳过已克隆的消息
+                        </label>
+                        <small>自动跳过已经克隆过的消息，避免重复</small>
+                    </div>
+                    
+                    <div id="scanProgress" class="progress-container" style="display: none;">
+                        <h4>📊 扫描进度</h4>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">已扫描</span>
+                                <span class="stat-value" id="scannedCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">找到消息</span>
+                                <span class="stat-value" id="foundCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">成功克隆</span>
+                                <span class="stat-value" id="clonedCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">失败数量</span>
+                                <span class="stat-value" id="errorCount">0</span>
+                            </div>
+                        </div>
+                        <div class="progress-info">
+                            <span>状态: <span id="scanStatus">准备中...</span></span>
+                            <span>耗时: <span id="scanDuration">0秒</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="action-btn btn-secondary" onclick="closeModal('historyScanModal')">关闭</button>
+                    <button class="action-btn btn-primary" id="startScanBtn" onclick="startHistoryScan('${configName}')">
+                        🚀 开始扫描
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// 开始历史消息扫描
+async function startHistoryScan(configName) {
+    const scanData = {
+        startMessageId: parseInt(document.getElementById('startMessageId').value) || 1,
+        endMessageId: document.getElementById('endMessageId').value ? parseInt(document.getElementById('endMessageId').value) : null,
+        maxMessages: parseInt(document.getElementById('maxMessages').value) || 100,
+        delayMs: parseInt(document.getElementById('delayMs').value) || 1000,
+        skipExisting: document.getElementById('skipExisting').checked
+    };
+    
+    console.log('🔍 开始历史消息扫描:', configName, scanData);
+    
+    // 显示进度区域
+    document.getElementById('scanProgress').style.display = 'block';
+    document.getElementById('startScanBtn').disabled = true;
+    document.getElementById('startScanBtn').innerHTML = '⏳ 扫描中...';
+    
+    try {
+        // 启动扫描
+        const response = await apiRequest(`/api/channel/configs/${encodeURIComponent(configName)}/scan-history`, {
+            method: 'POST',
+            body: JSON.stringify(scanData)
+        });
+        
+        if (response.success) {
+            document.getElementById('scanStatus').textContent = '扫描已启动';
+            
+            // 开始轮询状态
+            pollScanStatus(configName);
+        } else {
+            throw new Error(response.error || '启动扫描失败');
+        }
+        
+    } catch (error) {
+        console.error('启动历史消息扫描失败:', error);
+        showError('启动扫描失败: ' + error.message);
+        
+        // 重置按钮状态
+        document.getElementById('startScanBtn').disabled = false;
+        document.getElementById('startScanBtn').innerHTML = '🚀 开始扫描';
+    }
+}
+
+// 轮询扫描状态
+async function pollScanStatus(configName) {
+    try {
+        const response = await apiRequest(`/api/channel/configs/${encodeURIComponent(configName)}/scan-status`);
+        
+        if (response.success && response.data) {
+            const data = response.data;
+            
+            // 更新进度显示
+            if (data.progress) {
+                document.getElementById('scannedCount').textContent = data.progress.scannedCount || 0;
+                document.getElementById('foundCount').textContent = data.progress.foundCount || 0;
+                document.getElementById('clonedCount').textContent = data.progress.clonedCount || 0;
+                document.getElementById('errorCount').textContent = data.progress.errorCount || 0;
+                
+                // 计算进度百分比
+                const total = data.progress.scannedCount || 1;
+                const found = data.progress.foundCount || 0;
+                const progress = Math.min((found / Math.max(total, 1)) * 100, 100);
+                
+                document.querySelector('.progress-fill').style.width = progress + '%';
+            }
+            
+            // 更新状态和耗时
+            const statusText = {
+                'running': '扫描中...',
+                'completed': '扫描完成',
+                'failed': '扫描失败',
+                'not_started': '未开始'
+            }[data.status] || data.status;
+            
+            document.getElementById('scanStatus').textContent = statusText;
+            
+            if (data.duration) {
+                const seconds = Math.floor(data.duration / 1000);
+                document.getElementById('scanDuration').textContent = seconds + '秒';
+            }
+            
+            // 如果扫描完成或失败，停止轮询
+            if (data.status === 'completed' || data.status === 'failed') {
+                document.getElementById('startScanBtn').disabled = false;
+                document.getElementById('startScanBtn').innerHTML = '🔄 重新扫描';
+                
+                if (data.status === 'completed') {
+                    showSuccess(`扫描完成！共扫描 ${data.progress.scannedCount} 条，找到 ${data.progress.foundCount} 条，成功克隆 ${data.progress.clonedCount} 条`);
+                    
+                    // 刷新配置列表
+                    setTimeout(() => {
+                        refreshData();
+                    }, 2000);
+                } else {
+                    showError('扫描失败: ' + (data.error || '未知错误'));
+                }
+                
+                return;
+            }
+            
+            // 继续轮询
+            setTimeout(() => pollScanStatus(configName), 2000);
+            
+        } else {
+            console.warn('获取扫描状态失败:', response);
+            setTimeout(() => pollScanStatus(configName), 5000);
+        }
+        
+    } catch (error) {
+        console.error('轮询扫描状态失败:', error);
+        setTimeout(() => pollScanStatus(configName), 5000);
+    }
+}
+
 // 克隆选中的消息
 async function cloneSelectedMessages() {
     if (selectedMessages.size === 0) {

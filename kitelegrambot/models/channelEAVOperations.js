@@ -20,6 +20,8 @@ class ChannelEAVOperations {
                 syncEdits = true,
                 filterEnabled = false,
                 rateLimit = 30,
+                delaySeconds = 0,
+                sequentialMode = false,
                 cloneRules = {}
             } = configData;
 
@@ -45,6 +47,8 @@ class ChannelEAVOperations {
                 sync_edits: syncEdits,
                 filter_enabled: filterEnabled,
                 rate_limit: rateLimit,
+                delay_seconds: delaySeconds,
+                sequential_mode: sequentialMode,
                 clone_rules: cloneRules
             });
 
@@ -86,6 +90,8 @@ class ChannelEAVOperations {
                 sync_edits: values.sync_edits,
                 filter_enabled: values.filter_enabled,
                 rate_limit: values.rate_limit,
+                delay_seconds: values.delay_seconds || 0,
+                sequential_mode: values.sequential_mode || false,
                 clone_rules: values.clone_rules || {},
                 created_at: entity.created_at,
                 updated_at: entity.updated_at
@@ -122,6 +128,8 @@ class ChannelEAVOperations {
                     sync_edits: values.sync_edits,
                     filter_enabled: values.filter_enabled,
                     rate_limit: values.rate_limit,
+                    delay_seconds: values.delay_seconds || 0,
+                    sequential_mode: values.sequential_mode || false,
                     clone_rules: values.clone_rules || {},
                     created_at: entity.created_at,
                     updated_at: entity.updated_at,

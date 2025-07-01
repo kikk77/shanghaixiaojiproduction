@@ -22,6 +22,10 @@ class ChannelCloneService {
         this.mediaGroups = new Map(); // media_group_id -> { messages: [], timer: timeout, config: config }
         this.mediaGroupTimeout = 2000; // 2秒超时，收集完整媒体组
         
+        // 延时处理队列
+        this.delayedTasks = new Map(); // configId -> { queue: [], processing: boolean }
+        this.sequentialQueues = new Map(); // configId -> { queue: [], processing: boolean }
+        
         // 消息处理去重器 - 使用全局存储
         if (!global.channelCloneProcessedMessages) {
             global.channelCloneProcessedMessages = new Set();
@@ -156,7 +160,17 @@ class ChannelCloneService {
                 return;
             }
 
-            // 执行单条消息克隆
+            // 检查是否需要延时或顺序处理
+            const delaySeconds = config.settings.delaySeconds || 0;
+            const sequentialMode = config.settings.sequentialMode || false;
+
+            if (delaySeconds > 0 || sequentialMode) {
+                // 添加到延时/顺序队列
+                await this.addToProcessingQueue(config, message, delaySeconds, sequentialMode);
+                return;
+            }
+
+            // 立即执行单条消息克隆
             const cloneResult = await this.cloneMessage(config, message);
             
             if (cloneResult.success) {
@@ -952,6 +966,285 @@ class ChannelCloneService {
      */
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * 添加消息到处理队列（支持延时和顺序处理）
+     */
+    async addToProcessingQueue(config, message, delaySeconds, sequentialMode) {
+        const configId = config.id;
+        const executeTime = Date.now() + (delaySeconds * 1000);
+        
+        const task = {
+            id: `${configId}_${message.message_id}_${Date.now()}`,
+            configId,
+            config,
+            message,
+            executeTime,
+            attempts: 0,
+            maxAttempts: 3
+        };
+
+        if (sequentialMode) {
+            // 顺序处理模式
+            if (!this.sequentialQueues.has(configId)) {
+                this.sequentialQueues.set(configId, {
+                    queue: [],
+                    processing: false
+                });
+            }
+            
+            const queueInfo = this.sequentialQueues.get(configId);
+            queueInfo.queue.push(task);
+            
+            console.log(`📺 [顺序模式] 消息 ${message.message_id} 已添加到队列，队列长度: ${queueInfo.queue.length}`);
+            
+            // 如果当前没有在处理，立即开始处理
+            if (!queueInfo.processing) {
+                this.processSequentialQueue(configId);
+            }
+        } else {
+            // 延时处理模式
+            console.log(`📺 [延时模式] 消息 ${message.message_id} 将在 ${delaySeconds} 秒后处理`);
+            
+            setTimeout(async () => {
+                await this.processDelayedTask(task);
+            }, delaySeconds * 1000);
+        }
+
+        // 记录日志
+        await this.dataMapper.logAction(
+            config.id,
+            sequentialMode ? 'message_queued_sequential' : 'message_queued_delayed',
+            'info',
+            null,
+            0,
+            {
+                message_id: message.message_id,
+                delay_seconds: delaySeconds,
+                sequential_mode: sequentialMode,
+                queue_length: sequentialMode ? this.sequentialQueues.get(configId)?.queue.length : 1
+            }
+        );
+    }
+
+    /**
+     * 处理顺序队列
+     */
+    async processSequentialQueue(configId) {
+        const queueInfo = this.sequentialQueues.get(configId);
+        if (!queueInfo || queueInfo.processing) {
+            return;
+        }
+
+        queueInfo.processing = true;
+        console.log(`📺 [顺序模式] 开始处理配置 ${configId} 的队列，队列长度: ${queueInfo.queue.length}`);
+
+        while (queueInfo.queue.length > 0) {
+            const task = queueInfo.queue.shift();
+            
+            try {
+                // 检查是否需要等待延时时间
+                const now = Date.now();
+                if (task.executeTime > now) {
+                    const waitTime = task.executeTime - now;
+                    console.log(`📺 [顺序模式] 等待 ${Math.round(waitTime/1000)} 秒后处理消息 ${task.message.message_id}`);
+                    await this.sleep(waitTime);
+                }
+
+                console.log(`📺 [顺序模式] 处理消息 ${task.message.message_id}，剩余队列: ${queueInfo.queue.length}`);
+                
+                // 执行克隆
+                const cloneResult = await this.cloneMessage(task.config, task.message);
+                
+                if (cloneResult.success) {
+                    // 创建消息映射
+                    await this.dataMapper.createMessageMapping(
+                        task.config.id,
+                        task.message.message_id,
+                        cloneResult.targetMessageId,
+                        this.getMessageType(task.message)
+                    );
+
+                    this.cloneStats.totalCloned++;
+                    this.cloneStats.lastCloneTime = new Date();
+
+                    console.log(`✅ [顺序模式] 消息克隆成功: ${task.message.message_id} -> ${cloneResult.targetMessageId}`);
+                    
+                    // 记录成功日志
+                    await this.dataMapper.logAction(
+                        task.config.id,
+                        'sequential_clone_success',
+                        'success',
+                        null,
+                        cloneResult.processingTime,
+                        {
+                            source_message_id: task.message.message_id,
+                            target_message_id: cloneResult.targetMessageId,
+                            message_type: this.getMessageType(task.message),
+                            queue_position: queueInfo.queue.length + 1
+                        }
+                    );
+                } else {
+                    // 处理失败
+                    task.attempts++;
+                    if (task.attempts < task.maxAttempts) {
+                        // 重新加入队列末尾
+                        queueInfo.queue.push(task);
+                        console.log(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，重试 ${task.attempts}/${task.maxAttempts}`);
+                    } else {
+                        // 达到最大重试次数
+                        this.cloneStats.totalErrors++;
+                        console.error(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，已达最大重试次数`);
+                        
+                        await this.dataMapper.logAction(
+                            task.config.id,
+                            'sequential_clone_failed',
+                            'error',
+                            cloneResult.error,
+                            0,
+                            {
+                                source_message_id: task.message.message_id,
+                                attempts: task.attempts,
+                                final_error: cloneResult.error
+                            }
+                        );
+                    }
+                }
+
+                // 添加消息间隔，避免过快发送
+                if (queueInfo.queue.length > 0) {
+                    await this.sleep(1000); // 1秒间隔
+                }
+
+            } catch (error) {
+                console.error(`❌ [顺序模式] 处理任务失败:`, error);
+                
+                // 记录错误
+                await this.dataMapper.logAction(
+                    task.config.id,
+                    'sequential_processing_error',
+                    'error',
+                    error.message,
+                    0,
+                    {
+                        source_message_id: task.message.message_id,
+                        error: error.message
+                    }
+                );
+            }
+        }
+
+        queueInfo.processing = false;
+        console.log(`📺 [顺序模式] 配置 ${configId} 的队列处理完成`);
+    }
+
+    /**
+     * 处理延时任务
+     */
+    async processDelayedTask(task) {
+        try {
+            console.log(`📺 [延时模式] 开始处理延时消息 ${task.message.message_id}`);
+            
+            // 执行克隆
+            const cloneResult = await this.cloneMessage(task.config, task.message);
+            
+            if (cloneResult.success) {
+                // 创建消息映射
+                await this.dataMapper.createMessageMapping(
+                    task.config.id,
+                    task.message.message_id,
+                    cloneResult.targetMessageId,
+                    this.getMessageType(task.message)
+                );
+
+                this.cloneStats.totalCloned++;
+                this.cloneStats.lastCloneTime = new Date();
+
+                console.log(`✅ [延时模式] 消息克隆成功: ${task.message.message_id} -> ${cloneResult.targetMessageId}`);
+                
+                // 记录成功日志
+                await this.dataMapper.logAction(
+                    task.config.id,
+                    'delayed_clone_success',
+                    'success',
+                    null,
+                    cloneResult.processingTime,
+                    {
+                        source_message_id: task.message.message_id,
+                        target_message_id: cloneResult.targetMessageId,
+                        message_type: this.getMessageType(task.message),
+                        delay_executed: true
+                    }
+                );
+            } else {
+                this.cloneStats.totalErrors++;
+                console.error(`❌ [延时模式] 消息克隆失败: ${cloneResult.error}`);
+                
+                // 记录错误日志
+                await this.dataMapper.logAction(
+                    task.config.id,
+                    'delayed_clone_failed',
+                    'error',
+                    cloneResult.error,
+                    cloneResult.processingTime || 0,
+                    {
+                        source_message_id: task.message.message_id,
+                        message_type: this.getMessageType(task.message),
+                        error: cloneResult.error
+                    }
+                );
+            }
+        } catch (error) {
+            console.error(`❌ [延时模式] 处理延时任务失败:`, error);
+            
+            await this.dataMapper.logAction(
+                task.config.id,
+                'delayed_processing_error',
+                'error',
+                error.message,
+                0,
+                {
+                    source_message_id: task.message.message_id,
+                    error: error.message
+                }
+            );
+        }
+    }
+
+    /**
+     * 获取队列状态
+     */
+    getQueueStatus() {
+        const status = {
+            sequentialQueues: {},
+            totalPendingTasks: 0
+        };
+
+        for (const [configId, queueInfo] of this.sequentialQueues.entries()) {
+            status.sequentialQueues[configId] = {
+                queueLength: queueInfo.queue.length,
+                processing: queueInfo.processing,
+                nextMessageId: queueInfo.queue.length > 0 ? queueInfo.queue[0].message.message_id : null
+            };
+            status.totalPendingTasks += queueInfo.queue.length;
+        }
+
+        return status;
+    }
+
+    /**
+     * 清空指定配置的队列
+     */
+    clearQueue(configId) {
+        if (this.sequentialQueues.has(configId)) {
+            const queueInfo = this.sequentialQueues.get(configId);
+            const clearedCount = queueInfo.queue.length;
+            queueInfo.queue = [];
+            console.log(`📺 已清空配置 ${configId} 的队列，清空了 ${clearedCount} 个任务`);
+            return clearedCount;
+        }
+        return 0;
     }
 
     /**

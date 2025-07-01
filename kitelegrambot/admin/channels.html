@@ -729,6 +729,20 @@
                         <small>每分钟最多克隆的消息数量，避免API限制</small>
                     </div>
 
+                    <div class="form-group">
+                        <label for="delaySeconds">转发延时 (秒)</label>
+                        <input type="number" id="delaySeconds" name="delaySeconds" value="0" min="0" max="3600">
+                        <small>检测到新消息后延时多少秒再转发（0=立即转发，最大1小时）</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="sequentialMode" name="sequentialMode">
+                            <label for="sequentialMode">顺序转发模式</label>
+                        </div>
+                        <small>批量消息按顺序一条一条转发，确保消息顺序正确</small>
+                    </div>
+
                     <div style="display: flex; gap: 15px; margin-top: 30px;">
                         <button type="submit" class="action-btn btn-primary" style="flex: 1;">💾 保存配置</button>
                         <button type="button" class="action-btn btn-secondary" onclick="closeModal('configModal')">❌ 取消</button>

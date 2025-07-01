@@ -316,7 +316,9 @@ function createConfigCard(config) {
                         <div style="margin-top: 10px;">
                             <small style="color: #666;">
                                 同步编辑: ${Boolean(settings.syncEdits) ? '✅' : '❌'} | 
-                                内容过滤: ${Boolean(settings.filterEnabled) ? '✅' : '❌'}
+                                内容过滤: ${Boolean(settings.filterEnabled) ? '✅' : '❌'} | 
+                                转发延时: ${settings.delaySeconds || 0}秒 | 
+                                顺序转发: ${Boolean(settings.sequentialMode) ? '✅' : '❌'}
                             </small>
                         </div>
                     </div>
@@ -395,6 +397,8 @@ function showCreateModal() {
     document.getElementById('syncEdits').checked = true;
     document.getElementById('filterEnabled').checked = false;
     document.getElementById('rateLimit').value = 30;
+    document.getElementById('delaySeconds').value = 0;
+    document.getElementById('sequentialMode').checked = false;
     
     showModal('configModal');
 }
@@ -428,6 +432,8 @@ function editConfig(configName) {
         document.getElementById('syncEdits').checked = Boolean(settings.syncEdits);
         document.getElementById('filterEnabled').checked = Boolean(settings.filterEnabled);
         document.getElementById('rateLimit').value = settings.rateLimit || 30;
+        document.getElementById('delaySeconds').value = settings.delaySeconds || 0;
+        document.getElementById('sequentialMode').checked = Boolean(settings.sequentialMode);
         
         document.getElementById('modalTitle').textContent = '编辑频道配置';
         showModal('configModal');
@@ -453,7 +459,9 @@ async function handleConfigSubmit(event) {
         enabled: formData.has('enabled'),
         syncEdits: formData.has('syncEdits'),
         filterEnabled: formData.has('filterEnabled'),
-        rateLimit: parseInt(formData.get('rateLimit'))
+        rateLimit: parseInt(formData.get('rateLimit')),
+        delaySeconds: parseInt(formData.get('delaySeconds')) || 0,
+        sequentialMode: formData.has('sequentialMode')
     };
 
     // 验证表单数据

@@ -565,5 +565,41 @@
     </div>
 
     <script src="/admin/scripts/channel-management.js"></script>
+    
+    <script>
+        // 调试脚本 - 检查页面状态
+        console.log('🔍 页面调试信息:');
+        console.log('- 当前URL:', window.location.href);
+        console.log('- User Agent:', navigator.userAgent);
+        console.log('- 页面加载时间:', new Date().toISOString());
+        
+        // 检查关键元素是否存在
+        setTimeout(() => {
+            console.log('🔍 检查页面元素:');
+            console.log('- configsList元素:', document.getElementById('configsList'));
+            console.log('- totalConfigs元素:', document.getElementById('totalConfigs'));
+            console.log('- 所有配置数量:', typeof allConfigs !== 'undefined' ? allConfigs.length : '未定义');
+            
+            // 手动测试API
+            console.log('🔍 手动测试API...');
+            fetch('/api/channel/configs')
+                .then(response => {
+                    console.log('📡 手动API响应状态:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📡 手动API响应数据:', data);
+                })
+                .catch(error => {
+                    console.error('❌ 手动API请求失败:', error);
+                });
+        }, 2000);
+        
+        // 检查JavaScript错误
+        window.addEventListener('error', function(e) {
+            console.error('🚨 JavaScript错误:', e.error);
+            console.error('🚨 错误位置:', e.filename, '第', e.lineno, '行');
+        });
+    </script>
 </body>
 </html> 

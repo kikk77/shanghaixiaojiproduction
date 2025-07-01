@@ -247,43 +247,7 @@ async function handleChannelApiRequest(pathname, method, data) {
         const endpoint = pathParts[3]; // /api/channel/{endpoint}
         const id = pathParts[4]; // /api/channel/{endpoint}/{id}
 
-        // 配置管理API
-        if (endpoint === 'configs') {
-            if (method === 'GET' && !id) {
-                // 获取所有配置
-                const configs = await configService.getAllConfigs();
-                return { success: true, data: configs };
-            }
-
-            if (method === 'GET' && id) {
-                // 获取单个配置
-                const config = await configService.getConfig(id);
-                if (!config) {
-                    return { success: false, error: '配置不存在' };
-                }
-                return { success: true, data: config };
-            }
-
-            if (method === 'POST') {
-                // 创建或更新配置
-                const result = await configService.saveConfig(data);
-                return result;
-            }
-
-            if (method === 'PUT' && id) {
-                // 更新配置
-                const result = await configService.updateConfig(id, data);
-                return result;
-            }
-
-            if (method === 'DELETE' && id) {
-                // 删除配置
-                const result = await configService.deleteConfig(id);
-                return result;
-            }
-        }
-
-        // 配置操作API
+        // 配置操作API - 必须先匹配更具体的路径
         if (endpoint === 'configs' && pathParts[5]) {
             const action = pathParts[5]; // /api/channel/configs/{id}/{action}
 
@@ -304,6 +268,42 @@ async function handleChannelApiRequest(pathname, method, data) {
                 // 获取配置状态
                 const status = await configService.getConfigStatus(id);
                 return { success: true, data: status };
+            }
+        }
+
+        // 配置管理API
+        if (endpoint === 'configs') {
+            if (method === 'GET' && !id) {
+                // 获取所有配置
+                const configs = await configService.getAllConfigs();
+                return { success: true, data: configs };
+            }
+
+            if (method === 'GET' && id) {
+                // 获取单个配置
+                const config = await configService.getConfig(id);
+                if (!config) {
+                    return { success: false, error: '配置不存在' };
+                }
+                return { success: true, data: config };
+            }
+
+            if (method === 'POST' && !pathParts[5]) {
+                // 创建或更新配置 - 只有在没有action的情况下才执行
+                const result = await configService.saveConfig(data);
+                return result;
+            }
+
+            if (method === 'PUT' && id && !pathParts[5]) {
+                // 更新配置 - 只有在没有action的情况下才执行
+                const result = await configService.updateConfig(id, data);
+                return result;
+            }
+
+            if (method === 'DELETE' && id && !pathParts[5]) {
+                // 删除配置 - 只有在没有action的情况下才执行
+                const result = await configService.deleteConfig(id);
+                return result;
             }
         }
 

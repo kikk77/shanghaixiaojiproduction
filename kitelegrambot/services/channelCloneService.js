@@ -20,7 +20,7 @@ class ChannelCloneService {
         
         // 媒体组收集器
         this.mediaGroups = new Map(); // media_group_id -> { messages: [], timer: timeout, config: config }
-        this.mediaGroupTimeout = 2000; // 2秒超时，收集完整媒体组
+        this.mediaGroupTimeout = 5000; // 增加到5秒超时，收集完整媒体组
         
         // 延时处理队列
         this.delayedTasks = new Map(); // configId -> { queue: [], processing: boolean }
@@ -32,6 +32,9 @@ class ChannelCloneService {
         }
         this.processedMessages = global.channelCloneProcessedMessages;
         this.messageCleanupInterval = 300000; // 5分钟清理一次已处理消息记录
+        
+        // 媒体组去重器 - 防止重复处理同一个媒体组
+        this.processedMediaGroups = new Set();
         
         // 克隆状态追踪
         this.cloneStats = {
@@ -106,9 +109,20 @@ class ChannelCloneService {
      */
     startMessageCleanup() {
         this.cleanupTimer = setInterval(() => {
-            // 清理已处理消息记录（保留最近5分钟的记录）
-            this.processedMessages.clear();
-            console.log('📺 清理消息去重记录');
+            const currentMessageSize = this.processedMessages.size;
+            const currentMediaGroupSize = this.processedMediaGroups.size;
+            
+            // 清理已处理消息记录（当超过10000条时清理）
+            if (currentMessageSize > 10000) {
+                this.processedMessages.clear();
+                console.log(`🧹 清理消息去重记录: ${currentMessageSize} -> 0`);
+            }
+            
+            // 清理媒体组去重记录（当超过1000条时清理）
+            if (currentMediaGroupSize > 1000) {
+                this.processedMediaGroups.clear();
+                console.log(`🧹 清理媒体组去重记录: ${currentMediaGroupSize} -> 0`);
+            }
         }, this.messageCleanupInterval);
     }
 
@@ -308,6 +322,12 @@ class ChannelCloneService {
     async handleMediaGroupMessage(config, message) {
         const mediaGroupId = message.media_group_id;
         
+        // 检查是否已经处理过这个媒体组
+        if (this.processedMediaGroups.has(mediaGroupId)) {
+            console.log(`📺 媒体组 ${mediaGroupId} 已经处理过，跳过消息 ${message.message_id}`);
+            return;
+        }
+
         // 检查速率限制
         const rateLimitCheck = await this.checkRateLimit(config);
         if (!rateLimitCheck.allowed) {
@@ -320,11 +340,20 @@ class ChannelCloneService {
             this.mediaGroups.set(mediaGroupId, {
                 messages: [],
                 config: config,
-                timer: null
+                timer: null,
+                createdAt: Date.now()
             });
         }
 
         const mediaGroup = this.mediaGroups.get(mediaGroupId);
+        
+        // 检查消息是否已经在组中（防止重复添加）
+        const messageExists = mediaGroup.messages.some(msg => msg.message_id === message.message_id);
+        if (messageExists) {
+            console.log(`📺 媒体组 ${mediaGroupId} 中消息 ${message.message_id} 已存在，跳过`);
+            return;
+        }
+        
         mediaGroup.messages.push(message);
 
         console.log(`📺 媒体组 ${mediaGroupId} 收集到 ${mediaGroup.messages.length} 条消息`);
@@ -336,7 +365,18 @@ class ChannelCloneService {
 
         // 设置新的定时器，等待更多消息或超时处理
         mediaGroup.timer = setTimeout(async () => {
-            await this.processMediaGroup(mediaGroupId);
+            // 检查是否需要延时或顺序处理
+            const delaySeconds = config.settings.delaySeconds || 0;
+            const sequentialMode = config.settings.sequentialMode || false;
+
+            if (delaySeconds > 0 || sequentialMode) {
+                console.log(`📺 媒体组 ${mediaGroupId} 将使用延时/顺序处理模式`);
+                // 添加到延时/顺序队列
+                await this.addMediaGroupToProcessingQueue(mediaGroupId, delaySeconds, sequentialMode);
+            } else {
+                // 立即处理媒体组
+                await this.processMediaGroup(mediaGroupId);
+            }
         }, this.mediaGroupTimeout);
     }
 
@@ -396,6 +436,9 @@ class ChannelCloneService {
             if (result && result.length > 0) {
                 console.log(`✅ 媒体组克隆成功: ${mediaGroupId} -> ${result.length} 条消息`);
                 
+                // 标记媒体组为已处理
+                this.processedMediaGroups.add(mediaGroupId);
+                
                 // 创建消息映射
                 for (let i = 0; i < Math.min(messages.length, result.length); i++) {
                     await this.dataMapper.createMessageMapping(
@@ -430,6 +473,9 @@ class ChannelCloneService {
         } catch (error) {
             this.cloneStats.totalErrors++;
             console.error(`❌ 媒体组克隆失败: ${error.message}`);
+            
+            // 即使失败也标记为已处理，防止无限重试
+            this.processedMediaGroups.add(mediaGroupId);
             
             // 记录错误日志
             await this.dataMapper.logAction(
@@ -1052,63 +1098,83 @@ class ChannelCloneService {
                     await this.sleep(waitTime);
                 }
 
-                console.log(`📺 [顺序模式] 处理消息 ${task.message.message_id}，剩余队列: ${queueInfo.queue.length}`);
-                
-                // 执行克隆
-                const cloneResult = await this.cloneMessage(task.config, task.message);
-                
-                if (cloneResult.success) {
-                    // 创建消息映射
-                    await this.dataMapper.createMessageMapping(
-                        task.config.id,
-                        task.message.message_id,
-                        cloneResult.targetMessageId,
-                        this.getMessageType(task.message)
-                    );
-
-                    this.cloneStats.totalCloned++;
-                    this.cloneStats.lastCloneTime = new Date();
-
-                    console.log(`✅ [顺序模式] 消息克隆成功: ${task.message.message_id} -> ${cloneResult.targetMessageId}`);
+                if (task.isMediaGroup) {
+                    // 处理媒体组任务
+                    console.log(`📺 [顺序模式] 处理媒体组 ${task.mediaGroupId}，剩余队列: ${queueInfo.queue.length}`);
                     
-                    // 记录成功日志
-                    await this.dataMapper.logAction(
-                        task.config.id,
-                        'sequential_clone_success',
-                        'success',
-                        null,
-                        cloneResult.processingTime,
-                        {
-                            source_message_id: task.message.message_id,
-                            target_message_id: cloneResult.targetMessageId,
-                            message_type: this.getMessageType(task.message),
-                            queue_position: queueInfo.queue.length + 1
-                        }
-                    );
-                } else {
-                    // 处理失败
-                    task.attempts++;
-                    if (task.attempts < task.maxAttempts) {
-                        // 重新加入队列末尾
-                        queueInfo.queue.push(task);
-                        console.log(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，重试 ${task.attempts}/${task.maxAttempts}`);
-                    } else {
-                        // 达到最大重试次数
-                        this.cloneStats.totalErrors++;
-                        console.error(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，已达最大重试次数`);
+                    try {
+                        await this.processMediaGroup(task.mediaGroupId);
+                        console.log(`✅ [顺序模式] 媒体组处理成功: ${task.mediaGroupId}`);
+                    } catch (error) {
+                        console.error(`❌ [顺序模式] 媒体组处理失败: ${task.mediaGroupId}`, error);
                         
+                        // 媒体组处理失败，可以选择重试
+                        task.attempts++;
+                        if (task.attempts < task.maxAttempts) {
+                            queueInfo.queue.push(task);
+                            console.log(`❌ [顺序模式] 媒体组 ${task.mediaGroupId} 处理失败，重试 ${task.attempts}/${task.maxAttempts}`);
+                        }
+                    }
+                } else {
+                    // 处理普通消息任务
+                    console.log(`📺 [顺序模式] 处理消息 ${task.message.message_id}，剩余队列: ${queueInfo.queue.length}`);
+                    
+                    // 执行克隆
+                    const cloneResult = await this.cloneMessage(task.config, task.message);
+                    
+                    if (cloneResult.success) {
+                        // 创建消息映射
+                        await this.dataMapper.createMessageMapping(
+                            task.config.id,
+                            task.message.message_id,
+                            cloneResult.targetMessageId,
+                            this.getMessageType(task.message)
+                        );
+
+                        this.cloneStats.totalCloned++;
+                        this.cloneStats.lastCloneTime = new Date();
+
+                        console.log(`✅ [顺序模式] 消息克隆成功: ${task.message.message_id} -> ${cloneResult.targetMessageId}`);
+                        
+                        // 记录成功日志
                         await this.dataMapper.logAction(
                             task.config.id,
-                            'sequential_clone_failed',
-                            'error',
-                            cloneResult.error,
-                            0,
+                            'sequential_clone_success',
+                            'success',
+                            null,
+                            cloneResult.processingTime,
                             {
                                 source_message_id: task.message.message_id,
-                                attempts: task.attempts,
-                                final_error: cloneResult.error
+                                target_message_id: cloneResult.targetMessageId,
+                                message_type: this.getMessageType(task.message),
+                                queue_position: queueInfo.queue.length + 1
                             }
                         );
+                    } else {
+                        // 处理失败
+                        task.attempts++;
+                        if (task.attempts < task.maxAttempts) {
+                            // 重新加入队列末尾
+                            queueInfo.queue.push(task);
+                            console.log(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，重试 ${task.attempts}/${task.maxAttempts}`);
+                        } else {
+                            // 达到最大重试次数
+                            this.cloneStats.totalErrors++;
+                            console.error(`❌ [顺序模式] 消息 ${task.message.message_id} 处理失败，已达最大重试次数`);
+                            
+                            await this.dataMapper.logAction(
+                                task.config.id,
+                                'sequential_clone_failed',
+                                'error',
+                                cloneResult.error,
+                                0,
+                                {
+                                    source_message_id: task.message.message_id,
+                                    attempts: task.attempts,
+                                    final_error: cloneResult.error
+                                }
+                            );
+                        }
                     }
                 }
 
@@ -1213,19 +1279,122 @@ class ChannelCloneService {
     }
 
     /**
+     * 添加媒体组到处理队列（支持延时和顺序处理）
+     */
+    async addMediaGroupToProcessingQueue(mediaGroupId, delaySeconds, sequentialMode) {
+        const mediaGroup = this.mediaGroups.get(mediaGroupId);
+        if (!mediaGroup) {
+            return;
+        }
+
+        const config = mediaGroup.config;
+        const configId = config.id;
+        const executeTime = Date.now() + (delaySeconds * 1000);
+        
+        const task = {
+            id: `${configId}_${mediaGroupId}_${Date.now()}`,
+            configId,
+            config,
+            mediaGroupId,
+            executeTime,
+            attempts: 0,
+            maxAttempts: 3,
+            isMediaGroup: true
+        };
+
+        if (sequentialMode) {
+            // 顺序处理模式
+            if (!this.sequentialQueues.has(configId)) {
+                this.sequentialQueues.set(configId, {
+                    queue: [],
+                    processing: false
+                });
+            }
+            
+            const queueInfo = this.sequentialQueues.get(configId);
+            queueInfo.queue.push(task);
+            
+            console.log(`📺 [顺序模式] 媒体组 ${mediaGroupId} 已添加到队列，队列长度: ${queueInfo.queue.length}`);
+            
+            // 如果当前没有在处理，立即开始处理
+            if (!queueInfo.processing) {
+                this.processSequentialQueue(configId);
+            }
+        } else {
+            // 延时处理模式
+            console.log(`📺 [延时模式] 媒体组 ${mediaGroupId} 将在 ${delaySeconds} 秒后处理`);
+            
+            setTimeout(async () => {
+                await this.processDelayedMediaGroupTask(task);
+            }, delaySeconds * 1000);
+        }
+
+        // 记录日志
+        await this.dataMapper.logAction(
+            config.id,
+            sequentialMode ? 'media_group_queued_sequential' : 'media_group_queued_delayed',
+            'info',
+            null,
+            0,
+            {
+                media_group_id: mediaGroupId,
+                delay_seconds: delaySeconds,
+                sequential_mode: sequentialMode,
+                message_count: mediaGroup.messages.length
+            }
+        );
+    }
+
+    /**
+     * 处理延时媒体组任务
+     */
+    async processDelayedMediaGroupTask(task) {
+        try {
+            console.log(`📺 [延时模式] 开始处理延时媒体组 ${task.mediaGroupId}`);
+            
+            // 执行媒体组处理
+            await this.processMediaGroup(task.mediaGroupId);
+            
+        } catch (error) {
+            console.error(`❌ [延时模式] 处理延时媒体组任务失败:`, error);
+            
+            await this.dataMapper.logAction(
+                task.config.id,
+                'delayed_media_group_error',
+                'error',
+                error.message,
+                0,
+                {
+                    media_group_id: task.mediaGroupId,
+                    error: error.message
+                }
+            );
+        }
+    }
+
+    /**
      * 获取队列状态
      */
     getQueueStatus() {
         const status = {
             sequentialQueues: {},
-            totalPendingTasks: 0
+            totalPendingTasks: 0,
+            mediaGroups: {
+                active: this.mediaGroups.size,
+                processed: this.processedMediaGroups.size
+            }
         };
 
         for (const [configId, queueInfo] of this.sequentialQueues.entries()) {
             status.sequentialQueues[configId] = {
                 queueLength: queueInfo.queue.length,
                 processing: queueInfo.processing,
-                nextMessageId: queueInfo.queue.length > 0 ? queueInfo.queue[0].message.message_id : null
+                nextTask: queueInfo.queue.length > 0 ? {
+                    id: queueInfo.queue[0].id,
+                    isMediaGroup: queueInfo.queue[0].isMediaGroup || false,
+                    messageId: queueInfo.queue[0].message?.message_id,
+                    mediaGroupId: queueInfo.queue[0].mediaGroupId
+                } : null
             };
             status.totalPendingTasks += queueInfo.queue.length;
         }
@@ -1237,14 +1406,27 @@ class ChannelCloneService {
      * 清空指定配置的队列
      */
     clearQueue(configId) {
+        let clearedCount = 0;
+        
         if (this.sequentialQueues.has(configId)) {
             const queueInfo = this.sequentialQueues.get(configId);
-            const clearedCount = queueInfo.queue.length;
+            clearedCount = queueInfo.queue.length;
             queueInfo.queue = [];
             console.log(`📺 已清空配置 ${configId} 的队列，清空了 ${clearedCount} 个任务`);
-            return clearedCount;
         }
-        return 0;
+        
+        // 清理相关的媒体组
+        for (const [mediaGroupId, mediaGroup] of this.mediaGroups.entries()) {
+            if (mediaGroup.config.id === configId) {
+                if (mediaGroup.timer) {
+                    clearTimeout(mediaGroup.timer);
+                }
+                this.mediaGroups.delete(mediaGroupId);
+                console.log(`📺 清理了媒体组 ${mediaGroupId}`);
+            }
+        }
+        
+        return clearedCount;
     }
 
     /**
@@ -1262,4 +1444,4 @@ class ChannelCloneService {
     }
 }
 
-module.exports = ChannelCloneService; 
+module.exports = ChannelCloneService;

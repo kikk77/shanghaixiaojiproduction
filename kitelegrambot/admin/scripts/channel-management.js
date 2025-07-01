@@ -309,21 +309,21 @@ function createConfigCard(config) {
                     </div>
 
                     <div class="config-actions" onclick="event.stopPropagation();">
-                        <button class="btn btn-primary" onclick="editConfig('${escapeHtml(config.name || '')}')" title="编辑配置">
+                        <button class="config-btn btn-primary" onclick="editConfig('${escapeHtml(config.name || '')}')" title="编辑配置">
                             ✏️ 编辑
                         </button>
-                        <button class="btn ${enabled ? 'btn-warning' : 'btn-success'}" 
+                        <button class="config-btn ${enabled ? 'btn-warning' : 'btn-success'}" 
                                 onclick="toggleConfig('${escapeHtml(config.name || '')}', ${!enabled})"
                                 title="${enabled ? '禁用配置' : '启用配置'}">
                             ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
                         </button>
-                        <button class="btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
+                        <button class="config-btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
                             🔍 测试
                         </button>
-                        ${enabled ? `<button class="btn btn-info" onclick="showHistoryModal('${escapeHtml(config.name || '')}')" title="历史消息">
+                        ${enabled ? `<button class="config-btn btn-info" onclick="showHistoryModal('${escapeHtml(config.name || '')}')" title="历史消息">
                             📜 历史
                         </button>` : ''}
-                        <button class="btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
+                        <button class="config-btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
                             🗑️ 删除
                         </button>
                     </div>
@@ -343,7 +343,7 @@ function createConfigCard(config) {
                         <h3 style="color: #dc3545;">配置显示错误</h3>
                         <p>配置名: ${config.name || '未知'}</p>
                         <p>错误: ${error.message}</p>
-                        <button class="btn btn-danger" onclick="deleteConfig('${escapeHtml(config.name || '')}')">
+                        <button class="config-btn btn-danger" onclick="deleteConfig('${escapeHtml(config.name || '')}')">
                             🗑️ 删除错误配置
                         </button>
                     </div>

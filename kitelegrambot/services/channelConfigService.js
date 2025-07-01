@@ -768,159 +768,136 @@ class ChannelConfigService {
                 const chatInfo = await bot.getChat(channelId);
                 console.log(`📜 频道信息: ${chatInfo.title || chatInfo.id}`);
                 
-                // 🔥 正确的方法：尝试直接获取频道的最新消息
-                // 方法1：尝试从一个合理的消息ID范围开始扫描
-                const foundMessages = [];
-                let scanCount = 0;
-                const maxScan = Math.min(limit * 5, 500); // 最多扫描500次
+                // 🔥 重要：Bot API无法直接获取频道历史消息！
+                // 根据官方文档，Bot只能：
+                // 1. 监听实时消息 (channel_post事件)
+                // 2. 通过具体消息ID获取消息 (channels.getMessages)
+                // 3. 无法使用 messages.getHistory (仅限用户客户端)
                 
-                // 从较小的消息ID开始向上扫描
-                // Telegram消息ID通常从1开始递增
-                let startId = 1;
-                let maxFoundId = 0;
+                console.log(`⚠️ Bot API限制说明：`);
+                console.log(`   - Bot无法直接获取频道历史消息`);
+                console.log(`   - 只能通过监听实时消息或具体消息ID获取`);
+                console.log(`   - messages.getHistory方法仅限用户客户端使用`);
                 
-                console.log(`📜 开始智能扫描，最多扫描 ${maxScan} 个ID`);
+                // 尝试获取频道的最新消息（如果有的话）
+                // 这是一个变通方法：尝试获取最近可能的消息ID
+                const recentMessages = await this.tryGetRecentMessages(channelId, bot, limit);
                 
-                // 先快速扫描找到有效范围
-                const sampleIds = [1, 10, 50, 100, 500, 1000, 5000, 10000];
-                for (const testId of sampleIds) {
-                    try {
-                        const result = await bot.copyMessage(
-                            channelId, // 目标
-                            channelId, // 源
-                            testId,
-                            {
-                                disable_notification: true
-                            }
-                        );
-                        
-                        if (result && result.message_id) {
-                            // 立即删除测试消息
-                            try {
-                                await bot.deleteMessage(channelId, result.message_id);
-                            } catch (e) {
-                                // 忽略删除错误
-                            }
-                            
-                            maxFoundId = Math.max(maxFoundId, testId);
-                            console.log(`📜 找到有效消息ID: ${testId}`);
-                        }
-                    } catch (error) {
-                        // 消息不存在，继续
-                        continue;
-                    }
-                }
-                
-                if (maxFoundId > 0) {
-                    console.log(`📜 检测到最大有效ID: ${maxFoundId}，开始详细扫描`);
-                    
-                    // 从最大有效ID向下扫描
-                    for (let id = maxFoundId; id >= 1 && foundMessages.length < limit && scanCount < maxScan; id--) {
-                        scanCount++;
-                        
-                        try {
-                            // 尝试复制消息来检测是否存在
-                            const result = await bot.copyMessage(
-                                channelId,
-                                channelId, 
-                                id,
-                                {
-                                    disable_notification: true
-                                }
-                            );
-                            
-                            if (result && result.message_id) {
-                                // 立即删除测试消息
-                                try {
-                                    await bot.deleteMessage(channelId, result.message_id);
-                                } catch (e) {
-                                    // 忽略删除错误
-                                }
-                                
-                                // 构造消息对象（使用实际的消息ID）
-                                const messageObj = {
-                                    message_id: id,
-                                    date: Math.floor(Date.now() / 1000) - (maxFoundId - id) * 60, // 估算时间
-                                    text: `历史消息 #${id}`,
-                                    from: {
-                                        id: 0,
-                                        is_bot: false,
-                                        first_name: "频道消息"
-                                    },
-                                    chat: {
-                                        id: parseInt(channelId),
-                                        type: "channel",
-                                        title: chatInfo.title
-                                    }
-                                };
-                                
-                                foundMessages.push(messageObj);
-                                console.log(`📜 找到历史消息 #${id}`);
-                            }
-                        } catch (error) {
-                            // 消息不存在，继续扫描
-                            continue;
-                        }
-                        
-                        // 添加小延迟避免API限制
-                        if (scanCount % 10 === 0) {
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                        }
-                    }
-                    
-                    messages = foundMessages;
+                if (recentMessages.length > 0) {
+                    console.log(`📜 通过变通方法找到 ${recentMessages.length} 条最近消息`);
+                    messages = recentMessages;
                 } else {
-                    console.log(`📜 未找到任何有效消息，可能权限不足或频道为空`);
+                    console.log(`📜 无法获取历史消息，建议：`);
+                    console.log(`   1. 启用实时监听以捕获新消息`);
+                    console.log(`   2. 等待频道发布新消息后进行克隆`);
+                    console.log(`   3. 如需历史消息，请使用用户客户端而非Bot`);
                 }
                 
             } catch (error) {
-                console.error('扫描历史消息失败:', error);
+                console.error(`❌ 获取频道信息失败:`, error.message);
                 
-                // 返回错误说明
-                const now = Math.floor(Date.now() / 1000);
-                messages = [
-                    {
-                        message_id: 9000,
-                        date: now,
-                        text: `❌ 获取历史消息失败\n\n错误信息: ${error.message}\n\n可能的原因：\n• Bot权限不足（需要管理员权限）\n• 频道中没有消息\n• 消息已被删除\n• Bot未加入频道\n\n频道ID: ${channelId}\n扫描次数: ${scanCount}`,
-                        from: {
-                            id: 0,
-                            is_bot: true,
-                            first_name: "错误提示"
-                        },
-                        chat: {
-                            id: parseInt(channelId),
-                            type: "channel"
-                        }
-                    }
-                ];
+                if (error.message.includes('chat not found') || error.message.includes('CHAT_ID_INVALID')) {
+                    throw new Error(`频道ID无效或Bot无权限访问频道 ${channelId}`);
+                } else if (error.message.includes('CHANNEL_PRIVATE')) {
+                    throw new Error(`频道 ${channelId} 是私有的，Bot无权限访问`);
+                } else {
+                    throw new Error(`无法访问频道 ${channelId}: ${error.message}`);
+                }
             }
             
-            // 按消息ID排序（最新的在前）
-            messages.sort((a, b) => b.message_id - a.message_id);
-            
             console.log(`📜 最终返回 ${messages.length} 条消息`);
-            return messages.slice(0, limit);
+            return {
+                success: true,
+                messages: messages,
+                total: messages.length,
+                limitation: 'Bot API无法获取频道历史消息，只能获取实时消息或通过具体消息ID获取'
+            };
             
         } catch (error) {
-            console.error('获取频道历史失败:', error);
+            console.error(`❌ 获取历史消息失败:`, error);
+            return {
+                success: false,
+                error: error.message,
+                messages: [],
+                total: 0
+            };
+        }
+    }
+
+    /**
+     * 尝试获取最近的消息（变通方法）
+     */
+    async tryGetRecentMessages(channelId, bot, limit) {
+        const messages = [];
+        
+        try {
+            // 方法1：尝试从最新的可能消息ID开始向下查找
+            // 这是一个估算，大多数频道的消息ID不会超过这个范围
+            const possibleRecentIds = [];
             
-            // 返回错误信息作为消息
-            const now = Math.floor(Date.now() / 1000);
-            return [{
-                message_id: 9999,
-                date: now,
-                text: `🚨 系统错误\n\n${error.message}\n\n请联系管理员检查系统配置。`,
-                from: {
-                    id: 0,
-                    is_bot: true,
-                    first_name: "系统错误"
-                },
-                chat: {
-                    id: parseInt(channelId),
-                    type: "channel"
+            // 生成一些可能的最新消息ID（这是估算）
+            const now = Date.now();
+            const dayInMs = 24 * 60 * 60 * 1000;
+            
+            // 尝试一些启发式的消息ID
+            for (let i = 1; i <= Math.min(limit * 2, 100); i++) {
+                possibleRecentIds.push(i);
+            }
+            
+            // 反向检查，从大到小
+            possibleRecentIds.reverse();
+            
+            console.log(`📜 尝试检查最近 ${possibleRecentIds.length} 个可能的消息ID`);
+            
+            let foundCount = 0;
+            for (const messageId of possibleRecentIds) {
+                if (foundCount >= limit) break;
+                
+                try {
+                    // 使用forwardMessage来测试消息是否存在
+                    // 这是检测消息存在性的标准方法
+                    const result = await bot.forwardMessage(
+                        channelId, // 转发到同一个频道
+                        channelId, // 从同一个频道
+                        messageId,
+                        { disable_notification: true }
+                    );
+                    
+                    if (result) {
+                        // 立即删除测试消息
+                        try {
+                            await bot.deleteMessage(channelId, result.message_id);
+                        } catch (deleteError) {
+                            console.warn(`⚠️ 无法删除测试消息: ${deleteError.message}`);
+                        }
+                        
+                        // 构造消息对象
+                        messages.push({
+                            message_id: messageId,
+                            chat: { id: channelId },
+                            date: Math.floor(Date.now() / 1000),
+                            text: `消息 #${messageId}`,
+                            found_method: 'forward_test'
+                        });
+                        
+                        foundCount++;
+                        console.log(`📜 找到消息 #${messageId}`);
+                    }
+                } catch (error) {
+                    // 消息不存在或无权限，继续下一个
+                    continue;
                 }
-            }];
+                
+                // 添加延迟避免API限制
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            console.log(`📜 变通方法找到 ${messages.length} 条消息`);
+            return messages;
+            
+        } catch (error) {
+            console.error(`❌ 变通方法失败:`, error);
+            return [];
         }
     }
 
@@ -1399,6 +1376,204 @@ class ChannelConfigService {
             expiry: this.cacheExpiry,
             keys: Array.from(this.configCache.keys())
         };
+    }
+
+    /**
+     * 扫描频道历史消息并克隆
+     */
+    async scanChannelHistory(configName, options = {}) {
+        const config = await this.getConfig(configName);
+        if (!config || !config.settings.enabled) {
+            throw new Error('配置不存在或未启用');
+        }
+
+        const {
+            startMessageId = 1,
+            endMessageId = null,
+            maxMessages = 100,
+            delayMs = 1000,
+            skipExisting = true
+        } = options;
+
+        console.log(`🔍 开始扫描历史消息: ${configName}`, {
+            startMessageId,
+            endMessageId,
+            maxMessages,
+            delayMs,
+            skipExisting
+        });
+
+        // ⚠️ 重要说明：Bot API限制
+        console.log(`⚠️ Bot API限制说明：`);
+        console.log(`   - Telegram Bot API无法直接获取频道历史消息`);
+        console.log(`   - 此功能为实验性质，成功率有限`);
+        console.log(`   - 建议启用实时监听来捕获新消息`);
+        console.log(`   - 如需完整历史消息，请使用用户客户端`);
+
+        const sourceChannelId = config.sourceChannel.id;
+        const targetChannelId = config.targetChannel.id;
+
+        console.log(`🔍 开始扫描历史消息: ${sourceChannelId} -> ${targetChannelId}`);
+        console.log(`📊 扫描范围: ${startMessageId} 到 ${endMessageId || '最新'}`);
+
+        // 设置扫描状态
+        const scanStatus = {
+            configName,
+            isRunning: true,
+            startTime: new Date(),
+            currentId: startMessageId,
+            endId: endMessageId,
+            scannedCount: 0,
+            foundCount: 0,
+            clonedCount: 0,
+            errors: [],
+            maxMessages
+        };
+
+        // 存储扫描状态
+        if (!global.channelScanStatus) {
+            global.channelScanStatus = new Map();
+        }
+        global.channelScanStatus.set(configName, scanStatus);
+
+        try {
+            // 估算最大消息ID（如果未指定结束ID）
+            let maxId = endMessageId;
+            if (!maxId) {
+                maxId = Math.min(startMessageId + maxMessages * 10, 10000); // 保守估算
+                console.log(`📊 估算频道 ${sourceChannelId} 最大消息ID: ${maxId}`);
+            }
+
+            let currentId = startMessageId;
+            let foundMessages = 0;
+            let clonedMessages = 0;
+
+            while (currentId <= maxId && foundMessages < maxMessages && scanStatus.isRunning) {
+                scanStatus.currentId = currentId;
+                scanStatus.scannedCount++;
+
+                try {
+                    // ⚠️ 注意：这种方法成功率很低，因为Bot API限制
+                    // 尝试通过转发测试消息是否存在
+                    const exists = await this.testMessageExists(sourceChannelId, currentId);
+                    
+                    if (exists) {
+                        foundMessages++;
+                        scanStatus.foundCount++;
+
+                        console.log(`📜 发现消息 #${currentId}`);
+
+                        if (!skipExisting) {
+                            // 尝试克隆消息
+                            try {
+                                await this.cloneMessage(sourceChannelId, targetChannelId, currentId);
+                                clonedMessages++;
+                                scanStatus.clonedCount++;
+                                console.log(`✅ 成功克隆消息 #${currentId}`);
+                            } catch (cloneError) {
+                                console.error(`❌ 克隆消息 #${currentId} 失败:`, cloneError.message);
+                                scanStatus.errors.push(`消息 #${currentId}: ${cloneError.message}`);
+                            }
+                        }
+                    }
+
+                } catch (error) {
+                    // 消息不存在或无权限，继续扫描
+                    if (error.message.includes('message not found')) {
+                        // 正常情况，消息不存在
+                    } else {
+                        scanStatus.errors.push(`扫描消息 #${currentId}: ${error.message}`);
+                    }
+                }
+
+                currentId++;
+
+                // 更新进度
+                if (scanStatus.scannedCount % 100 === 0) {
+                    console.log(`📊 扫描进度: ${scanStatus.scannedCount}/${maxId}, 找到: ${foundMessages}, 克隆: ${clonedMessages}`);
+                }
+
+                // 添加延迟避免API限制
+                if (delayMs > 0) {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                }
+            }
+
+            scanStatus.isRunning = false;
+            scanStatus.endTime = new Date();
+
+            const result = {
+                success: true,
+                configName,
+                summary: {
+                    scannedCount: scanStatus.scannedCount,
+                    foundCount: foundMessages,
+                    clonedCount: clonedMessages,
+                    duration: scanStatus.endTime - scanStatus.startTime,
+                    errors: scanStatus.errors
+                },
+                limitation: 'Bot API限制：无法直接获取历史消息，此功能为实验性质，成功率有限'
+            };
+
+            console.log(`✅ 扫描完成:`, result.summary);
+            return result;
+
+        } catch (error) {
+            scanStatus.isRunning = false;
+            scanStatus.error = error.message;
+            
+            console.error(`❌ 扫描历史消息失败:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * 测试消息是否存在（Bot API限制方法）
+     */
+    async testMessageExists(channelId, messageId) {
+        try {
+            // 使用forwardMessage测试消息是否存在
+            // 这是Bot API中检测消息存在性的标准方法
+            const result = await this.bot.forwardMessage(
+                channelId, // 转发到同一个频道
+                channelId, // 从同一个频道
+                messageId,
+                { disable_notification: true }
+            );
+
+            if (result && result.message_id) {
+                // 立即删除测试消息
+                try {
+                    await this.bot.deleteMessage(channelId, result.message_id);
+                } catch (deleteError) {
+                    console.warn(`⚠️ 无法删除测试消息: ${deleteError.message}`);
+                }
+                return true;
+            }
+            return false;
+
+        } catch (error) {
+            // 消息不存在或无权限
+            return false;
+        }
+    }
+
+    /**
+     * 克隆单个消息
+     */
+    async cloneMessage(sourceChannelId, targetChannelId, messageId) {
+        try {
+            const result = await this.bot.copyMessage(
+                targetChannelId,
+                sourceChannelId,
+                messageId,
+                { disable_notification: true }
+            );
+
+            return result;
+        } catch (error) {
+            throw new Error(`克隆失败: ${error.message}`);
+        }
     }
 }
 

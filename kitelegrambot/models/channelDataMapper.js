@@ -36,7 +36,25 @@ class ChannelDataMapper {
                 syncEdits: configData.sync_edits !== false,
                 filterEnabled: configData.filter_enabled === true,
                 rateLimit: configData.rate_limit || 30,
-                rules: configData.clone_rules || {}
+                rules: configData.clone_rules || {},
+                
+                // 🆕 新增：消息过滤功能（借鉴Telegram_Forwarder）
+                messageFilters: {
+                    // 关键词过滤：包含这些词的消息会被转发
+                    keywords: configData.filter_keywords ? JSON.parse(configData.filter_keywords) : [],
+                    // 黑名单：包含这些词的消息不会被转发
+                    blacklist: configData.filter_blacklist ? JSON.parse(configData.filter_blacklist) : [],
+                    // 是否移除转发标签
+                    removeForwardTag: Boolean(configData.remove_forward_tag),
+                    // 消息类型过滤
+                    allowedTypes: configData.allowed_message_types ? JSON.parse(configData.allowed_message_types) : ['text', 'photo', 'video', 'document', 'audio'],
+                    // 最小消息长度
+                    minLength: configData.min_message_length || 0,
+                    // 最大消息长度
+                    maxLength: configData.max_message_length || 0,
+                    // 是否转发媒体组
+                    forwardMediaGroups: configData.forward_media_groups !== false
+                }
             },
             
             // 时间信息

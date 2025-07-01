@@ -269,6 +269,20 @@ async function handleChannelApiRequest(pathname, method, data) {
                 const status = await configService.getConfigStatus(id);
                 return { success: true, data: status };
             }
+
+            if (action === 'history' && method === 'GET') {
+                // 获取历史消息
+                const limit = parseInt(data.limit) || 100;
+                const result = await configService.getHistoryMessages(id, bs.getBotInstance(), limit);
+                return result;
+            }
+
+            if (action === 'clone-message' && method === 'POST') {
+                // 克隆单条消息
+                const { messageId } = data;
+                const result = await configService.cloneMessage(id, messageId, bs.getBotInstance());
+                return result;
+            }
         }
 
         // 配置管理API

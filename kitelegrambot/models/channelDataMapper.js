@@ -32,7 +32,7 @@ class ChannelDataMapper {
             
             // 克隆设置
             settings: {
-                enabled: configData.clone_enabled !== false,
+                enabled: Boolean(configData.clone_enabled),
                 syncEdits: configData.sync_edits !== false,
                 filterEnabled: configData.filter_enabled === true,
                 rateLimit: configData.rate_limit || 30,

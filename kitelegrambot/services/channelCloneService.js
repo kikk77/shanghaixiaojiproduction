@@ -11,6 +11,10 @@ class ChannelCloneService {
         this.dataMapper = new ChannelDataMapper();
         this.configService = new ChannelConfigService();
         
+        // 实例标识，用于调试
+        this.instanceId = Math.random().toString(36).substring(2, 8);
+        console.log(`📺 频道克隆服务实例创建: ${this.instanceId}`);
+        
         // 速率限制管理器
         this.rateLimiters = new Map(); // configId -> { tokens, lastRefill }
         
@@ -18,8 +22,11 @@ class ChannelCloneService {
         this.mediaGroups = new Map(); // media_group_id -> { messages: [], timer: timeout, config: config }
         this.mediaGroupTimeout = 2000; // 2秒超时，收集完整媒体组
         
-        // 消息处理去重器
-        this.processedMessages = new Set(); // 存储已处理的消息ID，防止重复处理
+        // 消息处理去重器 - 使用全局存储
+        if (!global.channelCloneProcessedMessages) {
+            global.channelCloneProcessedMessages = new Set();
+        }
+        this.processedMessages = global.channelCloneProcessedMessages;
         this.messageCleanupInterval = 300000; // 5分钟清理一次已处理消息记录
         
         // 克隆状态追踪
@@ -44,6 +51,15 @@ class ChannelCloneService {
             console.error('❌ Bot未初始化，无法设置消息监听器');
             return;
         }
+
+        // 检查是否已有其他实例的监听器
+        if (global.channelCloneListenerActive) {
+            console.warn(`⚠️ [${this.instanceId}] 检测到已有活跃的频道克隆监听器，跳过初始化`);
+            return;
+        }
+        
+        // 标记监听器为活跃状态
+        global.channelCloneListenerActive = this.instanceId;
 
         // 监听新消息（群组、私聊等，排除频道）
         this.bot.on('message', (msg) => {
@@ -75,7 +91,7 @@ class ChannelCloneService {
             this.handleEditedMessage(msg);
         });
 
-        console.log('📺 频道克隆消息监听器已初始化（包含频道消息监听）');
+        console.log(`📺 [${this.instanceId}] 频道克隆消息监听器已初始化（包含频道消息监听）`);
     }
 
     /**
@@ -99,12 +115,13 @@ class ChannelCloneService {
             
             // 检查消息是否已经处理过
             if (this.processedMessages.has(messageKey)) {
-                console.log(`📺 跳过重复消息: ${chatId} - ${message.message_id}`);
+                console.log(`📺 [${this.instanceId}] 跳过重复消息: ${chatId} - ${message.message_id}`);
                 return;
             }
             
             // 标记消息为已处理
             this.processedMessages.add(messageKey);
+            console.log(`📺 [${this.instanceId}] 开始处理消息: ${chatId} - ${message.message_id}`);
             
             // 查找对应的配置
             const config = await this.configService.getConfigBySourceChannel(chatId);
@@ -911,11 +928,15 @@ class ChannelCloneService {
             if (this.cleanupTimer) {
                 clearInterval(this.cleanupTimer);
             }
-            this.processedMessages.clear();
+            
+            // 清理全局标记
+            if (global.channelCloneListenerActive === this.instanceId) {
+                global.channelCloneListenerActive = null;
+            }
             
             this.rateLimiters.clear();
             
-            console.log('📺 频道克隆服务已停止');
+            console.log(`📺 [${this.instanceId}] 频道克隆服务已停止`);
             return { success: true };
         } catch (error) {
             console.error('停止克隆服务失败:', error);

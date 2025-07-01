@@ -86,10 +86,18 @@ async function apiRequest(url, options = {}) {
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
         },
     };
 
     const mergedOptions = { ...defaultOptions, ...options };
+
+    // 为GET请求添加时间戳防止缓存
+    if (!options.method || options.method === 'GET') {
+        const separator = url.includes('?') ? '&' : '?';
+        url = `${url}${separator}_t=${Date.now()}&_r=${Math.random()}`;
+    }
 
     try {
         console.log(`🔗 API请求: ${options.method || 'GET'} ${url}`);
@@ -482,7 +490,11 @@ async function handleConfigSubmit(event) {
         if (response.success) {
             showSuccess(currentEditingConfig ? '配置更新成功' : '配置创建成功');
             closeModal('configModal');
-            await refreshData();
+            
+            // 强制刷新数据确保显示最新配置
+            setTimeout(async () => {
+                await refreshData();
+            }, 100);
         } else {
             showError(response.errors ? response.errors.join('\n') : '保存失败');
         }
@@ -610,13 +622,21 @@ async function deleteConfig(configName) {
     try {
         showLoading('删除配置中...');
         
-        const response = await apiRequest(`/api/channel/configs/${configName}`, {
+        const response = await apiRequest(`/api/channel/configs/${encodeURIComponent(configName)}`, {
             method: 'DELETE'
         });
 
         if (response.success) {
             showSuccess('配置删除成功');
-            await refreshData();
+            
+            // 立即从本地数组中移除配置，然后刷新数据
+            allConfigs = allConfigs.filter(config => config.name !== configName);
+            displayConfigs(allConfigs);
+            
+            // 强制刷新确保数据同步
+            setTimeout(async () => {
+                await refreshData();
+            }, 100);
         } else {
             showError(response.error || '删除失败');
         }
@@ -929,12 +949,21 @@ async function importConfigs(input) {
 // 刷新数据
 async function refreshData() {
     try {
-        await loadInitialData();
-        // 移除刷新成功提示，避免UI一直变化
-        console.log('数据刷新成功');
+        console.log('🔄 开始强制刷新数据...');
+        
+        // 清空当前数据，强制重新加载
+        allConfigs = [];
+        
+        // 并行加载所有数据
+        await Promise.all([
+            loadConfigs(),
+            loadStats()
+        ]);
+        
+        console.log('✅ 数据刷新成功');
     } catch (error) {
-        console.error('刷新数据失败:', error);
-        showError('刷新数据失败');
+        console.error('❌ 刷新数据失败:', error);
+        showError('刷新数据失败: ' + error.message);
     }
 }
 

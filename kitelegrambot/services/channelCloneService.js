@@ -18,6 +18,10 @@ class ChannelCloneService {
         this.mediaGroups = new Map(); // media_group_id -> { messages: [], timer: timeout, config: config }
         this.mediaGroupTimeout = 2000; // 2秒超时，收集完整媒体组
         
+        // 消息处理去重器
+        this.processedMessages = new Set(); // 存储已处理的消息ID，防止重复处理
+        this.messageCleanupInterval = 300000; // 5分钟清理一次已处理消息记录
+        
         // 克隆状态追踪
         this.cloneStats = {
             totalCloned: 0,
@@ -27,6 +31,9 @@ class ChannelCloneService {
         
         // 初始化消息监听器
         this.initializeMessageListeners();
+        
+        // 启动消息去重清理定时器
+        this.startMessageCleanup();
     }
 
     /**
@@ -38,13 +45,21 @@ class ChannelCloneService {
             return;
         }
 
-        // 监听新消息（群组、私聊等）
+        // 监听新消息（群组、私聊等，排除频道）
         this.bot.on('message', (msg) => {
+            // 跳过频道消息，由channel_post处理
+            if (msg.chat.type === 'channel') {
+                return;
+            }
             this.handleNewMessage(msg);
         });
 
-        // 监听消息编辑（群组、私聊等）
+        // 监听消息编辑（群组、私聊等，排除频道）
         this.bot.on('edited_message', (msg) => {
+            // 跳过频道消息，由edited_channel_post处理
+            if (msg.chat.type === 'channel') {
+                return;
+            }
             this.handleEditedMessage(msg);
         });
 
@@ -64,11 +79,32 @@ class ChannelCloneService {
     }
 
     /**
+     * 启动消息去重清理定时器
+     */
+    startMessageCleanup() {
+        this.cleanupTimer = setInterval(() => {
+            // 清理已处理消息记录（保留最近5分钟的记录）
+            this.processedMessages.clear();
+            console.log('📺 清理消息去重记录');
+        }, this.messageCleanupInterval);
+    }
+
+    /**
      * 处理新消息
      */
     async handleNewMessage(message) {
         try {
             const chatId = message.chat.id.toString();
+            const messageKey = `${chatId}_${message.message_id}`;
+            
+            // 检查消息是否已经处理过
+            if (this.processedMessages.has(messageKey)) {
+                console.log(`📺 跳过重复消息: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
+            // 标记消息为已处理
+            this.processedMessages.add(messageKey);
             
             // 查找对应的配置
             const config = await this.configService.getConfigBySourceChannel(chatId);
@@ -859,7 +895,23 @@ class ChannelCloneService {
             if (this.bot) {
                 this.bot.removeAllListeners('message');
                 this.bot.removeAllListeners('edited_message');
+                this.bot.removeAllListeners('channel_post');
+                this.bot.removeAllListeners('edited_channel_post');
             }
+            
+            // 清理所有媒体组定时器
+            for (const [groupId, group] of this.mediaGroups.entries()) {
+                if (group.timer) {
+                    clearTimeout(group.timer);
+                }
+            }
+            this.mediaGroups.clear();
+            
+            // 清理消息去重定时器
+            if (this.cleanupTimer) {
+                clearInterval(this.cleanupTimer);
+            }
+            this.processedMessages.clear();
             
             this.rateLimiters.clear();
             

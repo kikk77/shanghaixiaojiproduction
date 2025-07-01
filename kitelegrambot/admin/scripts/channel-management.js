@@ -6,6 +6,10 @@
 // 全局变量
 let allConfigs = [];
 let currentEditingConfig = null;
+let currentHistoryConfig = null;
+let allHistoryMessages = [];
+let selectedMessages = new Set();
+let isCloning = false;
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -315,6 +319,9 @@ function createConfigCard(config) {
                         </button>
                         <button class="btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
                             🔍 测试
+                        </button>
+                        <button class="btn btn-info" onclick="showHistoryModal('${escapeHtml(config.name || '')}')" title="历史消息">
+                            📜 历史
                         </button>
                         <button class="btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
                             🗑️ 删除
@@ -1056,3 +1063,385 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style); 
+
+// ==================== 历史消息功能 ====================
+
+// 显示历史消息模态框
+async function showHistoryModal(configName) {
+    console.log('📜 显示历史消息模态框:', configName);
+    
+    currentHistoryConfig = configName;
+    selectedMessages.clear();
+    
+    // 设置模态框标题
+    document.getElementById('historyModalTitle').textContent = `📜 ${configName} - 历史消息`;
+    
+    // 显示模态框
+    showModal('historyModal');
+    
+    // 加载历史消息
+    await loadHistoryMessages();
+}
+
+// 加载历史消息
+async function loadHistoryMessages() {
+    const messagesList = document.getElementById('historyMessagesList');
+    
+    try {
+        messagesList.innerHTML = '<div class="loading">加载历史消息中...</div>';
+        
+        const limit = document.getElementById('historyLimit').value || 100;
+        const response = await apiRequest(`/api/channel/configs/${encodeURIComponent(currentHistoryConfig)}/history?limit=${limit}`);
+        
+        if (response.success) {
+            allHistoryMessages = response.data || [];
+            console.log('📜 加载到历史消息:', allHistoryMessages.length, '条');
+            displayHistoryMessages(allHistoryMessages);
+        } else {
+            messagesList.innerHTML = `
+                <div class="error">
+                    <h3>加载失败</h3>
+                    <p>${response.error || '无法获取历史消息'}</p>
+                    <button class="action-btn btn-primary" onclick="loadHistoryMessages()">重试</button>
+                </div>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('加载历史消息失败:', error);
+        messagesList.innerHTML = `
+            <div class="error">
+                <h3>加载失败</h3>
+                <p>${error.message}</p>
+                <button class="action-btn btn-primary" onclick="loadHistoryMessages()">重试</button>
+            </div>
+        `;
+    }
+}
+
+// 刷新历史消息
+async function refreshHistoryMessages() {
+    await loadHistoryMessages();
+}
+
+// 显示历史消息列表
+function displayHistoryMessages(messages) {
+    const messagesList = document.getElementById('historyMessagesList');
+    
+    if (!messages || messages.length === 0) {
+        messagesList.innerHTML = `
+            <div class="empty-state">
+                <h3>📭 暂无历史消息</h3>
+                <p>源频道中没有找到消息，或者消息已被删除</p>
+            </div>
+        `;
+        return;
+    }
+
+    const messagesHtml = messages.map(message => createMessageCard(message)).join('');
+    messagesList.innerHTML = messagesHtml;
+    
+    updateSelectionUI();
+}
+
+// 创建消息卡片
+function createMessageCard(message) {
+    const messageId = message.message_id;
+    const isSelected = selectedMessages.has(messageId);
+    
+    // 确定消息类型
+    let messageType = '文字';
+    let mediaItems = [];
+    
+    if (message.photo) {
+        messageType = '图片';
+        mediaItems.push('📷 图片');
+    }
+    if (message.video) {
+        messageType = '视频';
+        mediaItems.push('🎥 视频');
+    }
+    if (message.document) {
+        messageType = '文档';
+        mediaItems.push('📄 文档');
+    }
+    if (message.audio) {
+        messageType = '音频';
+        mediaItems.push('🎵 音频');
+    }
+    if (message.voice) {
+        messageType = '语音';
+        mediaItems.push('🎤 语音');
+    }
+    if (message.sticker) {
+        messageType = '贴纸';
+        mediaItems.push('😀 贴纸');
+    }
+    
+    // 处理消息文本
+    let messageText = message.text || message.caption || '';
+    if (messageText.length > 200) {
+        messageText = messageText.substring(0, 200) + '...';
+    }
+    
+    // 格式化日期
+    const messageDate = new Date(message.date * 1000).toLocaleString('zh-CN');
+    
+    return `
+        <div class="message-item ${isSelected ? 'selected' : ''}" onclick="toggleMessageSelection(${messageId})">
+            <input type="checkbox" class="message-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleMessageSelection(${messageId})">
+            
+            <div class="message-header">
+                <span class="message-id">消息 #${messageId}</span>
+                <span class="message-type">${messageType}</span>
+            </div>
+            
+            <div class="message-content">
+                ${messageText ? `<div class="message-text">${escapeHtml(messageText)}</div>` : ''}
+                ${mediaItems.length > 0 ? `
+                    <div class="message-media">
+                        ${mediaItems.map(item => `<span class="media-item">${item}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="message-footer">
+                <span class="message-date">${messageDate}</span>
+                <span class="clone-status status-ready">准备克隆</span>
+            </div>
+        </div>
+    `;
+}
+
+// 切换消息选择状态
+function toggleMessageSelection(messageId) {
+    if (selectedMessages.has(messageId)) {
+        selectedMessages.delete(messageId);
+    } else {
+        selectedMessages.add(messageId);
+    }
+    
+    // 更新UI
+    const messageItem = document.querySelector(`.message-item[onclick*="${messageId}"]`);
+    const checkbox = messageItem.querySelector('.message-checkbox');
+    
+    if (selectedMessages.has(messageId)) {
+        messageItem.classList.add('selected');
+        checkbox.checked = true;
+    } else {
+        messageItem.classList.remove('selected');
+        checkbox.checked = false;
+    }
+    
+    updateSelectionUI();
+}
+
+// 全选消息
+function selectAllMessages() {
+    const isAllSelected = selectedMessages.size === allHistoryMessages.length;
+    
+    if (isAllSelected) {
+        // 如果已全选，则清空选择
+        clearSelection();
+    } else {
+        // 否则全选
+        selectedMessages.clear();
+        allHistoryMessages.forEach(message => {
+            selectedMessages.add(message.message_id);
+        });
+        
+        // 更新UI
+        document.querySelectorAll('.message-item').forEach(item => {
+            item.classList.add('selected');
+            item.querySelector('.message-checkbox').checked = true;
+        });
+        
+        updateSelectionUI();
+    }
+}
+
+// 清空选择
+function clearSelection() {
+    selectedMessages.clear();
+    
+    // 更新UI
+    document.querySelectorAll('.message-item').forEach(item => {
+        item.classList.remove('selected');
+        item.querySelector('.message-checkbox').checked = false;
+    });
+    
+    updateSelectionUI();
+}
+
+// 更新选择UI
+function updateSelectionUI() {
+    const selectedCount = selectedMessages.size;
+    const totalCount = allHistoryMessages.length;
+    
+    // 更新计数显示
+    document.getElementById('selectedCount').textContent = selectedCount;
+    
+    // 更新按钮状态
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const cloneBtn = document.getElementById('cloneBtn');
+    
+    if (selectedCount === 0) {
+        selectAllBtn.textContent = '✅ 全选';
+        cloneBtn.disabled = true;
+        cloneBtn.textContent = '🚀 克隆选中 (0)';
+    } else if (selectedCount === totalCount) {
+        selectAllBtn.textContent = '❌ 取消全选';
+        cloneBtn.disabled = false;
+        cloneBtn.textContent = `🚀 克隆选中 (${selectedCount})`;
+    } else {
+        selectAllBtn.textContent = '✅ 全选';
+        cloneBtn.disabled = false;
+        cloneBtn.textContent = `🚀 克隆选中 (${selectedCount})`;
+    }
+}
+
+// 过滤历史消息
+function filterHistoryMessages() {
+    const typeFilter = document.getElementById('historyTypeFilter').value;
+    
+    if (!typeFilter) {
+        displayHistoryMessages(allHistoryMessages);
+        return;
+    }
+    
+    const filteredMessages = allHistoryMessages.filter(message => {
+        switch (typeFilter) {
+            case 'text':
+                return message.text && !message.photo && !message.video && !message.document && !message.audio;
+            case 'photo':
+                return message.photo;
+            case 'video':
+                return message.video;
+            case 'document':
+                return message.document;
+            case 'audio':
+                return message.audio || message.voice;
+            default:
+                return true;
+        }
+    });
+    
+    displayHistoryMessages(filteredMessages);
+}
+
+// 克隆选中的消息
+async function cloneSelectedMessages() {
+    if (selectedMessages.size === 0) {
+        showError('请先选择要克隆的消息');
+        return;
+    }
+    
+    if (isCloning) {
+        showError('正在克隆中，请等待完成');
+        return;
+    }
+    
+    if (!confirm(`确定要克隆选中的 ${selectedMessages.size} 条消息吗？\n\n克隆将按照消息的原始顺序进行。`)) {
+        return;
+    }
+    
+    isCloning = true;
+    const messageIds = Array.from(selectedMessages).sort((a, b) => a - b); // 按ID排序确保顺序
+    
+    // 显示进度条
+    document.getElementById('cloneProgress').style.display = 'block';
+    document.getElementById('cloneBtn').disabled = true;
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (let i = 0; i < messageIds.length; i++) {
+        if (!isCloning) break; // 检查是否被停止
+        
+        const messageId = messageIds[i];
+        const progress = ((i + 1) / messageIds.length) * 100;
+        
+        // 更新进度
+        document.getElementById('cloneProgressText').textContent = `${i + 1}/${messageIds.length}`;
+        document.getElementById('cloneProgressBar').style.width = `${progress}%`;
+        
+        // 更新消息状态
+        updateMessageCloneStatus(messageId, 'cloning');
+        
+        try {
+            // 调用克隆API
+            const response = await apiRequest(`/api/channel/configs/${encodeURIComponent(currentHistoryConfig)}/clone-message`, {
+                method: 'POST',
+                body: JSON.stringify({ messageId })
+            });
+            
+            if (response.success) {
+                successCount++;
+                updateMessageCloneStatus(messageId, 'success');
+            } else {
+                errorCount++;
+                updateMessageCloneStatus(messageId, 'error');
+                console.error(`克隆消息 ${messageId} 失败:`, response.error);
+            }
+        } catch (error) {
+            errorCount++;
+            updateMessageCloneStatus(messageId, 'error');
+            console.error(`克隆消息 ${messageId} 异常:`, error);
+        }
+        
+        // 添加延迟避免API限制
+        if (i < messageIds.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1秒延迟
+        }
+    }
+    
+    // 克隆完成
+    isCloning = false;
+    document.getElementById('cloneProgress').style.display = 'none';
+    document.getElementById('cloneBtn').disabled = false;
+    
+    // 显示结果
+    if (errorCount === 0) {
+        showSuccess(`克隆完成！成功克隆了 ${successCount} 条消息`);
+    } else {
+        showError(`克隆完成，成功 ${successCount} 条，失败 ${errorCount} 条`);
+    }
+    
+    // 清空选择
+    clearSelection();
+}
+
+// 停止克隆
+function stopCloning() {
+    if (confirm('确定要停止克隆吗？已克隆的消息不会回滚。')) {
+        isCloning = false;
+        document.getElementById('cloneProgress').style.display = 'none';
+        document.getElementById('cloneBtn').disabled = false;
+        showNotification('克隆已停止', 'warning');
+    }
+}
+
+// 更新消息克隆状态
+function updateMessageCloneStatus(messageId, status) {
+    const messageItem = document.querySelector(`.message-item[onclick*="${messageId}"]`);
+    if (!messageItem) return;
+    
+    const statusElement = messageItem.querySelector('.clone-status');
+    
+    statusElement.className = `clone-status status-${status}`;
+    
+    switch (status) {
+        case 'ready':
+            statusElement.textContent = '准备克隆';
+            break;
+        case 'cloning':
+            statusElement.textContent = '克隆中...';
+            break;
+        case 'success':
+            statusElement.textContent = '克隆成功';
+            break;
+        case 'error':
+            statusElement.textContent = '克隆失败';
+            break;
+    }
+} 

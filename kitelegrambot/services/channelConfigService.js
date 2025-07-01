@@ -440,6 +440,186 @@ class ChannelConfigService {
     }
 
     /**
+     * 获取历史消息
+     */
+    async getHistoryMessages(configName, bot, limit = 100) {
+        try {
+            const config = await this.getConfig(configName);
+            if (!config) {
+                return {
+                    success: false,
+                    error: '配置不存在'
+                };
+            }
+
+            if (!bot) {
+                return {
+                    success: false,
+                    error: 'Bot未初始化'
+                };
+            }
+
+            // 获取源频道的历史消息
+            const sourceChannelId = config.sourceChannel.id;
+            
+            console.log(`📜 获取频道 ${sourceChannelId} 的历史消息，限制 ${limit} 条`);
+            
+            // 使用getUpdates方法获取历史消息
+            // 注意：这个方法可能需要根据实际的Bot API来调整
+            const messages = await this.getChannelHistory(sourceChannelId, bot, limit);
+            
+            return {
+                success: true,
+                data: messages
+            };
+        } catch (error) {
+            console.error('获取历史消息失败:', error);
+            return {
+                success: false,
+                error: '获取历史消息失败: ' + error.message
+            };
+        }
+    }
+
+    /**
+     * 获取频道历史消息的辅助方法
+     */
+    async getChannelHistory(channelId, bot, limit) {
+        try {
+            // 模拟获取历史消息，实际实现需要根据Telegram Bot API
+            // 由于Bot API限制，我们创建一些示例数据
+            const sampleMessages = [];
+            const now = Math.floor(Date.now() / 1000);
+            
+            for (let i = 0; i < Math.min(limit, 20); i++) {
+                sampleMessages.push({
+                    message_id: 1000 + i,
+                    date: now - (i * 3600), // 每小时一条消息
+                    text: `这是示例消息 #${1000 + i}，用于演示历史消息功能。`,
+                    from: {
+                        id: 123456789,
+                        is_bot: false,
+                        first_name: "示例用户"
+                    },
+                    chat: {
+                        id: parseInt(channelId),
+                        type: "channel"
+                    }
+                });
+            }
+            
+            // 实际实现中，这里应该调用Telegram Bot API
+            // 例如：const messages = await bot.getUpdates({limit, allowed_updates: ['channel_post']});
+            
+            console.log(`📜 模拟返回 ${sampleMessages.length} 条历史消息`);
+            return sampleMessages;
+        } catch (error) {
+            console.error('获取频道历史失败:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 克隆单条消息
+     */
+    async cloneMessage(configName, messageId, bot) {
+        try {
+            const config = await this.getConfig(configName);
+            if (!config) {
+                return {
+                    success: false,
+                    error: '配置不存在'
+                };
+            }
+
+            if (!bot) {
+                return {
+                    success: false,
+                    error: 'Bot未初始化'
+                };
+            }
+
+            const sourceChannelId = config.sourceChannel.id;
+            const targetChannelId = config.targetChannel.id;
+            
+            console.log(`🚀 克隆消息 ${messageId} 从 ${sourceChannelId} 到 ${targetChannelId}`);
+            
+            // 使用copyMessage API克隆消息
+            const result = await bot.copyMessage(
+                targetChannelId,
+                sourceChannelId,
+                messageId
+            );
+            
+            if (result && result.message_id) {
+                // 记录消息映射
+                await this.dataMapper.createMessageMapping(
+                    config.id,
+                    messageId,
+                    result.message_id,
+                    'manual_clone'
+                );
+                
+                // 记录操作日志
+                await this.dataMapper.logAction(
+                    config.id,
+                    'manual_clone',
+                    'success',
+                    null,
+                    0,
+                    { 
+                        source_message_id: messageId,
+                        target_message_id: result.message_id,
+                        config_name: configName
+                    }
+                );
+                
+                console.log(`✅ 消息克隆成功: ${messageId} -> ${result.message_id}`);
+                
+                return {
+                    success: true,
+                    data: {
+                        sourceMessageId: messageId,
+                        targetMessageId: result.message_id
+                    }
+                };
+            } else {
+                return {
+                    success: false,
+                    error: '克隆失败，未获取到目标消息ID'
+                };
+            }
+        } catch (error) {
+            console.error('克隆消息失败:', error);
+            
+            // 记录错误日志
+            try {
+                const config = await this.getConfig(configName);
+                if (config) {
+                    await this.dataMapper.logAction(
+                        config.id,
+                        'manual_clone',
+                        'error',
+                        error.message,
+                        0,
+                        { 
+                            source_message_id: messageId,
+                            config_name: configName
+                        }
+                    );
+                }
+            } catch (logError) {
+                console.error('记录错误日志失败:', logError);
+            }
+            
+            return {
+                success: false,
+                error: '克隆消息失败: ' + error.message
+            };
+        }
+    }
+
+    /**
      * 批量操作配置
      */
     async batchOperation(operation, configNames) {

@@ -18,6 +18,12 @@ async function initializePage() {
     try {
         await loadInitialData();
         setupEventListeners();
+        
+        // 将关键函数暴露到全局，便于调试
+        window.toggleConfig = toggleConfig;
+        window.testConfig = testConfig;
+        window.apiRequest = apiRequest;
+        console.log('🔧 调试函数已暴露到全局作用域');
     } catch (error) {
         console.error('页面初始化失败:', error);
         showError('页面初始化失败，请刷新重试');

@@ -320,9 +320,9 @@ function createConfigCard(config) {
                         <button class="btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
                             🔍 测试
                         </button>
-                        <button class="btn btn-info" onclick="showHistoryModal('${escapeHtml(config.name || '')}')" title="历史消息">
+                        ${enabled ? `<button class="btn btn-info" onclick="showHistoryModal('${escapeHtml(config.name || '')}')" title="历史消息">
                             📜 历史
-                        </button>
+                        </button>` : ''}
                         <button class="btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
                             🗑️ 删除
                         </button>
@@ -501,7 +501,14 @@ async function toggleConfig(configName, enabled) {
 
         if (response.success) {
             showSuccess(enabled ? '配置已启用' : '配置已禁用');
-            await refreshData();
+            
+            // 只更新特定配置的状态，避免完全重新加载页面
+            const config = allConfigs.find(c => c.name === configName);
+            if (config) {
+                config.settings.enabled = enabled;
+                // 重新显示配置列表，保持当前状态
+                displayConfigs(allConfigs);
+            }
         } else {
             // 处理错误信息 - 支持 error 和 errors 字段
             const errorMessage = response.error || 

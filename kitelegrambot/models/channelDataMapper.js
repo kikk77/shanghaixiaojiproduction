@@ -36,6 +36,8 @@ class ChannelDataMapper {
                 syncEdits: configData.sync_edits !== false,
                 filterEnabled: configData.filter_enabled === true,
                 rateLimit: configData.rate_limit || 30,
+                delaySeconds: configData.delay_seconds || 0,
+                sequentialMode: Boolean(configData.sequential_mode),
                 rules: configData.clone_rules || {},
                 
                 // 🆕 新增：消息过滤功能（借鉴Telegram_Forwarder）
@@ -131,8 +133,23 @@ class ChannelDataMapper {
                 syncEdits = true,
                 filterEnabled = false,
                 rateLimit = 30,
+                delaySeconds = 0,
+                sequentialMode = false,
                 rules = {}
             } = configData;
+
+            console.log('📺 保存配置数据:', {
+                name,
+                sourceChannelId,
+                targetChannelId,
+                enabled,
+                syncEdits,
+                filterEnabled,
+                rateLimit,
+                delaySeconds,
+                sequentialMode,
+                rules
+            });
 
             // 检查是否存在
             const existing = this.eavOps.getChannelConfig(name);
@@ -146,9 +163,12 @@ class ChannelDataMapper {
                     sync_edits: syncEdits,
                     filter_enabled: filterEnabled,
                     rate_limit: rateLimit,
+                    delay_seconds: delaySeconds,
+                    sequential_mode: sequentialMode,
                     clone_rules: rules
                 });
                 
+                console.log('📺 更新配置结果:', success);
                 return success ? await this.getChannelConfig(name) : null;
             } else {
                 // 创建新配置
@@ -160,9 +180,12 @@ class ChannelDataMapper {
                     syncEdits,
                     filterEnabled,
                     rateLimit,
+                    delaySeconds,
+                    sequentialMode,
                     cloneRules: rules
                 });
                 
+                console.log('📺 创建配置结果:', entityId);
                 return entityId ? await this.getChannelConfig(name) : null;
             }
         } catch (error) {

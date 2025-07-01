@@ -11,14 +11,14 @@ const fs = require('fs');
 // 设置环境变量
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
-const ChannelDatabase = require('../config/channelDatabase');
+const { getChannelDatabase, ChannelDatabaseManager } = require('../config/channelDatabase');
 
 async function fixChannelDatabase() {
     console.log('🔧 开始修复频道克隆数据库...');
     
     try {
         // 1. 获取数据库实例
-        const db = ChannelDatabase.getDatabase();
+        const db = getChannelDatabase();
         console.log('✅ 数据库连接成功');
 
         // 2. 备份现有数据
@@ -122,7 +122,8 @@ async function recreateTables(db) {
     }
 
     // 重新初始化数据库
-    ChannelDatabase.initDatabase();
+    const dbManager = new ChannelDatabaseManager();
+    console.log('✅ 数据库重新初始化完成');
 }
 
 /**

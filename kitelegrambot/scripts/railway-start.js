@@ -71,15 +71,8 @@ async function startApp() {
     // 等待权限修复完成
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // 修复频道数据库（如果需要）
-    console.log('🔧 检查并修复频道数据库...');
-    try {
-        const { fixChannelDatabase } = require('./fix-channel-database');
-        await fixChannelDatabase();
-        console.log('✅ 频道数据库检查完成');
-    } catch (error) {
-        console.warn('⚠️ 频道数据库修复失败，继续启动应用:', error.message);
-    }
+    // 跳过数据库修复，让应用自动处理数据库初始化
+    console.log('🔧 跳过数据库修复，让应用自动初始化...');
     
     // 直接启动主应用，不做任何数据库操作
     // 让app.js自己处理数据库初始化和数据迁移

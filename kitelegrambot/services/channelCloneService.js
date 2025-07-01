@@ -52,10 +52,13 @@ class ChannelCloneService {
             return;
         }
 
-        // 检查是否已有其他实例的监听器
-        if (global.channelCloneListenerActive) {
-            console.warn(`⚠️ [${this.instanceId}] 检测到已有活跃的频道克隆监听器，跳过初始化`);
-            return;
+        // 检查是否已有其他实例的监听器，如果有则先清理
+        if (global.channelCloneListenerActive && global.channelCloneListenerActive !== this.instanceId) {
+            console.warn(`⚠️ [${this.instanceId}] 检测到其他活跃的频道克隆监听器: ${global.channelCloneListenerActive}，正在清理...`);
+            // 清理旧的监听器
+            this.bot.removeAllListeners('channel_post');
+            this.bot.removeAllListeners('edited_channel_post');
+            console.log(`🧹 [${this.instanceId}] 已清理旧的频道监听器`);
         }
         
         // 标记监听器为活跃状态
@@ -81,13 +84,13 @@ class ChannelCloneService {
 
         // 🔥 关键修复：监听频道消息
         this.bot.on('channel_post', (msg) => {
-            console.log(`📺 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
+            console.log(`📺 [${this.instanceId}] 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleNewMessage(msg);
         });
 
         // 🔥 关键修复：监听频道编辑消息
         this.bot.on('edited_channel_post', (msg) => {
-            console.log(`📺 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
+            console.log(`📺 [${this.instanceId}] 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleEditedMessage(msg);
         });
 
@@ -949,6 +952,20 @@ class ChannelCloneService {
      */
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * 强制重置监听器状态
+     */
+    static resetGlobalState() {
+        if (global.channelCloneListenerActive) {
+            console.log(`🧹 强制重置全局监听器状态: ${global.channelCloneListenerActive}`);
+            global.channelCloneListenerActive = null;
+        }
+        if (global.channelCloneProcessedMessages) {
+            global.channelCloneProcessedMessages.clear();
+            console.log(`🧹 清理全局消息去重记录`);
+        }
     }
 }
 

@@ -359,6 +359,10 @@ async function initializeChannelServices() {
 
         console.log('📺 开始初始化频道克隆服务...');
 
+        // 先重置全局状态，避免多实例冲突
+        const ChannelCloneService = require('./channelCloneService');
+        ChannelCloneService.resetGlobalState();
+
         // 初始化配置服务
         channelConfigService = new ChannelConfigService();
         
@@ -637,16 +641,22 @@ async function handleTextInput(userId, chatId, text, username) {
 // 初始化Bot事件监听
 function initBotHandlers() {
     // Bot消息处理
-          bot.on('message', async (msg) => {
-          const chatId = msg.chat.id;
-          const userId = msg.from?.id;
-          const text = msg.text;
-          const username = msg.from?.username;
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const userId = msg.from?.id;
+        const text = msg.text;
+        const username = msg.from?.username;
 
-          // 确保是私聊消息且有发送者信息
-          if (!userId || msg.chat.type !== 'private') {
-              return;
-          }
+        // 🔥 重要修复：跳过频道消息，交给channelCloneService处理
+        if (msg.chat.type === 'channel') {
+            console.log(`📺 [botService] 跳过频道消息，交给频道克隆服务处理: ${chatId} - ${msg.message_id}`);
+            return;
+        }
+
+        // 确保是私聊消息且有发送者信息
+        if (!userId || msg.chat.type !== 'private') {
+            return;
+        }
 
         // 处理 /start 命令
         if (text && text.startsWith('/start')) {

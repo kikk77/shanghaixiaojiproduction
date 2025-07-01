@@ -146,7 +146,7 @@ async function loadConfigs() {
     
     try {
         console.log('📋 开始加载配置列表...');
-        configsList.innerHTML = '<div class="loading">加载配置中...</div>';
+        configsList.innerHTML = '<div class="loading">加载配置中</div>';
         
         const response = await apiRequest('/api/channel/configs');
         console.log('📋 配置列表响应:', response);
@@ -565,7 +565,7 @@ async function loadServiceStatus() {
     const statusDiv = document.getElementById('serviceStatus');
     
     try {
-        statusDiv.innerHTML = '<div class="loading">获取服务状态中...</div>';
+        statusDiv.innerHTML = '<div class="loading">获取服务状态中</div>';
         
         const response = await apiRequest('/api/channel/service/status');
         
@@ -652,7 +652,7 @@ async function stopService() {
 // 重新加载服务
 async function reloadService() {
     try {
-        showLoading('重新加载服务中...');
+        showLoading('重新加载服务中');
         
         const response = await apiRequest('/api/channel/service/reload', {
             method: 'POST'
@@ -714,7 +714,7 @@ async function loadLogs() {
     const logsList = document.getElementById('logsList');
     
     try {
-        logsList.innerHTML = '<div class="loading">加载日志中...</div>';
+        logsList.innerHTML = '<div class="loading">加载日志中</div>';
         
         const configFilter = document.getElementById('logConfigFilter').value;
         const params = new URLSearchParams();

@@ -637,11 +637,16 @@ async function handleTextInput(userId, chatId, text, username) {
 // 初始化Bot事件监听
 function initBotHandlers() {
     // Bot消息处理
-    bot.on('message', async (msg) => {
-        const chatId = msg.chat.id;
-        const userId = msg.from.id;
-        const text = msg.text;
-        const username = msg.from.username;
+          bot.on('message', async (msg) => {
+          const chatId = msg.chat.id;
+          const userId = msg.from?.id;
+          const text = msg.text;
+          const username = msg.from?.username;
+
+          // 确保是私聊消息且有发送者信息
+          if (!userId || msg.chat.type !== 'private') {
+              return;
+          }
 
         // 处理 /start 命令
         if (text && text.startsWith('/start')) {

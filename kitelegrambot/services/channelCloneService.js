@@ -14,6 +14,10 @@ class ChannelCloneService {
         // 速率限制管理器
         this.rateLimiters = new Map(); // configId -> { tokens, lastRefill }
         
+        // 媒体组收集器
+        this.mediaGroups = new Map(); // media_group_id -> { messages: [], timer: timeout, config: config }
+        this.mediaGroupTimeout = 2000; // 2秒超时，收集完整媒体组
+        
         // 克隆状态追踪
         this.cloneStats = {
             totalCloned: 0,
@@ -74,6 +78,13 @@ class ChannelCloneService {
 
             console.log(`📺 收到源频道 ${chatId} 的新消息 ${message.message_id}`);
 
+            // 检查是否为媒体组消息
+            if (message.media_group_id) {
+                console.log(`📺 检测到媒体组消息: ${message.media_group_id}`);
+                await this.handleMediaGroupMessage(config, message);
+                return;
+            }
+
             // 检查速率限制
             const rateLimitCheck = await this.checkRateLimit(config);
             if (!rateLimitCheck.allowed) {
@@ -89,7 +100,7 @@ class ChannelCloneService {
                 return;
             }
 
-            // 执行克隆
+            // 执行单条消息克隆
             const cloneResult = await this.cloneMessage(config, message);
             
             if (cloneResult.success) {
@@ -156,6 +167,24 @@ class ChannelCloneService {
 
             console.log(`📺 收到源频道 ${chatId} 的消息编辑 ${message.message_id}`);
 
+            // 检查是否为媒体组消息的编辑
+            if (message.media_group_id) {
+                console.log(`📺 检测到媒体组编辑消息: ${message.media_group_id}`);
+                // 媒体组的编辑比较复杂，暂时记录日志
+                await this.dataMapper.logAction(
+                    config.id,
+                    'media_group_edit',
+                    'info',
+                    '媒体组编辑暂不支持自动同步',
+                    0,
+                    {
+                        source_message_id: message.message_id,
+                        media_group_id: message.media_group_id
+                    }
+                );
+                return;
+            }
+
             // 查找消息映射
             const mapping = await this.dataMapper.getMessageMapping(message.message_id, config.id);
             if (!mapping) {
@@ -200,6 +229,198 @@ class ChannelCloneService {
             }
         } catch (error) {
             console.error('处理编辑消息失败:', error);
+        }
+    }
+
+    /**
+     * 处理媒体组消息
+     */
+    async handleMediaGroupMessage(config, message) {
+        const mediaGroupId = message.media_group_id;
+        
+        // 检查速率限制
+        const rateLimitCheck = await this.checkRateLimit(config);
+        if (!rateLimitCheck.allowed) {
+            console.log(`📺 媒体组速率限制：跳过消息 ${message.message_id}`);
+            return;
+        }
+
+        // 获取或创建媒体组收集器
+        if (!this.mediaGroups.has(mediaGroupId)) {
+            this.mediaGroups.set(mediaGroupId, {
+                messages: [],
+                config: config,
+                timer: null
+            });
+        }
+
+        const mediaGroup = this.mediaGroups.get(mediaGroupId);
+        mediaGroup.messages.push(message);
+
+        console.log(`📺 媒体组 ${mediaGroupId} 收集到 ${mediaGroup.messages.length} 条消息`);
+
+        // 清除之前的定时器
+        if (mediaGroup.timer) {
+            clearTimeout(mediaGroup.timer);
+        }
+
+        // 设置新的定时器，等待更多消息或超时处理
+        mediaGroup.timer = setTimeout(async () => {
+            await this.processMediaGroup(mediaGroupId);
+        }, this.mediaGroupTimeout);
+    }
+
+    /**
+     * 处理完整的媒体组
+     */
+    async processMediaGroup(mediaGroupId) {
+        const mediaGroup = this.mediaGroups.get(mediaGroupId);
+        if (!mediaGroup) {
+            return;
+        }
+
+        try {
+            console.log(`📺 开始处理媒体组 ${mediaGroupId}，包含 ${mediaGroup.messages.length} 条消息`);
+            
+            const startTime = Date.now();
+            const config = mediaGroup.config;
+            const messages = mediaGroup.messages.sort((a, b) => a.message_id - b.message_id); // 按消息ID排序
+            
+            // 构建媒体组数据
+            const mediaItems = [];
+            let groupCaption = null;
+            let captionMessage = null;
+
+            for (const msg of messages) {
+                const mediaItem = await this.buildMediaItem(msg);
+                if (mediaItem) {
+                    mediaItems.push(mediaItem);
+                    
+                    // 使用第一个有标题的消息作为组标题
+                    if (!groupCaption && (msg.caption || msg.text)) {
+                        groupCaption = msg.caption || msg.text;
+                        captionMessage = msg;
+                    }
+                }
+            }
+
+            if (mediaItems.length === 0) {
+                throw new Error('媒体组中没有有效的媒体项');
+            }
+
+            // 设置组标题到第一个媒体项
+            if (groupCaption && mediaItems.length > 0) {
+                mediaItems[0].caption = groupCaption;
+                if (captionMessage && captionMessage.caption_entities) {
+                    mediaItems[0].caption_entities = captionMessage.caption_entities;
+                }
+            }
+
+            console.log(`📺 发送媒体组到目标频道，包含 ${mediaItems.length} 个媒体项`);
+
+            // 发送媒体组
+            const result = await this.bot.sendMediaGroup(config.targetChannel.id, mediaItems);
+            
+            const processingTime = Date.now() - startTime;
+
+            if (result && result.length > 0) {
+                console.log(`✅ 媒体组克隆成功: ${mediaGroupId} -> ${result.length} 条消息`);
+                
+                // 创建消息映射
+                for (let i = 0; i < Math.min(messages.length, result.length); i++) {
+                    await this.dataMapper.createMessageMapping(
+                        config.id,
+                        messages[i].message_id,
+                        result[i].message_id,
+                        this.getMessageType(messages[i])
+                    );
+                }
+
+                this.cloneStats.totalCloned += result.length;
+                this.cloneStats.lastCloneTime = new Date();
+
+                // 记录成功日志
+                await this.dataMapper.logAction(
+                    config.id,
+                    'media_group_clone',
+                    'success',
+                    null,
+                    processingTime,
+                    {
+                        media_group_id: mediaGroupId,
+                        source_messages: messages.length,
+                        target_messages: result.length,
+                        media_types: mediaItems.map(item => item.type).join(',')
+                    }
+                );
+            } else {
+                throw new Error('发送媒体组返回空结果');
+            }
+
+        } catch (error) {
+            this.cloneStats.totalErrors++;
+            console.error(`❌ 媒体组克隆失败: ${error.message}`);
+            
+            // 记录错误日志
+            await this.dataMapper.logAction(
+                config.id,
+                'media_group_clone',
+                'error',
+                error.message,
+                0,
+                {
+                    media_group_id: mediaGroupId,
+                    message_count: mediaGroup.messages.length
+                }
+            );
+        } finally {
+            // 清理媒体组数据
+            this.mediaGroups.delete(mediaGroupId);
+        }
+    }
+
+    /**
+     * 构建媒体项用于sendMediaGroup
+     */
+    async buildMediaItem(message) {
+        try {
+            if (message.photo && message.photo.length > 0) {
+                // 图片
+                const photo = message.photo[message.photo.length - 1]; // 最大尺寸
+                return {
+                    type: 'photo',
+                    media: photo.file_id
+                };
+            } else if (message.video) {
+                // 视频
+                return {
+                    type: 'video',
+                    media: message.video.file_id,
+                    width: message.video.width,
+                    height: message.video.height,
+                    duration: message.video.duration
+                };
+            } else if (message.document) {
+                // 文档
+                return {
+                    type: 'document',
+                    media: message.document.file_id
+                };
+            } else if (message.audio) {
+                // 音频
+                return {
+                    type: 'audio',
+                    media: message.audio.file_id,
+                    duration: message.audio.duration,
+                    performer: message.audio.performer,
+                    title: message.audio.title
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('构建媒体项失败:', error);
+            return null;
         }
     }
 

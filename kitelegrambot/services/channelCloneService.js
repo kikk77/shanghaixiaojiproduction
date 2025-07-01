@@ -34,17 +34,29 @@ class ChannelCloneService {
             return;
         }
 
-        // 监听新消息
+        // 监听新消息（群组、私聊等）
         this.bot.on('message', (msg) => {
             this.handleNewMessage(msg);
         });
 
-        // 监听消息编辑
+        // 监听消息编辑（群组、私聊等）
         this.bot.on('edited_message', (msg) => {
             this.handleEditedMessage(msg);
         });
 
-        console.log('📺 频道克隆消息监听器已初始化');
+        // 🔥 关键修复：监听频道消息
+        this.bot.on('channel_post', (msg) => {
+            console.log(`📺 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
+            this.handleNewMessage(msg);
+        });
+
+        // 🔥 关键修复：监听频道编辑消息
+        this.bot.on('edited_channel_post', (msg) => {
+            console.log(`📺 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
+            this.handleEditedMessage(msg);
+        });
+
+        console.log('📺 频道克隆消息监听器已初始化（包含频道消息监听）');
     }
 
     /**

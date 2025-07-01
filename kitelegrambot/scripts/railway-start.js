@@ -22,7 +22,8 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 // 确保数据目录存在并修复权限
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
+const { migrateProductionDelayFields } = require('./production-migrate-delay-fields');
 
 const dataDir = '/app/data'; // 直接使用Volume挂载路径
 
@@ -67,18 +68,40 @@ try {
 // 启动主应用
 console.log('🎯 启动主应用...');
 
-async function startApp() {
-    // 等待权限修复完成
-    await new Promise(resolve => setTimeout(resolve, 1000));
+async function startRailwayApp() {
+    console.log('🚀 Railway应用启动中...');
+    console.log('环境:', process.env.NODE_ENV || 'development');
+    console.log('Railway环境:', process.env.RAILWAY_ENVIRONMENT_NAME || 'none');
     
-    // 跳过数据库修复，让应用自动处理数据库初始化
-    console.log('🔧 跳过数据库修复，让应用自动初始化...');
-    
-    // 直接启动主应用，不做任何数据库操作
-    // 让app.js自己处理数据库初始化和数据迁移
-    console.log('🔄 开始启动完整应用服务...');
-    
-    require('../app.js');
+    try {
+        // 等待权限修复完成
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 在启动应用前运行数据库迁移
+        console.log('🔧 检查数据库迁移状态...');
+        try {
+            const migrationSuccess = await migrateProductionDelayFields();
+            
+            if (migrationSuccess) {
+                console.log('✅ 数据库迁移检查完成');
+            } else {
+                console.log('⚠️ 数据库迁移检查有警告，但继续启动应用');
+            }
+        } catch (migrationError) {
+            console.error('⚠️ 数据库迁移失败，但继续启动应用:', migrationError.message);
+        }
+        
+        // 启动主应用
+        console.log('🚀 启动主应用...');
+        require('../app.js');
+        
+    } catch (error) {
+        console.error('❌ Railway应用启动失败:', error);
+        // 如果迁移失败，仍然尝试启动应用
+        console.log('🔄 尝试直接启动应用...');
+        require('../app.js');
+    }
 }
 
-startApp(); 
+// 启动应用
+startRailwayApp(); 

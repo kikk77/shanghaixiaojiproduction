@@ -831,31 +831,33 @@ class ChannelConfigService {
         const messages = [];
         
         try {
-            // 方法1：尝试从最新的可能消息ID开始向下查找
-            // 这是一个估算，大多数频道的消息ID不会超过这个范围
+            // 🔥 修复：使用更大的扫描范围
+            // 根据用户反馈，实际消息ID可能到583或更高
             const possibleRecentIds = [];
             
-            // 生成一些可能的最新消息ID（这是估算）
-            const now = Date.now();
-            const dayInMs = 24 * 60 * 60 * 1000;
+            // 生成更大范围的可能消息ID，从高到低
+            const maxEstimate = 2000; // 增加到2000
+            const minEstimate = 1;
+            const scanStep = Math.max(1, Math.floor((maxEstimate - minEstimate) / (limit * 3)));
             
-            // 尝试一些启发式的消息ID
-            for (let i = 1; i <= Math.min(limit * 2, 100); i++) {
-                possibleRecentIds.push(i);
+            // 从高ID开始向下扫描，这样更容易找到最新消息
+            for (let id = maxEstimate; id >= minEstimate; id -= scanStep) {
+                possibleRecentIds.push(id);
+                if (possibleRecentIds.length >= limit * 5) break; // 限制扫描数量
             }
             
-            // 反向检查，从大到小
-            possibleRecentIds.reverse();
-            
-            console.log(`📜 尝试检查最近 ${possibleRecentIds.length} 个可能的消息ID`);
+            console.log(`📜 智能扫描策略：从 ${maxEstimate} 向下扫描到 ${minEstimate}，步长 ${scanStep}`);
+            console.log(`📜 将检查 ${possibleRecentIds.length} 个消息ID`);
             
             let foundCount = 0;
+            let scannedCount = 0;
+            
             for (const messageId of possibleRecentIds) {
                 if (foundCount >= limit) break;
+                scannedCount++;
                 
                 try {
                     // 使用forwardMessage来测试消息是否存在
-                    // 这是检测消息存在性的标准方法
                     const result = await bot.forwardMessage(
                         channelId, // 转发到同一个频道
                         channelId, // 从同一个频道
@@ -876,27 +878,39 @@ class ChannelConfigService {
                             message_id: messageId,
                             chat: { id: channelId },
                             date: Math.floor(Date.now() / 1000),
-                            text: `消息 #${messageId}`,
+                            text: `历史消息 #${messageId}`,
                             found_method: 'forward_test'
                         });
                         
                         foundCount++;
-                        console.log(`📜 找到消息 #${messageId}`);
+                        console.log(`📜 找到消息 #${messageId} (${foundCount}/${limit})`);
                     }
                 } catch (error) {
                     // 消息不存在或无权限，继续下一个
                     continue;
                 }
                 
+                // 进度报告
+                if (scannedCount % 50 === 0) {
+                    console.log(`📊 扫描进度: ${scannedCount}/${possibleRecentIds.length}, 已找到: ${foundCount}`);
+                }
+                
                 // 添加延迟避免API限制
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
             
-            console.log(`📜 变通方法找到 ${messages.length} 条消息`);
+            // 按消息ID排序（最新的在前）
+            messages.sort((a, b) => b.message_id - a.message_id);
+            
+            console.log(`📜 智能扫描完成: 扫描了 ${scannedCount} 个ID，找到 ${messages.length} 条消息`);
+            if (messages.length > 0) {
+                console.log(`📜 消息ID范围: ${messages[messages.length-1].message_id} - ${messages[0].message_id}`);
+            }
+            
             return messages;
             
         } catch (error) {
-            console.error(`❌ 变通方法失败:`, error);
+            console.error(`❌ 智能扫描失败:`, error);
             return [];
         }
     }

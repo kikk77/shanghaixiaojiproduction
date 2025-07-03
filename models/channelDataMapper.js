@@ -546,8 +546,9 @@ class ChannelDataMapper {
             errors.push(`目标频道${targetValidation.error}`);
         }
         
-        if (configData.sourceChannelId === configData.targetChannelId) {
-            errors.push('源频道和目标频道不能相同');
+        // 对于播报配置，允许源频道和目标频道相同
+        if (configData.sourceChannelId === configData.targetChannelId && !configData.broadcastEnabled) {
+            errors.push('源频道和目标频道不能相同（播报配置除外）');
         }
         
         if (configData.rateLimit && (configData.rateLimit < 1 || configData.rateLimit > 1000)) {

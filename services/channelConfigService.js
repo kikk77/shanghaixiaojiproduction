@@ -264,20 +264,28 @@ class ChannelConfigService {
                     continue;
                 }
 
-                // 检查源频道冲突
-                if (existingConfig.sourceChannel.id === configData.sourceChannelId) {
-                    conflicts.push(`源频道 ${configData.sourceChannelId} 已被配置 "${existingConfig.name}" 使用`);
-                }
+                // 对于播报配置，只检查源频道冲突，不检查目标频道冲突
+                if (configData.broadcastEnabled) {
+                    // 播报配置：只检查源频道是否被其他非播报配置使用
+                    if (existingConfig.sourceChannel.id === configData.sourceChannelId && 
+                        !existingConfig.settings.broadcastEnabled) {
+                        conflicts.push(`源频道 ${configData.sourceChannelId} 已被非播报配置 "${existingConfig.name}" 使用`);
+                    }
+                } else {
+                    // 普通克隆配置：检查源频道和目标频道冲突
+                    if (existingConfig.sourceChannel.id === configData.sourceChannelId) {
+                        conflicts.push(`源频道 ${configData.sourceChannelId} 已被配置 "${existingConfig.name}" 使用`);
+                    }
 
-                // 检查目标频道冲突
-                if (existingConfig.targetChannel.id === configData.targetChannelId) {
-                    conflicts.push(`目标频道 ${configData.targetChannelId} 已被配置 "${existingConfig.name}" 使用`);
-                }
+                    if (existingConfig.targetChannel.id === configData.targetChannelId) {
+                        conflicts.push(`目标频道 ${configData.targetChannelId} 已被配置 "${existingConfig.name}" 使用`);
+                    }
 
-                // 检查是否有反向配置（A->B 和 B->A）
-                if (existingConfig.sourceChannel.id === configData.targetChannelId && 
-                    existingConfig.targetChannel.id === configData.sourceChannelId) {
-                    conflicts.push(`存在反向配置冲突，配置 "${existingConfig.name}" 已设置反向克隆`);
+                    // 检查是否有反向配置（A->B 和 B->A）
+                    if (existingConfig.sourceChannel.id === configData.targetChannelId && 
+                        existingConfig.targetChannel.id === configData.sourceChannelId) {
+                        conflicts.push(`存在反向配置冲突，配置 "${existingConfig.name}" 已设置反向克隆`);
+                    }
                 }
             }
 

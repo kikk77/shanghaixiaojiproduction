@@ -247,6 +247,118 @@ async function handleChannelApiRequest(pathname, method, data) {
         const endpoint = pathParts[3]; // /api/channel/{endpoint}
         const id = pathParts[4]; // /api/channel/{endpoint}/{id}
 
+        // 播报配置专用路由处理
+        if (endpoint === 'broadcast' && pathParts[4] === 'configs') {
+            const configId = pathParts[5]; // /api/channel/broadcast/configs/{id}
+            const action = pathParts[6]; // /api/channel/broadcast/configs/{id}/{action}
+
+            if (method === 'POST' && !configId) {
+                // 创建播报配置: POST /api/channel/broadcast/configs
+                console.log('📢 处理播报配置创建请求:', data);
+                
+                // 验证必需字段
+                if (!data.name || !data.sourceChannelId || !data.broadcastTargetGroups) {
+                    return {
+                        success: false,
+                        error: '缺少必需字段：配置名称、源频道ID或播报目标群组'
+                    };
+                }
+
+                // 构造播报配置数据
+                const broadcastConfigData = {
+                    ...data,
+                    broadcastEnabled: true,
+                    targetChannelId: data.sourceChannelId, // 播报模式下目标频道ID等于源频道ID
+                    syncEdits: false,
+                    filterEnabled: false,
+                    sequentialMode: false
+                };
+
+                const result = await configService.saveConfig(broadcastConfigData);
+                
+                if (result.success) {
+                    console.log('✅ 播报配置创建成功:', result.config?.name);
+                    return {
+                        success: true,
+                        message: '播报配置创建成功',
+                        config: result.config
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: result.error || '播报配置保存失败'
+                    };
+                }
+            }
+
+            if (method === 'DELETE' && configId && !action) {
+                // 删除播报配置: DELETE /api/channel/broadcast/configs/{id}
+                console.log('📢 处理播报配置删除请求:', configId);
+                
+                const result = await configService.deleteConfig(configId);
+                
+                if (result.success) {
+                    console.log('✅ 播报配置删除成功:', configId);
+                    return {
+                        success: true,
+                        message: '播报配置删除成功'
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: result.error || '播报配置删除失败'
+                    };
+                }
+            }
+
+            if (method === 'POST' && configId && action === 'test') {
+                // 测试播报配置: POST /api/channel/broadcast/configs/{id}/test
+                console.log('📢 处理播报配置测试请求:', configId);
+                
+                const config = await configService.getConfig(configId);
+
+                if (!config || !config.settings.broadcastEnabled) {
+                    return {
+                        success: false,
+                        error: '播报配置不存在'
+                    };
+                }
+
+                const targetGroups = config.settings.broadcastTargetGroups || [];
+                let groupsAccessible = 0;
+                let testResults = {
+                    targetGroupsCount: targetGroups.length,
+                    groupsAccessible: 0,
+                    permissions: { valid: false },
+                    templateParser: { working: true }
+                };
+
+                // 测试每个群组的访问权限
+                const bot = bs.getBotInstance();
+                for (const groupId of targetGroups) {
+                    try {
+                        if (bot) {
+                            const chat = await bot.getChat(groupId);
+                            if (chat) {
+                                groupsAccessible++;
+                            }
+                        }
+                    } catch (error) {
+                        console.log(`群组 ${groupId} 访问测试失败:`, error.message);
+                    }
+                }
+
+                testResults.groupsAccessible = groupsAccessible;
+                testResults.permissions.valid = groupsAccessible > 0;
+
+                return {
+                    success: true,
+                    message: '播报配置测试完成',
+                    results: testResults
+                };
+            }
+        }
+
         // 配置操作API - 必须先匹配更具体的路径
         if (endpoint === 'configs' && pathParts[5]) {
             const action = pathParts[5]; // /api/channel/configs/{id}/{action}

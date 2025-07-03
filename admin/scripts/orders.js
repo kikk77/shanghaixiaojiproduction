@@ -1,4 +1,7 @@
-// 订单管理系统优化版本
+// 订单管理系统 - 优化版本
+// 版本: 20250625-1659 - 修复双向评价筛选和显示问题
+console.log('📋 订单管理系统加载 - 版本: 20250625-1659');
+
 class OptimizedOrdersManager {
     constructor() {
         // 基础配置
@@ -30,6 +33,11 @@ class OptimizedOrdersManager {
         
         // 防抖定时器
         this.debounceTimers = {};
+        
+        // 频道点击相关
+        this.channelClicksAutoRefresh = true;
+        this.channelClicksInterval = null;
+        this.lastChannelClickId = 0;
         
         this.init();
     }
@@ -650,15 +658,23 @@ class OptimizedOrdersManager {
                 };
 
             case 'statusChart':
-                // 状态颜色映射
+                // 状态颜色映射 - 与后端emoji保持一致
                 const statusColorMap = {
-                    '已完成': '#10b981',    // 绿色
-                    '已确认': '#004085',    // 蓝色
-                    '待确认': '#856404',    // 黄色
-                    '未完成': '#856404',    // 黄色
-                    '尝试预约': '#0c5460',  // 浅蓝色
-                    '预约失败': '#721c24',  // 红色
-                    '已取消': '#6c757d'     // 灰色
+                    '🔄 尝试预约': '#FFA500',  // 橙色
+                    '⏳ 待确认': '#FFD700',    // 金色
+                    '✅ 已确认': '#32CD32',    // 绿色
+                    '🎉 已完成': '#228B22',    // 深绿色
+                    '❌ 未完成': '#DC143C',    // 红色
+                    '💔 预约失败': '#8B0000',  // 深红色
+                    '🚫 已取消': '#6c757d',    // 灰色
+                    // 兼容旧格式
+                    '尝试预约': '#FFA500',
+                    '待确认': '#FFD700',
+                    '已确认': '#32CD32',
+                    '已完成': '#228B22',
+                    '未完成': '#DC143C',
+                    '预约失败': '#8B0000',
+                    '已取消': '#6c757d'
                 };
                 
                 // 根据标签动态生成颜色数组
@@ -675,7 +691,20 @@ class OptimizedOrdersManager {
                             backgroundColor: dynamicColors
                         }]
                     },
-                    options: commonOptions
+                    options: {
+                        ...commonOptions,
+                        plugins: {
+                            ...commonOptions.plugins,
+                            legend: {
+                                display: true,
+                                position: 'right',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            }
+                        }
+                    }
                 };
 
             default:
@@ -939,6 +968,12 @@ class OptimizedOrdersManager {
                 }
             });
             
+            // 加载频道点击数据
+            await this.loadChannelClicksData();
+            
+            // 启动实时频道点击刷新
+            this.startChannelClicksAutoRefresh();
+            
         } catch (error) {
             console.error('更新仪表板失败:', error);
             this.showError('更新仪表板失败: ' + error.message);
@@ -1004,7 +1039,11 @@ class OptimizedOrdersManager {
             'totalBindCodes': data.totalBindCodes || 0,
             'totalRegions': data.totalRegions || 0,
             'totalTemplates': data.totalTemplates || 0,
-            'totalClicks': data.totalClicks || 0
+            'totalClicks': data.totalClicks || 0,
+            // 新增的用户互动统计
+            'totalInteractions': data.totalInteractions || 0,
+            'uniqueUsers': data.uniqueUsers || 0,
+            'activeChats': data.activeChats || 0
         };
 
         console.log('🏪 处理后的基础数据映射:', basicElements);
@@ -1019,6 +1058,16 @@ class OptimizedOrdersManager {
                 console.log(`🏪 未找到基础统计元素: ${elementId}`);
             }
         });
+        
+        // 用户参与度需要特殊处理
+        const userEngagementElement = document.getElementById('userEngagement');
+        if (userEngagementElement) {
+            const engagement = data.userEngagement || 0;
+            userEngagementElement.textContent = `${engagement}次/人`;
+            console.log('🏪 userEngagement 更新为:', `${engagement}次/人`);
+        } else {
+            console.log('🏪 未找到基础统计元素: userEngagement');
+        }
 
         console.log('🏪 基础统计数据更新完成');
     }
@@ -2719,4 +2768,153 @@ window.applyAdvancedFilters = () => ordersManager.applyAdvancedFilters();
 window.clearAdvancedFilters = () => ordersManager.clearAdvancedFilters();
 window.refreshOrdersData = () => ordersManager.refreshOrdersData();
 
-console.log('订单管理系统优化版本已加载，全局访问已设置'); 
+console.log('订单管理系统优化版本已加载，全局访问已设置');
+
+// 为OptimizedOrdersManager类添加频道点击相关方法
+OptimizedOrdersManager.prototype.loadChannelClicksData = async function() {
+    try {
+        // 加载统计数据
+        const filters = this.getCurrentFilters();
+        const statsResponse = await fetch('/api/channel-clicks/stats?' + new URLSearchParams(filters));
+        const statsData = await statsResponse.json();
+        
+        if (statsData.success) {
+            this.updateChannelClicksStats(statsData.data);
+        }
+        
+        // 加载最新点击记录
+        await this.refreshChannelClicks();
+        
+    } catch (error) {
+        console.error('加载频道点击数据失败:', error);
+    }
+};
+
+OptimizedOrdersManager.prototype.updateChannelClicksStats = function(data) {
+    // 更新频道点击总数
+    const totalElement = document.getElementById('totalChannelClicks');
+    if (totalElement) {
+        totalElement.textContent = data.totalClicks.toLocaleString();
+    }
+
+    // 更新今日点击数
+    const todayElement = document.getElementById('todayChannelClicks');
+    if (todayElement) {
+        todayElement.textContent = data.todayClicks.toLocaleString();
+    }
+
+    // 更新独立用户数
+    const uniqueElement = document.getElementById('uniqueChannelUsers');
+    if (uniqueElement) {
+        uniqueElement.textContent = data.uniqueUsers.toLocaleString();
+    }
+};
+
+OptimizedOrdersManager.prototype.refreshChannelClicks = async function() {
+    try {
+        const response = await fetch('/api/channel-clicks/recent?limit=20');
+        const data = await response.json();
+        
+        if (data.success) {
+            this.renderChannelClicks(data.data);
+        }
+    } catch (error) {
+        console.error('刷新频道点击失败:', error);
+    }
+};
+
+OptimizedOrdersManager.prototype.renderChannelClicks = function(clicks) {
+    const container = document.getElementById('channelClicksTable');
+    if (!container) return;
+
+    if (!clicks || clicks.length === 0) {
+        container.innerHTML = '<div class="loading">暂无频道点击记录</div>';
+        return;
+    }
+
+    // 检查是否有新数据
+    const latestId = clicks[0]?.id || 0;
+    const hasNewData = latestId > this.lastChannelClickId;
+    this.lastChannelClickId = latestId;
+
+    const html = clicks.map((click, index) => {
+        const userName = this.formatUserName(click);
+        const timeStr = this.formatClickTime(click.clicked_at);
+        const isNew = hasNewData && index < 3; // 标记前3条为新数据
+        
+        return `
+            <div class="realtime-item ${isNew ? 'new' : ''}">
+                <div class="realtime-item-content">
+                    <div class="realtime-item-text">
+                        ${timeStr}：用户<span class="username">${userName}</span>查看了<span class="merchant">${click.merchant_name}</span>老师
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = html;
+};
+
+OptimizedOrdersManager.prototype.formatUserName = function(click) {
+    if (click.username) {
+        return `@${click.username}`;
+    }
+    
+    let name = '';
+    if (click.first_name) name += click.first_name;
+    if (click.last_name) name += ' ' + click.last_name;
+    
+    return name.trim() || `用户${click.user_id}`;
+};
+
+OptimizedOrdersManager.prototype.formatClickTime = function(timestamp) {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    
+    // 如果是今天，只显示时分秒
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+    
+    // 否则显示完整日期时间
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+};
+
+OptimizedOrdersManager.prototype.startChannelClicksAutoRefresh = function() {
+    if (this.channelClicksInterval) {
+        clearInterval(this.channelClicksInterval);
+    }
+
+    if (this.channelClicksAutoRefresh) {
+        this.channelClicksInterval = setInterval(() => {
+            this.refreshChannelClicks();
+        }, 5000); // 每5秒刷新一次
+    }
+};
+
+OptimizedOrdersManager.prototype.toggleChannelClicksAutoRefresh = function() {
+    this.channelClicksAutoRefresh = !this.channelClicksAutoRefresh;
+    const btn = document.getElementById('autoRefreshBtn');
+    
+    if (this.channelClicksAutoRefresh) {
+        btn.textContent = '⏸️ 暂停刷新';
+        this.startChannelClicksAutoRefresh();
+    } else {
+        btn.textContent = '▶️ 开始刷新';
+        if (this.channelClicksInterval) {
+            clearInterval(this.channelClicksInterval);
+            this.channelClicksInterval = null;
+        }
+    }
+}; 

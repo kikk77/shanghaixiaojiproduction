@@ -596,6 +596,26 @@
                 justify-content: center;
             }
         }
+
+        .config-btn.btn-info {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+        }
+        
+        .config-btn.btn-info:hover {
+            background: linear-gradient(135deg, #138496, #117a8b);
+            transform: translateY(-2px);
+        }
+        
+        .config-btn.btn-secondary {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+            color: white;
+        }
+        
+        .config-btn.btn-secondary:hover {
+            background: linear-gradient(135deg, #5a6268, #545b62);
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -741,6 +761,25 @@
                             <label for="sequentialMode">顺序转发模式</label>
                         </div>
                         <small>批量消息按顺序一条一条转发，确保消息顺序正确</small>
+                    </div>
+
+                    <hr style="margin: 25px 0; border: 1px solid #eee;">
+                    
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="color: #007bff; margin-bottom: 15px;">📢 小鸡播报功能</h4>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="broadcastEnabled" name="broadcastEnabled">
+                                <label for="broadcastEnabled">启用小鸡报告播报</label>
+                            </div>
+                            <small>监听频道中的小鸡报告并自动播报到指定群组</small>
+                        </div>
+
+                        <div class="form-group" id="broadcastTargetGroup" style="display: none;">
+                            <label for="broadcastTargetGroups">播报目标群组ID *</label>
+                            <input type="text" id="broadcastTargetGroups" name="broadcastTargetGroups" placeholder="-1001234567890,-1001234567891">
+                            <small>多个群组ID用逗号分隔，格式如：-1001234567890</small>
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 15px; margin-top: 30px;">

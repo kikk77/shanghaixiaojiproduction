@@ -11,31 +11,26 @@ class DatabaseManager {
         const isStaging = nodeEnv === 'staging';
         
         // 根据环境选择数据目录和数据库文件名
-        // 生产环境优先使用Volume，如果权限有问题则使用应用目录
+        // 生产环境和staging环境都优先使用Volume
         let dataDir;
         if (isProduction || isStaging) {
-            const volumeDataDir = '/app/data';
-            const localDataDir = path.join(__dirname, '..', 'data'); // staging使用本地data目录
+            // Railway Volume路径检查
+            const volumeDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data';
+            const localDataDir = path.join(__dirname, '..', 'data');
             
-            // staging环境直接使用本地data目录，不使用Volume
-            if (isStaging) {
-                dataDir = localDataDir;
-                console.log(`📁 STAGING环境使用本地数据目录: ${dataDir}`);
-            } else {
-                // production环境才检查Volume权限
+                        // 优先尝试使用Volume，无论是production还是staging
             try {
                 if (fs.existsSync(volumeDataDir)) {
                     fs.accessSync(volumeDataDir, fs.constants.W_OK);
                     dataDir = volumeDataDir; // Volume可用
-                    console.log(`📁 使用Volume数据目录: ${dataDir}`);
+                    console.log(`📁 ${isStaging ? 'STAGING' : 'PRODUCTION'}环境使用Volume数据目录: ${dataDir}`);
                 } else {
                     throw new Error('Volume目录不存在');
                 }
             } catch (error) {
-                console.log(`⚠️ Volume权限问题，使用应用目录: ${error.message}`);
-                    dataDir = path.join(__dirname, '..', 'app-data'); // 使用应用目录
-                console.log(`📁 使用应用数据目录: ${dataDir}`);
-                }
+                console.log(`⚠️ Volume权限问题，使用本地目录: ${error.message}`);
+                dataDir = localDataDir; // 使用本地目录
+                console.log(`📁 使用本地数据目录: ${dataDir}`);
             }
         } else {
             dataDir = path.join(__dirname, '..', 'data');
@@ -203,6 +198,7 @@ class DatabaseManager {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 sort_order INTEGER DEFAULT 0,
+                active INTEGER DEFAULT 1,
                 created_at INTEGER DEFAULT (strftime('%s', 'now'))
             );
         `);
@@ -417,6 +413,9 @@ class DatabaseManager {
     migrateDatabase(currentVersion) {
         console.log(`开始数据库迁移，当前版本: ${currentVersion}`);
         
+        // 检查是否需要添加新字段到regions表
+        this.migrateRegionsTable();
+        
         // 检查是否需要添加新字段到merchants表
         this.migrateMerchantsTable();
         
@@ -430,48 +429,47 @@ class DatabaseManager {
         this.repairDataConsistency();
         
         // 更新到最新版本
-        this.setDbVersion('1.1.2'); // 升级版本号，强制触发image_url字段迁移
+        this.setDbVersion('1.1.3'); // 升级版本号，强制触发active字段迁移
         console.log('数据库迁移完成');
+    }
+
+    migrateRegionsTable() {
+        try {
+            // 检查regions表是否存在active字段
+            const tableInfo = this.db.prepare("PRAGMA table_info(regions)").all();
+            const columnNames = tableInfo.map(col => col.name);
+            
+            if (!columnNames.includes('active')) {
+                console.log('添加字段 active 到 regions 表');
+                this.db.exec('ALTER TABLE regions ADD COLUMN active INTEGER DEFAULT 1');
+                
+                // 更新所有现有记录的active字段为1
+                const updateResult = this.db.prepare('UPDATE regions SET active = 1 WHERE active IS NULL').run();
+                console.log(`✅ 已添加active字段并更新了 ${updateResult.changes} 条记录`);
+            }
+        } catch (error) {
+            console.error('迁移regions表失败:', error);
+        }
     }
 
     migrateMerchantsTable() {
         try {
-            console.log('检查merchants表字段...');
+            // 检查merchants表是否存在新字段
+            const tableInfo = this.db.prepare("PRAGMA table_info(merchants)").all();
+            const columnNames = tableInfo.map(col => col.name);
             
-            // 检查表结构
-            const columns = this.db.prepare("PRAGMA table_info(merchants)").all();
-            const columnNames = columns.map(col => col.name);
+            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url'];
             
-            console.log('当前merchants表字段:', columnNames);
-            
-            // 需要检查的字段列表
-            const requiredFields = ['advantages', 'disadvantages', 'price1', 'price2', 
-                                  'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 
-                                  'channel_link', 'channel_clicks', 'image_url'];
-            
-            // 添加缺失的字段
-            for (const field of requiredFields) {
-                if (!columnNames.includes(field)) {
-                    console.log(`添加缺失字段: ${field}`);
-                    try {
-                        if (field.startsWith('price') || field === 'channel_clicks') {
-                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${field} INTEGER DEFAULT 0`);
-                        } else {
-                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${field} TEXT`);
-                        }
-                        console.log(`成功添加字段: ${field}`);
-                    } catch (error) {
-                        if (!error.message.includes('duplicate column name')) {
-                            console.error(`添加字段 ${field} 失败:`, error);
-                        } else {
-                            console.log(`字段 ${field} 已存在，跳过添加`);
-                        }
+            for (const column of requiredColumns) {
+                if (!columnNames.includes(column)) {
+                    console.log(`添加字段 ${column} 到 merchants 表`);
+                    if (column.startsWith('price') || column === 'channel_clicks') {
+                        this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);
+                    } else {
+                        this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} TEXT`);
                     }
                 }
             }
-            
-            console.log('merchants表字段迁移完成');
-            
         } catch (error) {
             console.error('迁移merchants表失败:', error);
         }
@@ -624,8 +622,6 @@ class DatabaseManager {
                     );
                 `);
                 console.log('channel_clicks表创建完成');
-            } else {
-                console.log('channel_clicks表已存在');
             }
         } catch (error) {
             console.error('迁移channel_clicks表失败:', error);

@@ -226,6 +226,343 @@ function handleWebhookRequest(req, res) {
     });
 }
 
+// 频道管理API处理函数
+async function handleChannelApiRequest(pathname, method, data) {
+    try {
+        // 获取频道服务实例
+        const bs = getBotService();
+        if (!bs) {
+            return { success: false, error: 'Bot服务未初始化' };
+        }
+
+        const channelServices = bs.getChannelServices();
+        if (!channelServices.configService) {
+            return { success: false, error: '频道克隆服务未初始化' };
+        }
+
+        const { configService, cloneService, queueService, filterService } = channelServices;
+
+        // 路由匹配
+        const pathParts = pathname.split('/');
+        const endpoint = pathParts[3]; // /api/channel/{endpoint}
+        const id = pathParts[4]; // /api/channel/{endpoint}/{id}
+
+        // 配置操作API - 必须先匹配更具体的路径
+        if (endpoint === 'configs' && pathParts[5]) {
+            const action = pathParts[5]; // /api/channel/configs/{id}/{action}
+
+            if (action === 'toggle' && method === 'POST') {
+                // 启用/禁用配置
+                const { enabled } = data;
+                const result = await configService.toggleConfig(id, enabled);
+                return result;
+            }
+
+            if (action === 'test' && method === 'POST') {
+                // 测试配置
+                const result = await configService.testConfig(id, bs.getBotInstance());
+                return result;
+            }
+
+            if (action === 'status' && method === 'GET') {
+                // 获取配置状态
+                const status = await configService.getConfigStatus(id);
+                return { success: true, data: status };
+            }
+
+            // 历史消息功能已移除 - 由于Telegram Bot API限制
+
+            if (action === 'clone-message' && method === 'POST') {
+                // 克隆单条消息
+                const { messageId } = data;
+                const result = await configService.cloneMessage(id, messageId, bs.getBotInstance());
+                return result;
+            }
+        }
+
+        // 配置管理API
+        if (endpoint === 'configs') {
+            if (method === 'GET' && !id) {
+                // 获取所有配置
+                const configs = await configService.getAllConfigs();
+                return { success: true, data: configs };
+            }
+
+            if (method === 'GET' && id) {
+                // 获取单个配置
+                const config = await configService.getConfig(id);
+                if (!config) {
+                    return { success: false, error: '配置不存在' };
+                }
+                return { success: true, data: config };
+            }
+
+            if (method === 'POST' && !pathParts[5]) {
+                // 创建或更新配置 - 只有在没有action的情况下才执行
+                const result = await configService.saveConfig(data);
+                return result;
+            }
+
+            if (method === 'PUT' && id && !pathParts[5]) {
+                // 更新配置 - 只有在没有action的情况下才执行
+                const result = await configService.updateConfig(id, data);
+                return result;
+            }
+
+            if (method === 'DELETE' && id && !pathParts[5]) {
+                // 删除配置 - 只有在没有action的情况下才执行
+                const result = await configService.deleteConfig(id);
+                return result;
+            }
+        }
+
+        // 统计信息API
+        if (endpoint === 'stats' && method === 'GET') {
+            // 从查询参数获取统计类型
+            const statsType = data.id || id;
+            
+            if (statsType === 'configs') {
+                // 配置统计
+                const stats = await configService.getConfigStats();
+                return { success: true, data: stats };
+            }
+
+            if (statsType === 'clone') {
+                // 克隆统计
+                const stats = cloneService ? cloneService.getCloneStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (statsType === 'queue') {
+                // 队列统计
+                const stats = queueService ? await queueService.getQueueStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (statsType === 'system') {
+                // 系统统计
+                const channelDataMapper = require('../models/channelDataMapper');
+                const mapper = new channelDataMapper();
+                const stats = await mapper.getSystemStats();
+                return { success: true, data: stats };
+            }
+
+            if (id === 'summary') {
+                // 汇总统计 - 用于admin主界面显示
+                try {
+                    const configStats = await configService.getConfigStats();
+                    const cloneStats = cloneService ? cloneService.getCloneStats() : {};
+                    const queueStats = queueService ? await queueService.getQueueStats() : {};
+                    
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: configStats.total || 0,
+                            enabledConfigs: configStats.enabled || 0,
+                            totalClonedMessages: cloneStats.totalCloned || 0,
+                            queuedMessages: queueStats.pendingTasks || 0
+                        }
+                    };
+                } catch (error) {
+                    console.error('获取频道管理汇总统计失败:', error);
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: 0,
+                            enabledConfigs: 0,
+                            totalClonedMessages: 0,
+                            queuedMessages: 0
+                        }
+                    };
+                }
+            }
+        }
+
+        // 日志API
+        if (endpoint === 'logs' && method === 'GET') {
+            const channelDataMapper = require('../models/channelDataMapper');
+            const mapper = new channelDataMapper();
+            
+            const configId = data.configId || null;
+            const limit = parseInt(data.limit) || 50;
+            
+            const logs = await mapper.getLogs(configId, limit);
+            return { success: true, data: logs };
+        }
+
+        // 队列管理API
+        if (endpoint === 'queue') {
+            if (method === 'GET') {
+                // 获取队列任务
+                const stats = queueService ? await queueService.getQueueStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (method === 'POST' && id === 'clear') {
+                // 清空队列
+                const { taskType } = data;
+                const result = queueService ? await queueService.clearQueue(taskType) : null;
+                return result || { success: false, error: '队列服务未初始化' };
+            }
+
+            if (method === 'POST' && id === 'add') {
+                // 添加任务到队列
+                const { configId, taskType, taskData, priority, delay } = data;
+                
+                if (!queueService) {
+                    return { success: false, error: '队列服务未初始化' };
+                }
+
+                let success = false;
+                switch (taskType) {
+                    case 'clone_message':
+                        success = await queueService.addCloneTask(
+                            configId, 
+                            taskData.sourceChannelId, 
+                            taskData.sourceMessageId, 
+                            priority, 
+                            delay
+                        );
+                        break;
+                    case 'sync_edit':
+                        success = await queueService.addEditSyncTask(
+                            configId,
+                            taskData.sourceChannelId,
+                            taskData.sourceMessageId,
+                            taskData.targetChannelId,
+                            taskData.targetMessageId,
+                            taskData.newContent,
+                            priority
+                        );
+                        break;
+                    case 'batch_clone':
+                        success = await queueService.addBatchCloneTask(
+                            configId,
+                            taskData.configName,
+                            taskData.messageIds,
+                            priority
+                        );
+                        break;
+                    default:
+                        return { success: false, error: '未知的任务类型' };
+                }
+
+                return { success, message: success ? '任务添加成功' : '任务添加失败' };
+            }
+        }
+
+        // 服务管理API
+        if (endpoint === 'service') {
+            if (method === 'POST' && id === 'start') {
+                // 启动服务
+                await bs.startChannelServices();
+                return { success: true, message: '频道克隆服务已启动' };
+            }
+
+            if (method === 'POST' && id === 'stop') {
+                // 停止服务
+                await bs.stopChannelServices();
+                return { success: true, message: '频道克隆服务已停止' };
+            }
+
+            if (method === 'POST' && id === 'reload') {
+                // 重新加载配置
+                const result = await bs.reloadChannelConfigs();
+                return result;
+            }
+
+            if (method === 'GET' && id === 'status') {
+                // 获取服务状态
+                const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
+                
+                if (!channelCloneEnabled) {
+                    return { 
+                        success: true, 
+                        enabled: false,
+                        message: '频道克隆功能未启用，请设置 CHANNEL_CLONE_ENABLED=true'
+                    };
+                }
+                
+                const queueStats = queueService ? await queueService.getQueueStats() : { isRunning: false };
+                const cloneStats = cloneService ? cloneService.getCloneStats() : {};
+                
+                return { 
+                    success: true, 
+                    enabled: true,
+                    data: {
+                        queueService: {
+                            running: queueStats.isRunning,
+                            pendingTasks: queueStats.pendingTasks || 0
+                        },
+                        cloneService: {
+                            totalCloned: cloneStats.totalCloned || 0,
+                            totalErrors: cloneStats.totalErrors || 0,
+                            activeConfigs: cloneStats.activeConfigs || 0
+                        }
+                    }
+                };
+            }
+        }
+
+        // 批量操作API
+        if (endpoint === 'batch' && method === 'POST') {
+            if (id === 'configs') {
+                // 批量操作配置
+                const { operation, configNames } = data;
+                const result = await configService.batchOperation(operation, configNames);
+                return { success: true, data: result };
+            }
+        }
+
+        // 导入导出API
+        if (endpoint === 'export' && method === 'POST') {
+            // 导出配置
+            const { configNames } = data;
+            const exportData = await configService.exportConfigs(configNames);
+            return { success: true, data: exportData };
+        }
+
+        if (endpoint === 'import' && method === 'POST') {
+            // 导入配置
+            const { importData, options } = data;
+            const result = await configService.importConfigs(importData, options);
+            return result;
+        }
+
+        // 频道信息API
+        if (endpoint === 'info' && method === 'GET') {
+            if (id) {
+                // 获取频道信息
+                const channelInfo = await configService.getChannelInfo(id, bs.getBotInstance());
+                return { success: true, data: channelInfo };
+            }
+        }
+
+        // 过滤器API
+        if (endpoint === 'filters') {
+            if (method === 'GET' && !id) {
+                // 获取过滤器类型列表
+                const filterTypes = filterService ? filterService.getFilterTypes() : [];
+                return { success: true, data: filterTypes };
+            }
+
+            if (method === 'POST' && id === 'test') {
+                // 测试过滤规则
+                const { ruleData, testMessage } = data;
+                const result = filterService ? await filterService.testFilterRule(ruleData, testMessage) : null;
+                return result || { success: false, error: '过滤服务未初始化' };
+            }
+        }
+
+        // 404 - 未找到对应的API端点
+        return { success: false, error: '未找到对应的API端点', endpoint, method };
+
+    } catch (error) {
+        console.error('频道API处理错误:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 // 文件下载处理
 function handleFileDownload(req, res, pathname) {
     try {
@@ -340,8 +677,11 @@ async function processApiRequest(pathname, method, data) {
                 return { success: false, error: '商家信息不存在' };
             }
 
-            // 获取用户信息
-            const username = order.user_username ? `@${order.user_username}` : '未设置用户名';
+            // 获取用户信息 - 避免重复添加@符号
+            const rawUsername = order.user_username;
+            const username = rawUsername ? 
+                (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`) : 
+                '未设置用户名';
             const teacherName = merchant.teacher_name || '未知老师';
 
             // 构建播报消息
@@ -491,6 +831,11 @@ async function processApiRequest(pathname, method, data) {
     
 
     
+    // 频道管理API路由 - 独立的API命名空间
+    if (pathname.startsWith('/api/channel/')) {
+        return await handleChannelApiRequest(pathname, method, data);
+    }
+
     // 绑定码管理API
     if (pathname === '/api/bind-codes') {
         if (method === 'GET') {
@@ -995,10 +1340,7 @@ async function processApiRequest(pathname, method, data) {
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
 
 老师💃自填基本功：
-💦洗:${merchant.skill_wash || '未填写'}
-👄吹:${merchant.skill_blow || '未填写'}
-❤️做:${merchant.skill_do || '未填写'}
-🐍吻:${merchant.skill_kiss || '未填写'}`;
+${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
 
                 // 添加跳转到私聊的按钮
                 let botUsername;
@@ -1046,6 +1388,18 @@ async function processApiRequest(pathname, method, data) {
                     sendOptions.caption = messageContent;
                     sendOptions.photo = imageUrl;
                 }
+            } else if (type === 'dailyHot') {
+                // 当日热门老师
+                const apiService = require('./apiService');
+                const hotResult = await apiService.generateDailyHotMessage({ query: {} });
+                
+                if (!hotResult.success) {
+                    return { success: false, error: hotResult.message || '获取当日热门数据失败' };
+                }
+                
+                messageContent = hotResult.message;
+                sendOptions.parse_mode = 'HTML';
+                
             } else if (type === 'template') {
                 if (!templateId) {
                     return { success: false, error: '请选择消息模板' };
@@ -1258,7 +1612,7 @@ async function processApiRequest(pathname, method, data) {
     if (pathname === '/api/charts/orders-trend' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getOrdersTrendChart({ query: {} });
+            const result = await apiService.getOrdersTrendChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取订单趋势图表失败:', error);
@@ -1269,7 +1623,7 @@ async function processApiRequest(pathname, method, data) {
     if (pathname === '/api/charts/region-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getRegionDistributionChart({ query: {} });
+            const result = await apiService.getRegionDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取地区分布图表失败:', error);
@@ -1280,7 +1634,7 @@ async function processApiRequest(pathname, method, data) {
     if (pathname === '/api/charts/price-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getPriceDistributionChart({ query: {} });
+            const result = await apiService.getPriceDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取价格分布图表失败:', error);
@@ -1291,10 +1645,33 @@ async function processApiRequest(pathname, method, data) {
     if (pathname === '/api/charts/status-distribution' && method === 'GET') {
         try {
             const apiService = require('./apiService');
-            const result = await apiService.getStatusDistributionChart({ query: {} });
+            const result = await apiService.getStatusDistributionChart({ query: data || {} });
             return result;
         } catch (error) {
             console.error('获取状态分布图表失败:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // 频道点击相关API
+    if (pathname === '/api/channel-clicks/recent' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getRecentChannelClicks({ query: data || {} });
+            return result;
+        } catch (error) {
+            console.error('获取最新频道点击失败:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    if (pathname === '/api/channel-clicks/stats' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getChannelClicksStats({ query: data || {} });
+            return result;
+        } catch (error) {
+            console.error('获取频道点击统计失败:', error);
             return { success: false, error: error.message };
         }
     }
@@ -1361,26 +1738,38 @@ async function processApiRequest(pathname, method, data) {
             const rankingType = url.searchParams.get('type') || 'monthlyOrders';
             const regionId = url.searchParams.get('regionId');
             const period = url.searchParams.get('period') || 'month';
+            const dateFrom = url.searchParams.get('dateFrom');
+            const dateTo = url.searchParams.get('dateTo');
+            
+            console.log('商家排名API参数:', { rankingType, regionId, period, dateFrom, dateTo });
             
             let rankings = [];
             
-            if (rankingType === 'channelClicks') {
-                // 频道点击排名
-                rankings = dbOperations.getChannelClickRanking(50);
-                rankings = rankings.map((merchant, index) => ({
-                    ...merchant,
-                    rank: index + 1,
-                    displayValue: `${merchant.channel_clicks}次点击`,
-                    sortValue: merchant.channel_clicks
-                }));
-            } else {
-                // 其他排名类型的处理保持不变
+            // 统一使用apiService处理所有排名类型，包括频道点击排名
                 const apiService = require('./apiService');
+            const queryParams = {
+                type: rankingType,
+                regionId,
+                period
+            };
+            
+            // 添加时间参数
+            if (dateFrom) queryParams.dateFrom = dateFrom;
+            if (dateTo) queryParams.dateTo = dateTo;
+            
                 const result = await apiService.getMerchantRankings({
-                    query: { type: rankingType, regionId, period }
+                query: queryParams
                 });
+            
                 rankings = result.data || result.rankings || [];
-            }
+            
+            // 为每个商家添加排名序号
+            rankings = rankings.map((merchant, index) => ({
+                ...merchant,
+                rank: index + 1
+            }));
+            
+            console.log(`获取到 ${rankings.length} 个商家排名结果`);
             
             return {
                 success: true,
@@ -1388,6 +1777,36 @@ async function processApiRequest(pathname, method, data) {
             };
         } catch (error) {
             console.error('获取商家排名失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // 当日热门老师API
+    if (pathname === '/api/daily-hot-teachers' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.getDailyHotTeachers({ query: data });
+            return result;
+        } catch (error) {
+            console.error('获取当日热门老师失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // 生成当日热门消息API
+    if (pathname === '/api/daily-hot-message' && method === 'GET') {
+        try {
+            const apiService = require('./apiService');
+            const result = await apiService.generateDailyHotMessage({ query: data });
+            return result;
+        } catch (error) {
+            console.error('生成当日热门消息失败:', error);
             return {
                 success: false,
                 error: error.message
@@ -1409,6 +1828,8 @@ async function processApiRequest(pathname, method, data) {
             'GET /api/rankings/merchants',
             'GET /api/rankings/users',
             'GET /api/charts/*',
+            'GET /api/daily-hot-teachers',
+            'GET /api/daily-hot-message',
             'GET /api/bot-username'
         ]
     };

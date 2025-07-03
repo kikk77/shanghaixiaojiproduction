@@ -4,6 +4,7 @@ const dbOperations = require('../models/dbOperations');
 const { db } = require('../config/database');
 const DataExportService = require('./dataExportService');
 const MerchantReportService = require('./merchantReportService');
+
 // statsService将在需要时延迟加载
 
 class ApiService {
@@ -51,6 +52,10 @@ class ApiService {
         this.routes.set('GET /api/charts/price-distribution', this.getPriceDistributionChart.bind(this));
         this.routes.set('GET /api/charts/status-distribution', this.getStatusDistributionChart.bind(this));
 
+        // 频道点击相关接口
+        this.routes.set('GET /api/channel-clicks/recent', this.getRecentChannelClicks.bind(this));
+        this.routes.set('GET /api/channel-clicks/stats', this.getChannelClicksStats.bind(this));
+
         // 订单相关接口
         this.routes.set('GET /api/orders', this.getOrders.bind(this));
         this.routes.set('GET /api/orders/:id', this.getOrderById.bind(this));
@@ -95,6 +100,18 @@ class ApiService {
         // 用户排名相关路由
         this.routes.set('GET /api/user-rankings/:year/:month', this.getUserMonthlyRanking.bind(this));
         this.routes.set('POST /api/user-rankings/refresh', this.refreshUserRanking.bind(this));
+
+        // 频道配置相关路由
+        this.routes.set('GET /api/channel/configs', this.getChannelConfigs.bind(this));
+        this.routes.set('POST /api/channel/configs', this.createChannelConfig.bind(this));
+        this.routes.set('GET /api/channel/configs/:id', this.getChannelConfig.bind(this));
+        this.routes.set('PUT /api/channel/configs/:id', this.updateChannelConfig.bind(this));
+        this.routes.set('DELETE /api/channel/configs/:id', this.deleteChannelConfig.bind(this));
+        this.routes.set('POST /api/channel/configs/:id/toggle', this.toggleChannelConfig.bind(this));
+        this.routes.set('POST /api/channel/configs/:id/test', this.testChannelConfig.bind(this));
+        this.routes.set('GET /api/channel/configs/:id/status', this.getChannelConfigStatus.bind(this));
+        this.routes.set('GET /api/channel/stats/:type', this.getChannelStats.bind(this));
+        this.routes.set('GET /api/channel/logs', this.getChannelLogs.bind(this));
 
         
         console.log('API路由设置完成，共', this.routes.size, '个路由');
@@ -235,7 +252,7 @@ class ApiService {
                 AND ${whereClause}
             `).get(...params);
 
-            // 4. 计算平均出击素质 - 基于evaluations表
+            // 4. 计算评价出击素质 - 所有商家（老师）给所有用户的"总体出击素质"评分的平均分
             const merchantRatingStats = db.prepare(`
                 SELECT AVG(e.overall_score) as avgMerchantRating
                 FROM evaluations e
@@ -244,7 +261,7 @@ class ApiService {
                 LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE e.evaluator_type = 'merchant' 
-                AND e.status = 'completed' 
+                AND e.status IN ('completed', 'detail_completed', 'overall_completed')
                 AND e.overall_score IS NOT NULL
                 AND ${whereClause}
             `).get(...params);
@@ -260,7 +277,7 @@ class ApiService {
                 completedOrders: orderStats.completedOrders || 0,  // 已完成订单
                 avgPrice: priceStats.avgPrice ? Math.round(priceStats.avgPrice) : 0,  // 平均订单价格
                 avgUserRating: userRatingStats.avgUserRating ? Math.round(userRatingStats.avgUserRating * 10) / 10 : 0,  // 平均用户评分
-                avgMerchantRating: merchantRatingStats.avgMerchantRating ? Math.round(merchantRatingStats.avgMerchantRating * 10) / 10 : 0,  // 平均出击素质
+                avgMerchantRating: merchantRatingStats.avgMerchantRating ? Math.round(merchantRatingStats.avgMerchantRating * 10) / 10 : 0,  // 评价出击素质：所有老师给所有用户的总体出击素质平均分
                 completionRate: Math.round(completionRate * 10) / 10  // 完成率
             };
             
@@ -367,19 +384,19 @@ class ApiService {
             switch (period) {
                 case 'hourly':
                     dateFormat = '%Y-%m-%d %H:00:00';
-                    groupBy = "strftime('%Y-%m-%d %H', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-%m-%d %H', datetime(o.created_at, 'unixepoch'))";
                     break;
                 case 'weekly':
                     dateFormat = '%Y-W%W';
-                    groupBy = "strftime('%Y-W%W', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-W%W', datetime(o.created_at, 'unixepoch'))";
                     break;
                 case 'monthly':
                     dateFormat = '%Y-%m';
-                    groupBy = "strftime('%Y-%m', datetime(o.created_at))";
+                    groupBy = "strftime('%Y-%m', datetime(o.created_at, 'unixepoch'))";
                     break;
                 default: // daily
                     dateFormat = '%Y-%m-%d';
-                    groupBy = "date(datetime(o.created_at))";
+                    groupBy = "date(datetime(o.created_at, 'unixepoch'))";
             }
 
             const whereConditions = this.buildWhereConditions(filters);
@@ -395,11 +412,15 @@ class ApiService {
                     END) as completedCount
                 FROM orders o
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 WHERE ${whereClause}
                 GROUP BY ${groupBy}
                 ORDER BY period DESC
                 LIMIT 30
             `).all(...whereConditions.params);
+
+            console.log('订单趋势数据:', trendData);
 
             return {
                 data: {
@@ -456,25 +477,34 @@ class ApiService {
             const priceData = db.prepare(`
                 SELECT 
                     CASE 
-                        WHEN CAST(o.price_range AS REAL) < 500 THEN '0-500'
-                        WHEN CAST(o.price_range AS REAL) < 700 THEN '500-700'
-                        WHEN CAST(o.price_range AS REAL) < 900 THEN '700-900'
-                        WHEN CAST(o.price_range AS REAL) < 1100 THEN '900-1100'
-                        ELSE '1100+'
+                        WHEN CAST(o.price_range AS REAL) < 300 THEN '0-300'
+                        WHEN CAST(o.price_range AS REAL) < 500 THEN '300-500'
+                        WHEN CAST(o.price_range AS REAL) < 800 THEN '500-800'
+                        WHEN CAST(o.price_range AS REAL) < 1000 THEN '800-1000'
+                        WHEN CAST(o.price_range AS REAL) < 1500 THEN '1000-1500'
+                        WHEN CAST(o.price_range AS REAL) < 2000 THEN '1500-2000'
+                        ELSE '2000+'
                     END as price_range,
                     COUNT(*) as orderCount
                 FROM orders o
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
+                LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE ${whereClause}
                 GROUP BY price_range
                 ORDER BY 
                     CASE price_range
-                        WHEN '0-500' THEN 1
-                        WHEN '500-700' THEN 2
-                        WHEN '700-900' THEN 3
-                        WHEN '900-1100' THEN 4
-                        WHEN '1100+' THEN 5
+                        WHEN '0-300' THEN 1
+                        WHEN '300-500' THEN 2
+                        WHEN '500-800' THEN 3
+                        WHEN '800-1000' THEN 4
+                        WHEN '1000-1500' THEN 5
+                        WHEN '1500-2000' THEN 6
+                        WHEN '2000+' THEN 7
                     END
             `).all(...whereConditions.params);
+
+            console.log('价格分布数据:', priceData);
 
             return {
                 data: {
@@ -501,45 +531,177 @@ class ApiService {
                         WHEN bs.user_course_status = 'completed' THEN 'completed'
                         WHEN bs.user_course_status = 'incomplete' THEN 'incomplete'
                         WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 'confirmed'
-                        WHEN o.status = 'attempting' THEN 'attempting'
-                        WHEN o.status = 'failed' THEN 'failed'
+                        WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 'attempting'
+                        WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 'failed'
                         WHEN o.status = 'cancelled' THEN 'cancelled'
+                        WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 'pending'
                         ELSE 'pending'
-                    END as status,
+                    END as order_status,
                     COUNT(*) as orderCount
                 FROM orders o
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
+                LEFT JOIN merchants m ON o.merchant_id = m.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 WHERE ${whereClause}
                 GROUP BY CASE 
                     WHEN bs.user_course_status = 'completed' THEN 'completed'
                     WHEN bs.user_course_status = 'incomplete' THEN 'incomplete'
                     WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 'confirmed'
-                    WHEN o.status = 'attempting' THEN 'attempting'
-                    WHEN o.status = 'failed' THEN 'failed'
+                    WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 'attempting'
+                    WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 'failed'
                     WHEN o.status = 'cancelled' THEN 'cancelled'
+                    WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 'pending'
                     ELSE 'pending'
                 END
-                ORDER BY orderCount DESC
+                ORDER BY 
+                    CASE 
+                        WHEN bs.user_course_status = 'completed' THEN 4
+                        WHEN bs.user_course_status = 'incomplete' THEN 5
+                        WHEN bs.user_course_status = 'confirmed' OR o.status = 'confirmed' THEN 3
+                        WHEN bs.user_course_status = 'attempting' OR o.status = 'attempting' THEN 1
+                        WHEN bs.user_course_status = 'failed' OR o.status = 'failed' THEN 6
+                        WHEN o.status = 'cancelled' THEN 7
+                        WHEN bs.user_course_status = 'pending' OR o.status = 'pending' THEN 2
+                        ELSE 8
+                    END
             `).all(...whereConditions.params);
 
             const statusLabels = {
-                'attempting': '尝试预约',
-                'pending': '待确认',
-                'confirmed': '已确认',
-                'completed': '已完成',
-                'incomplete': '未完成',
-                'failed': '预约失败',
-                'cancelled': '已取消'
+                'attempting': '🔄 尝试预约',
+                'pending': '⏳ 待确认',
+                'confirmed': '✅ 已确认',
+                'completed': '🎉 已完成',
+                'incomplete': '❌ 未完成',
+                'failed': '💔 预约失败',
+                'cancelled': '🚫 已取消'
             };
+
+            console.log('状态分布数据:', statusData);
 
             return {
                 data: {
-                    labels: statusData.map(d => statusLabels[d.status] || d.status),
+                    labels: statusData.map(d => statusLabels[d.order_status] || d.order_status),
                     values: statusData.map(d => d.orderCount)
                 }
             };
         } catch (error) {
+            console.error('获取状态分布数据失败:', error);
             throw new Error('获取状态分布数据失败: ' + error.message);
+        }
+    }
+
+    // 获取最新频道点击记录
+    async getRecentChannelClicks({ query }) {
+        try {
+            const limit = query.limit || 20;
+            
+            const recentClicks = db.prepare(`
+                SELECT 
+                    cc.id,
+                    cc.user_id,
+                    cc.username,
+                    cc.first_name,
+                    cc.last_name,
+                    cc.merchant_id,
+                    cc.merchant_name,
+                    cc.channel_link,
+                    cc.clicked_at,
+                    datetime(cc.clicked_at, 'unixepoch', 'localtime') as formatted_time
+                FROM channel_clicks cc
+                ORDER BY cc.clicked_at DESC
+                LIMIT ?
+            `).all(limit);
+
+            return {
+                success: true,
+                data: recentClicks
+            };
+        } catch (error) {
+            console.error('获取最新频道点击失败:', error);
+            throw new Error('获取最新频道点击失败: ' + error.message);
+        }
+    }
+
+    // 获取频道点击统计
+    async getChannelClicksStats({ query }) {
+        try {
+            const filters = this.parseFilters(query);
+            let whereConditions = ['1=1'];
+            let params = [];
+
+            // 时间筛选
+            if (filters.timeRange && filters.timeRange !== '全部') {
+                const timeFilter = this.getTimeRangeFilter(filters.timeRange);
+                if (timeFilter) {
+                    whereConditions.push('cc.clicked_at >= ?');
+                    params.push(timeFilter.start);
+                    if (timeFilter.end) {
+                        whereConditions.push('cc.clicked_at <= ?');
+                        params.push(timeFilter.end);
+                    }
+                }
+            }
+
+            // 自定义日期范围
+            if (filters.dateFrom) {
+                const startTimestamp = Math.floor(new Date(filters.dateFrom + ' 00:00:00').getTime() / 1000);
+                whereConditions.push('cc.clicked_at >= ?');
+                params.push(startTimestamp);
+            }
+            if (filters.dateTo) {
+                const endTimestamp = Math.floor(new Date(filters.dateTo + ' 23:59:59').getTime() / 1000);
+                whereConditions.push('cc.clicked_at <= ?');
+                params.push(endTimestamp);
+            }
+
+            const whereClause = whereConditions.join(' AND ');
+
+            // 总点击数
+            const totalClicks = db.prepare(`
+                SELECT COUNT(*) as total
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+            `).get(...params);
+
+            // 独立用户数
+            const uniqueUsers = db.prepare(`
+                SELECT COUNT(DISTINCT cc.user_id) as unique_users
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+            `).get(...params);
+
+            // 最受欢迎的商家
+            const topMerchants = db.prepare(`
+                SELECT 
+                    cc.merchant_name,
+                    COUNT(*) as click_count
+                FROM channel_clicks cc
+                WHERE ${whereClause}
+                GROUP BY cc.merchant_id, cc.merchant_name
+                ORDER BY click_count DESC
+                LIMIT 5
+            `).all(...params);
+
+            // 今日点击数
+            const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+            const todayClicks = db.prepare(`
+                SELECT COUNT(*) as today_total
+                FROM channel_clicks cc
+                WHERE cc.clicked_at >= ?
+            `).get(todayStart);
+
+            return {
+                success: true,
+                data: {
+                    totalClicks: totalClicks.total || 0,
+                    uniqueUsers: uniqueUsers.unique_users || 0,
+                    todayClicks: todayClicks.today_total || 0,
+                    topMerchants: topMerchants
+                }
+            };
+        } catch (error) {
+            console.error('获取频道点击统计失败:', error);
+            throw new Error('获取频道点击统计失败: ' + error.message);
         }
     }
 
@@ -654,19 +816,32 @@ class ApiService {
     // 获取用户评价状态
     getUserEvaluationStatus(bookingSessionId) {
         try {
-            const evaluation = db.prepare(`
-                SELECT status, detailed_scores, overall_score FROM evaluations 
-                WHERE booking_session_id = ? AND evaluator_type = 'user'
-            `).get(bookingSessionId);
+            // 处理数据类型转换 - booking_session_id可能是字符串或数字
+            const sessionId = parseInt(bookingSessionId) || bookingSessionId;
             
-            // 必须状态为completed且有实际评分数据
-            if (evaluation && evaluation.status === 'completed') {
-                const hasDetailedScores = evaluation.detailed_scores && evaluation.detailed_scores !== 'null';
-                const hasOverallScore = evaluation.overall_score !== null;
-                return (hasDetailedScores || hasOverallScore) ? 'completed' : 'pending';
+            // 检查evaluations表中是否有用户评价
+            const evaluation = db.prepare(`
+                SELECT COUNT(*) as count
+                FROM evaluations e
+                WHERE (e.booking_session_id = ? OR e.booking_session_id = ?)
+                AND e.evaluator_type = 'user' 
+                AND e.status IN ('completed', 'detail_completed')
+            `).get(sessionId, String(sessionId));
+            
+            if (evaluation && evaluation.count > 0) {
+                return 'completed';
             }
-            return 'pending';
+            
+            // 兼容性：检查传统的orders表
+            const order = db.prepare(`
+                SELECT user_evaluation 
+                FROM orders 
+                WHERE booking_session_id = ? OR booking_session_id = ?
+            `).get(String(bookingSessionId), bookingSessionId);
+            
+            return (order && order.user_evaluation) ? 'completed' : 'pending';
         } catch (error) {
+            console.error('获取用户评价状态失败:', error);
             return 'pending';
         }
     }
@@ -674,15 +849,32 @@ class ApiService {
     // 获取商家评价状态
     getMerchantEvaluationStatus(bookingSessionId) {
         try {
-            const evaluation = db.prepare(`
-                SELECT status, detailed_scores, overall_score FROM evaluations 
-                WHERE booking_session_id = ? AND evaluator_type = 'merchant'
-            `).get(bookingSessionId);
+            // 处理数据类型转换 - booking_session_id可能是字符串或数字
+            const sessionId = parseInt(bookingSessionId) || bookingSessionId;
             
-            // 商家评价：status为completed即视为已完成评价
-            // 包括简单评价（选择"不了👋"）和详细评价
-            return evaluation && evaluation.status === 'completed' ? 'completed' : 'pending';
+            // 检查evaluations表中是否有商家评价
+            const evaluation = db.prepare(`
+                SELECT COUNT(*) as count
+                FROM evaluations e
+                WHERE (e.booking_session_id = ? OR e.booking_session_id = ?)
+                AND e.evaluator_type = 'merchant' 
+                AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+            `).get(sessionId, String(sessionId));
+            
+            if (evaluation && evaluation.count > 0) {
+                return 'completed';
+            }
+            
+            // 兼容性：检查传统的orders表
+            const order = db.prepare(`
+                SELECT merchant_evaluation 
+                FROM orders 
+                WHERE booking_session_id = ? OR booking_session_id = ?
+            `).get(String(bookingSessionId), bookingSessionId);
+            
+            return (order && order.merchant_evaluation) ? 'completed' : 'pending';
         } catch (error) {
+            console.error('获取商家评价状态失败:', error);
             return 'pending';
         }
     }
@@ -740,18 +932,78 @@ class ApiService {
                 realStatus = 'cancelled';
             }
 
-            // 获取评价数据
-            const userEvaluation = db.prepare(`
-                SELECT overall_score, detailed_scores, comments as text_comment, status, created_at
-                FROM evaluations 
-                WHERE booking_session_id = ? AND evaluator_type = 'user'
-            `).get(order.booking_session_id);
-
-            const merchantEvaluation = db.prepare(`
-                SELECT overall_score, detailed_scores, comments as text_comment, status, created_at
-                FROM evaluations 
-                WHERE booking_session_id = ? AND evaluator_type = 'merchant'
-            `).get(order.booking_session_id);
+            // 获取评价数据 - 优先从evaluations表获取
+            let userEvaluation = null;
+            let merchantEvaluation = null;
+            
+            // 处理booking_session_id数据类型
+            const sessionId = parseInt(order.booking_session_id) || order.booking_session_id;
+            
+            // 从evaluations表获取用户评价
+            const userEval = db.prepare(`
+                SELECT * FROM evaluations 
+                WHERE (booking_session_id = ? OR booking_session_id = ?)
+                AND evaluator_type = 'user' 
+                AND status IN ('completed', 'detail_completed')
+                ORDER BY created_at DESC LIMIT 1
+            `).get(sessionId, String(sessionId));
+            
+            if (userEval) {
+                userEvaluation = {
+                    overall_score: userEval.overall_score,
+                    detailed_scores: userEval.detailed_scores || '{}',
+                    text_comment: userEval.comments,
+                    status: userEval.status,
+                    created_at: userEval.created_at
+                };
+            } else if (order.user_evaluation) {
+                // 兼容性：从orders表获取
+                try {
+                    const parsed = JSON.parse(order.user_evaluation);
+                    userEvaluation = {
+                        overall_score: parsed.overall_score || null,
+                        detailed_scores: JSON.stringify(parsed.scores || {}),
+                        text_comment: parsed.comments || parsed.textComment || null,
+                        status: 'completed',
+                        created_at: parsed.created_at || null
+                    };
+                } catch (e) {
+                    console.error('解析用户评价失败:', e);
+                }
+            }
+            
+            // 从evaluations表获取商家评价
+            const merchantEval = db.prepare(`
+                SELECT * FROM evaluations 
+                WHERE (booking_session_id = ? OR booking_session_id = ?)
+                AND evaluator_type = 'merchant' 
+                AND status IN ('completed', 'detail_completed', 'overall_completed')
+                ORDER BY created_at DESC LIMIT 1
+            `).get(sessionId, String(sessionId));
+            
+            if (merchantEval) {
+                merchantEvaluation = {
+                    overall_score: merchantEval.overall_score,
+                    detailed_scores: merchantEval.detailed_scores || '{}',
+                    text_comment: merchantEval.comments,
+                    status: merchantEval.status,
+                    created_at: merchantEval.created_at
+                };
+            } else if (order.merchant_evaluation) {
+                // 兼容性：从orders表获取
+                try {
+                    const parsed = JSON.parse(order.merchant_evaluation);
+                    merchantEvaluation = {
+                        overall_score: parsed.overall_score || null,
+                        detailed_scores: JSON.stringify(parsed.scores || {}),
+                        text_comment: parsed.comments || parsed.textComment || null,
+                        status: 'completed',
+                        created_at: parsed.created_at || null
+                    };
+                } catch (e) {
+                    console.error('解析商家评价失败:', e);
+                }
+            }
 
             // 时间处理
             const formatTime = (timestamp) => {
@@ -1049,12 +1301,41 @@ class ApiService {
             console.log('最终WHERE子句:', whereClause);
             console.log('查询参数:', params);
 
+            // 根据排名类型确定排序方式
+            const rankingType = query.type || 'monthlyOrders';
+            let orderByClause = '';
+            
+            switch (rankingType) {
+                case 'dailyRevenue':
+                    orderByClause = 'totalRevenue DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'dailyOrders':
+                case 'monthlyOrders':
+                    orderByClause = 'completedOrders DESC, totalRevenue DESC, avgRating DESC';
+                    break;
+                case 'dailyConsultations':
+                    orderByClause = 'totalOrders DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'avgRating':
+                    orderByClause = 'avgRating DESC, completedOrders DESC, totalOrders DESC';
+                    break;
+                case 'completionRate':
+                    orderByClause = 'completionRate DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                case 'channelClicks':
+                    orderByClause = 'm.channel_clicks DESC, completedOrders DESC, avgRating DESC';
+                    break;
+                default:
+                    orderByClause = 'completedOrders DESC, totalOrders DESC, avgRating DESC';
+            }
+
             const sql = `
                 SELECT 
                     m.id,
                     m.teacher_name,
                     m.username,
                     r.name as region_name,
+                    m.channel_clicks,
                     COUNT(DISTINCT o.id) as totalOrders,
                     COUNT(DISTINCT CASE WHEN bs.user_course_status = 'completed' THEN o.id END) as completedOrders,
                     AVG(CASE WHEN e.overall_score IS NOT NULL THEN e.overall_score END) as avgRating,
@@ -1079,8 +1360,8 @@ class ApiService {
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 LEFT JOIN evaluations e ON bs.id = e.booking_session_id AND e.evaluator_type = 'user'
                 WHERE ${whereClause}
-                GROUP BY m.id, m.teacher_name, m.username, r.name
-                ORDER BY completedOrders DESC, totalOrders DESC, avgRating DESC
+                GROUP BY m.id, m.teacher_name, m.username, r.name, m.channel_clicks
+                ORDER BY ${orderByClause}
                 LIMIT 50
             `;
             
@@ -1274,15 +1555,19 @@ class ApiService {
         const conditions = ['1=1'];
         const params = [];
 
-        // 时间筛选 - 使用Unix时间戳
+        // 时间筛选 - 修复Unix时间戳转换
         if (filters.dateFrom) {
-            conditions.push('date(o.created_at, "unixepoch") >= ?');
-            params.push(filters.dateFrom);
+            // 将日期转换为Unix时间戳（当天开始）
+            const fromTimestamp = Math.floor(new Date(filters.dateFrom + ' 00:00:00').getTime() / 1000);
+            conditions.push('o.created_at >= ?');
+            params.push(fromTimestamp);
         }
 
         if (filters.dateTo) {
-            conditions.push('date(o.created_at, "unixepoch") <= ?');
-            params.push(filters.dateTo);
+            // 将日期转换为Unix时间戳（当天结束）
+            const toTimestamp = Math.floor(new Date(filters.dateTo + ' 23:59:59').getTime() / 1000);
+            conditions.push('o.created_at <= ?');
+            params.push(toTimestamp);
         }
 
         // 商家筛选 - 支持按商家ID或老师名称
@@ -1336,30 +1621,39 @@ class ApiService {
             }
         }
 
-        // 状态筛选 - 简化逻辑，主要基于orders表的status字段
+        // 状态筛选 - 基于实际的数据结构优化
         if (filters.status) {
             switch (filters.status) {
                 case 'confirmed':
-                    conditions.push("o.status = 'confirmed'");
+                    // 已确认：orders表status为confirmed 或 booking_sessions表user_course_status为confirmed
+                    conditions.push("(o.status = 'confirmed' OR bs.user_course_status = 'confirmed')");
                     break;
                 case 'pending':
-                    conditions.push("o.status = 'pending'");
+                    // 待确认：orders表status为pending 或 attempting
+                    conditions.push("(o.status IN ('pending', 'attempting'))");
                     break;
                 case 'attempting':
+                    // 尝试预约：orders表status为attempting
                     conditions.push("o.status = 'attempting'");
                     break;
                 case 'cancelled':
+                    // 已取消：orders表status为cancelled
                     conditions.push("o.status = 'cancelled'");
                     break;
                 case 'failed':
+                    // 预约失败：orders表status为failed
                     conditions.push("o.status = 'failed'");
                     break;
                 case 'completed':
-                    // 完成状态可能在booking_sessions中，也可能在orders中
-                    conditions.push("(o.status = 'completed' OR bs.user_course_status = 'completed')");
+                    // 已完成：booking_sessions表user_course_status为completed
+                    conditions.push("bs.user_course_status = 'completed'");
+                    break;
+                case 'incomplete':
+                    // 未完成：不是completed状态的其他状态
+                    conditions.push("(bs.user_course_status IS NULL OR bs.user_course_status != 'completed') AND o.status NOT IN ('cancelled', 'failed')");
                     break;
                 default:
-                    // 如果是其他状态，直接匹配
+                    // 如果是其他状态，直接匹配orders表的status
                     conditions.push("o.status = ?");
                     params.push(filters.status);
             }
@@ -1429,66 +1723,67 @@ class ApiService {
             params.push(filters.maxPrice, filters.maxPrice, filters.maxPrice, filters.maxPrice);
         }
 
-        // 评价状态筛选 - 由于production环境evaluations表为空，暂时简化
+        // 评价状态筛选 - 基于evaluations表的实际数据
         if (filters.evaluationStatus) {
             switch (filters.evaluationStatus) {
                 case 'user_completed':
+                    // 用户已评价：在evaluations表中存在用户评价记录
                     conditions.push(`EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'user' 
-                        AND e.status = 'completed'
+                        AND e.status IN ('completed', 'detail_completed')
                     )`);
                     break;
                 case 'user_pending':
+                    // 用户未评价：在evaluations表中不存在用户评价记录
                     conditions.push(`NOT EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'user' 
-                        AND e.status = 'completed'
-                    ) OR o.booking_session_id IS NULL`);
+                        AND e.status IN ('completed', 'detail_completed')
+                    )`);
                     break;
                 case 'merchant_completed':
+                    // 商家已评价：在evaluations表中存在商家评价记录
                     conditions.push(`EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'merchant' 
-                        AND e.status = 'completed'
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
                     )`);
                     break;
                 case 'merchant_pending':
+                    // 商家未评价：在evaluations表中不存在商家评价记录
                     conditions.push(`NOT EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'merchant' 
-                        AND e.status = 'completed'
-                    ) OR o.booking_session_id IS NULL`);
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
                 case 'all_completed':
+                    // 双方已评价：同时存在用户和商家评价记录
                     conditions.push(`EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'user' 
-                        AND e.status = 'completed'
+                        AND e.status IN ('completed', 'detail_completed')
                     ) AND EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
                         AND e.evaluator_type = 'merchant' 
-                        AND e.status = 'completed'
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
                     )`);
                     break;
                 case 'none_completed':
-                    conditions.push(`(NOT EXISTS (
+                    // 双方未评价：不存在任何评价记录
+                    conditions.push(`NOT EXISTS (
                         SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
-                        AND e.evaluator_type = 'user' 
-                        AND e.status = 'completed'
-                    ) AND NOT EXISTS (
-                        SELECT 1 FROM evaluations e 
-                        WHERE e.booking_session_id = o.booking_session_id 
-                        AND e.evaluator_type = 'merchant' 
-                        AND e.status = 'completed'
-                    )) OR o.booking_session_id IS NULL`);
+                        WHERE (e.booking_session_id = o.booking_session_id OR e.booking_session_id = CAST(o.booking_session_id AS INTEGER))
+                        AND e.evaluator_type IN ('user', 'merchant')
+                        AND e.status IN ('completed', 'detail_completed', 'overall_completed')
+                    )`);
                     break;
             }
         }
@@ -1524,7 +1819,16 @@ class ApiService {
             const attackClicks = db.prepare('SELECT COUNT(*) as count FROM interactions WHERE action_type = ?').get('attack_click').count;
             const totalClicks = attackClicks; // 总点击数就是预约按钮点击数
             
+            // 获取用户互动统计
+            const totalInteractions = db.prepare('SELECT COUNT(*) as count FROM interactions').get().count;
+            const uniqueUsers = db.prepare('SELECT COUNT(DISTINCT user_id) as count FROM interactions').get().count;
+            const activeChats = db.prepare('SELECT COUNT(DISTINCT chat_id) as count FROM interactions').get().count;
+            
+            // 计算用户参与度 (平均每用户交互次数)
+            const userEngagement = uniqueUsers > 0 ? Math.round((totalInteractions / uniqueUsers) * 10) / 10 : 0;
+            
             console.log(`点击统计详情: 预约点击=${attackClicks}, 总点击数=${totalClicks}`);
+            console.log(`用户互动统计: 总交互=${totalInteractions}, 独立用户=${uniqueUsers}, 活跃会话=${activeChats}, 参与度=${userEngagement}`);
             console.log(`商家统计: 总数=${totalMerchants}, 活跃=${activeMerchants}`);
             console.log(`订单统计: 总数=${totalOrders}, 完成=${completedOrders}, 待处理=${pendingOrders}`);
             
@@ -1542,6 +1846,11 @@ class ApiService {
                 pendingOrders,
                 totalClicks,
                 attackClicks,
+                // 新增的用户互动统计
+                totalInteractions,
+                uniqueUsers,
+                activeChats,
+                userEngagement,
                 lastUpdated: new Date().toISOString(),
                 ...interactionStats
             };
@@ -2228,6 +2537,386 @@ class ApiService {
         } catch (error) {
             console.error('刷新用户排名失败:', error);
             throw new Error('刷新用户排名失败: ' + error.message);
+        }
+    }
+
+    // 获取当日热门老师（点击1分 + 咨询2分）
+    async getDailyHotTeachers({ query }) {
+        try {
+            console.log('获取当日热门老师排名');
+            
+            // 获取今日开始和结束时间戳
+            const today = new Date();
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const todayEnd = new Date(todayStart);
+            todayEnd.setDate(todayEnd.getDate() + 1);
+            
+            const startTimestamp = Math.floor(todayStart.getTime() / 1000);
+            const endTimestamp = Math.floor(todayEnd.getTime() / 1000);
+            
+            console.log('今日时间范围:', {
+                start: todayStart.toISOString(),
+                end: todayEnd.toISOString(),
+                startTimestamp,
+                endTimestamp
+            });
+
+            // 查询当日数据：频道点击 + 咨询订单
+            const sql = `
+                SELECT 
+                    m.id,
+                    m.teacher_name,
+                    m.username,
+                    m.channel_link,
+                    r.name as region_name,
+                    -- 今日频道点击数（1分/次）
+                    COUNT(DISTINCT cc.id) as todayClicks,
+                    -- 今日咨询数（2分/次）
+                    COUNT(DISTINCT o.id) as todayConsultations,
+                    -- 计算热度分数：点击1分 + 咨询2分
+                    (COUNT(DISTINCT cc.id) * 1 + COUNT(DISTINCT o.id) * 2) as hotScore
+                FROM merchants m
+                LEFT JOIN regions r ON m.region_id = r.id
+                LEFT JOIN channel_clicks cc ON m.id = cc.merchant_id 
+                    AND cc.clicked_at >= ? AND cc.clicked_at < ?
+                LEFT JOIN orders o ON m.id = o.merchant_id 
+                    AND o.created_at >= ? AND o.created_at < ?
+                WHERE m.status = 'active' 
+                    AND m.teacher_name IS NOT NULL 
+                    AND m.teacher_name != ''
+                GROUP BY m.id, m.teacher_name, m.username, m.channel_link, r.name
+                HAVING hotScore > 0
+                ORDER BY hotScore DESC, todayClicks DESC, m.teacher_name ASC
+                LIMIT 5
+            `;
+            
+            const hotTeachers = db.prepare(sql).all(
+                startTimestamp, endTimestamp, // 频道点击时间范围
+                startTimestamp, endTimestamp  // 订单时间范围
+            );
+            
+            console.log(`查询到 ${hotTeachers.length} 位热门老师`);
+            console.log('热门老师数据:', hotTeachers);
+
+            // 为每位老师添加排名和详细信息
+            const rankedTeachers = hotTeachers.map((teacher, index) => ({
+                ...teacher,
+                rank: index + 1,
+                todayClicks: teacher.todayClicks || 0,
+                todayConsultations: teacher.todayConsultations || 0,
+                hotScore: teacher.hotScore || 0
+            }));
+
+            return { 
+                success: true,
+                data: rankedTeachers,
+                date: todayStart.toISOString().split('T')[0],
+                totalTeachers: rankedTeachers.length
+            };
+            
+        } catch (error) {
+            console.error('获取当日热门老师失败:', error);
+            throw new Error('获取当日热门老师失败: ' + error.message);
+        }
+    }
+
+    // 生成当日热门老师消息内容
+    async generateDailyHotMessage({ query }) {
+        try {
+            const hotData = await this.getDailyHotTeachers({ query });
+            
+            if (!hotData.success || !hotData.data || hotData.data.length === 0) {
+                return {
+                    success: false,
+                    message: '今日暂无热门老师数据'
+                };
+            }
+
+            const teachers = hotData.data;
+            const today = new Date().toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // 获取机器人用户名
+            const botUsername = 'xiaojisystembot'; // 固定使用这个用户名
+
+            // 构建消息内容
+            let message = `🔥 <b>${today} 当日热门老师 TOP${teachers.length}</b> 🔥\n\n`;
+
+            teachers.forEach((teacher, index) => {
+                let rankEmoji = '';
+                switch (index) {
+                    case 0: rankEmoji = '🥇'; break;
+                    case 1: rankEmoji = '🥈'; break;
+                    case 2: rankEmoji = '🥉'; break;
+                    case 3: rankEmoji = '🏅'; break;
+                    case 4: rankEmoji = '⭐'; break;
+                    default: rankEmoji = `${index + 1}️⃣`;
+                }
+
+                // 创建跳转机器人的链接
+                const merchantUrl = `https://t.me/${botUsername}?start=merchant_${teacher.id}`;
+                
+                // 简化排版：只显示排名emoji和热度emoji
+                message += `${rankEmoji} <a href="${merchantUrl}">${teacher.teacher_name}</a> - 🔥${teacher.hotScore}分\n`;
+            });
+
+            // 添加当前时间（中国时区）
+            const now = new Date();
+            const chinaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Shanghai"}));
+            const timeString = chinaTime.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }) + '  ' + chinaTime.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            
+            message += `\n${timeString}`;
+
+            return {
+                success: true,
+                message: message,
+                data: teachers,
+                date: hotData.date
+            };
+
+        } catch (error) {
+            console.error('生成当日热门消息失败:', error);
+            return {
+                success: false,
+                message: '生成当日热门消息失败: ' + error.message
+            };
+        }
+    }
+
+    // 频道配置相关方法
+    async getChannelConfigs({ query }) {
+        try {
+            // 延迟加载botService避免循环依赖
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const configs = await channelServices.configService.getAllConfigs();
+            return { success: true, data: configs };
+        } catch (error) {
+            console.error('获取频道配置失败:', error);
+            throw new Error('获取频道配置失败: ' + error.message);
+        }
+    }
+
+    async createChannelConfig({ body }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.saveConfig(body);
+            return result;
+        } catch (error) {
+            console.error('创建频道配置失败:', error);
+            throw new Error('创建频道配置失败: ' + error.message);
+        }
+    }
+
+    async getChannelConfig({ params }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const config = await channelServices.configService.getConfig(params.id);
+            if (!config) {
+                return { success: false, error: '配置不存在' };
+            }
+            return { success: true, data: config };
+        } catch (error) {
+            console.error('获取频道配置失败:', error);
+            throw new Error('获取频道配置失败: ' + error.message);
+        }
+    }
+
+    async updateChannelConfig({ params, body }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.updateConfig(params.id, body);
+            return result;
+        } catch (error) {
+            console.error('更新频道配置失败:', error);
+            throw new Error('更新频道配置失败: ' + error.message);
+        }
+    }
+
+    async deleteChannelConfig({ params }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.deleteConfig(params.id);
+            return result;
+        } catch (error) {
+            console.error('删除频道配置失败:', error);
+            throw new Error('删除频道配置失败: ' + error.message);
+        }
+    }
+
+    async toggleChannelConfig({ params, body }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const { enabled } = body;
+            const result = await channelServices.configService.toggleConfig(params.id, enabled);
+            return result;
+        } catch (error) {
+            console.error('切换频道配置状态失败:', error);
+            throw new Error('切换频道配置状态失败: ' + error.message);
+        }
+    }
+
+    async testChannelConfig({ params }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.testConfig(params.id, botService.getBotInstance());
+            return result;
+        } catch (error) {
+            console.error('测试频道配置失败:', error);
+            throw new Error('测试频道配置失败: ' + error.message);
+        }
+    }
+
+    async getChannelConfigStatus({ params }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const status = await channelServices.configService.getConfigStatus(params.id);
+            return { success: true, data: status };
+        } catch (error) {
+            console.error('获取频道配置状态失败:', error);
+            throw new Error('获取频道配置状态失败: ' + error.message);
+        }
+    }
+
+    async getChannelStats({ params, query }) {
+        try {
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            const statsType = params.type;
+            
+            if (statsType === 'configs') {
+                if (!channelServices.configService) {
+                    throw new Error('频道克隆服务未初始化');
+                }
+                const stats = await channelServices.configService.getConfigStats();
+                return { success: true, data: stats };
+            }
+
+            if (statsType === 'clone') {
+                const stats = channelServices.cloneService ? channelServices.cloneService.getCloneStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (statsType === 'queue') {
+                const stats = channelServices.queueService ? await channelServices.queueService.getQueueStats() : null;
+                return { success: true, data: stats || {} };
+            }
+
+            if (statsType === 'system') {
+                const channelDataMapper = require('../models/channelDataMapper');
+                const mapper = new channelDataMapper();
+                const stats = await mapper.getSystemStats();
+                return { success: true, data: stats };
+            }
+
+            if (statsType === 'summary') {
+                try {
+                    const configStats = channelServices.configService ? await channelServices.configService.getConfigStats() : {};
+                    const cloneStats = channelServices.cloneService ? channelServices.cloneService.getCloneStats() : {};
+                    const queueStats = channelServices.queueService ? await channelServices.queueService.getQueueStats() : {};
+                    
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: configStats.total || 0,
+                            enabledConfigs: configStats.enabled || 0,
+                            totalClonedMessages: cloneStats.totalCloned || 0,
+                            queuedMessages: queueStats.pendingTasks || 0
+                        }
+                    };
+                } catch (error) {
+                    console.error('获取频道管理汇总统计失败:', error);
+                    return { 
+                        success: true, 
+                        data: {
+                            totalConfigs: 0,
+                            enabledConfigs: 0,
+                            totalClonedMessages: 0,
+                            queuedMessages: 0
+                        }
+                    };
+                }
+            }
+
+            throw new Error('不支持的统计类型: ' + statsType);
+        } catch (error) {
+            console.error('获取频道统计失败:', error);
+            throw new Error('获取频道统计失败: ' + error.message);
+        }
+    }
+
+    async getChannelLogs({ query }) {
+        try {
+            const channelDataMapper = require('../models/channelDataMapper');
+            const mapper = new channelDataMapper();
+            
+            const configId = query.configId || null;
+            const limit = parseInt(query.limit) || 50;
+            
+            const logs = await mapper.getLogs(configId, limit);
+            return { success: true, data: logs };
+        } catch (error) {
+            console.error('获取频道日志失败:', error);
+            throw new Error('获取频道日志失败: ' + error.message);
         }
     }
 }

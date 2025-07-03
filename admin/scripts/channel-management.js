@@ -31,6 +31,7 @@ async function initializePage() {
         window.editConfig = editConfig;
         window.toggleConfig = toggleConfig;
         window.testConfig = testConfig;
+        window.testBroadcast = testBroadcast;
         window.confirmDeleteConfig = confirmDeleteConfig;
         window.deleteConfig = deleteConfig;
         window.closeModal = closeModal;
@@ -61,6 +62,19 @@ function setupEventListeners() {
     const configForm = document.getElementById('configForm');
     if (configForm) {
         configForm.addEventListener('submit', handleConfigSubmit);
+    }
+
+    // 播报功能开关控制
+    const broadcastEnabledCheckbox = document.getElementById('broadcastEnabled');
+    if (broadcastEnabledCheckbox) {
+        broadcastEnabledCheckbox.addEventListener('change', function() {
+            const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+            if (this.checked) {
+                targetGroupDiv.style.display = 'block';
+            } else {
+                targetGroupDiv.style.display = 'none';
+            }
+        });
     }
 
     // 模态框点击外部关闭
@@ -326,7 +340,11 @@ function createConfigCard(config) {
                                 同步编辑: ${Boolean(settings.syncEdits) ? '✅' : '❌'} | 
                                 内容过滤: ${Boolean(settings.filterEnabled) ? '✅' : '❌'} | 
                                 转发延时: ${settings.delaySeconds || 0}秒 | 
-                                顺序转发: ${Boolean(settings.sequentialMode) ? '✅' : '❌'}
+                                顺序转发: ${Boolean(settings.sequentialMode) ? '✅' : '❌'} | 
+                                小鸡播报: ${Boolean(settings.broadcastEnabled) ? '✅' : '❌'}
+                                ${Boolean(settings.broadcastEnabled) && settings.broadcastTargetGroups && settings.broadcastTargetGroups.length > 0 ? 
+                                    `<br/>播报群组: ${settings.broadcastTargetGroups.slice(0, 2).join(', ')}${settings.broadcastTargetGroups.length > 2 ? '...' : ''}` : 
+                                    ''}
                             </small>
                         </div>
                     </div>
@@ -343,6 +361,12 @@ function createConfigCard(config) {
                         <button class="config-btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
                             🔍 测试
                         </button>
+                        ${Boolean(settings.broadcastEnabled) ? 
+                            `<button class="config-btn btn-info" onclick="testBroadcast('${escapeHtml(config.name || '')}')" title="测试播报功能">
+                                📢 测试播报
+                            </button>` : 
+                            ''
+                        }
                         <button class="config-btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
                             🗑️ 删除
                         </button>
@@ -407,6 +431,8 @@ function showCreateModal() {
     document.getElementById('rateLimit').value = 30;
     document.getElementById('delaySeconds').value = 0;
     document.getElementById('sequentialMode').checked = false;
+    document.getElementById('broadcastEnabled').checked = false;
+    document.getElementById('broadcastTargetGroups').value = '';
     
     showModal('configModal');
 }
@@ -442,6 +468,16 @@ function editConfig(configName) {
         document.getElementById('rateLimit').value = settings.rateLimit || 30;
         document.getElementById('delaySeconds').value = settings.delaySeconds || 0;
         document.getElementById('sequentialMode').checked = Boolean(settings.sequentialMode);
+        document.getElementById('broadcastEnabled').checked = Boolean(settings.broadcastEnabled);
+        document.getElementById('broadcastTargetGroups').value = (settings.broadcastTargetGroups || []).join(',');
+        
+        // 控制播报目标群组输入框的显示
+        const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+        if (Boolean(settings.broadcastEnabled)) {
+            targetGroupDiv.style.display = 'block';
+        } else {
+            targetGroupDiv.style.display = 'none';
+        }
         
         document.getElementById('modalTitle').textContent = '编辑频道配置';
         showModal('configModal');
@@ -469,7 +505,10 @@ async function handleConfigSubmit(event) {
         filterEnabled: formData.has('filterEnabled'),
         rateLimit: parseInt(formData.get('rateLimit')),
         delaySeconds: parseInt(formData.get('delaySeconds')) || 0,
-        sequentialMode: formData.has('sequentialMode')
+        sequentialMode: formData.has('sequentialMode'),
+        broadcastEnabled: formData.has('broadcastEnabled'),
+        broadcastTargetGroups: formData.get('broadcastTargetGroups') ? 
+            formData.get('broadcastTargetGroups').split(',').map(id => id.trim()).filter(id => id) : []
     };
 
     // 验证表单数据
@@ -971,29 +1010,56 @@ async function refreshData() {
 function validateConfigData(data) {
     const errors = [];
     
-    if (!data.name || data.name.trim().length === 0) {
+    // 基本验证
+    if (!data.name || data.name.trim() === '') {
         errors.push('配置名称不能为空');
     }
     
-    if (!data.sourceChannelId || !data.sourceChannelId.startsWith('-100')) {
-        errors.push('源频道ID格式错误，应以-100开头');
+    if (!data.sourceChannelId || data.sourceChannelId.trim() === '') {
+        errors.push('源频道ID不能为空');
     }
     
-    if (!data.targetChannelId || !data.targetChannelId.startsWith('-100')) {
-        errors.push('目标频道ID格式错误，应以-100开头');
+    if (!data.targetChannelId || data.targetChannelId.trim() === '') {
+        errors.push('目标频道ID不能为空');
     }
     
-    if (data.sourceChannelId === data.targetChannelId) {
-        errors.push('源频道和目标频道不能相同');
+    // 频道ID格式验证
+    const channelIdPattern = /^-?\d+$/;
+    if (data.sourceChannelId && !channelIdPattern.test(data.sourceChannelId)) {
+        errors.push('源频道ID格式不正确，应为数字格式（如：-1002686133634）');
     }
     
-    if (data.rateLimit < 1 || data.rateLimit > 1000) {
+    if (data.targetChannelId && !channelIdPattern.test(data.targetChannelId)) {
+        errors.push('目标频道ID格式不正确，应为数字格式（如：-1002763598790）');
+    }
+    
+    // 播报配置验证
+    if (data.broadcastEnabled) {
+        if (!data.broadcastTargetGroups || data.broadcastTargetGroups.length === 0) {
+            errors.push('启用播报功能时，必须设置至少一个目标群组ID');
+        } else {
+            // 验证每个群组ID格式
+            const invalidGroupIds = data.broadcastTargetGroups.filter(id => 
+                !channelIdPattern.test(id.trim())
+            );
+            if (invalidGroupIds.length > 0) {
+                errors.push(`播报目标群组ID格式不正确：${invalidGroupIds.join(', ')}`);
+            }
+        }
+    }
+    
+    // 数值验证
+    if (data.rateLimit && (data.rateLimit < 1 || data.rateLimit > 1000)) {
         errors.push('速率限制必须在1-1000之间');
+    }
+    
+    if (data.delaySeconds && (data.delaySeconds < 0 || data.delaySeconds > 3600)) {
+        errors.push('转发延时必须在0-3600秒之间');
     }
     
     return {
         valid: errors.length === 0,
-        errors
+        errors: errors
     };
 }
 
@@ -1123,3 +1189,56 @@ document.head.appendChild(style);
 
 // 页面初始化完成
 console.log('📺 频道管理页面加载完成'); 
+
+// 测试播报功能
+async function testBroadcast(configName) {
+    console.log('📢 开始测试播报功能:', configName);
+    
+    try {
+        showLoading('测试播报功能中...');
+        
+        const url = `/api/channel/configs/${encodeURIComponent(configName)}/test-broadcast`;
+        console.log('📡 测试播报API请求URL:', url);
+        
+        const response = await apiRequest(url, {
+            method: 'POST'
+        });
+
+        console.log('📡 测试播报API响应:', response);
+
+        if (response.success) {
+            const results = response.results || response.data;
+            console.log('📢 播报测试结果:', results);
+            
+            let message = '播报功能测试完成:\n\n';
+            
+            if (results) {
+                message += `目标群组数量: ${results.targetGroupsCount || 0}\n`;
+                message += `群组访问测试: ${results.groupsAccessible || 0}/${results.targetGroupsCount || 0} 可访问\n`;
+                message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
+                message += `模板解析: ${results.templateParser?.working ? '✅ 正常' : '❌ 异常'}\n`;
+                
+                if (results.testMessage) {
+                    message += `\n测试消息已发送到群组: ${results.testMessage.sentTo || '未知'}`;
+                }
+            } else {
+                message += '⚠️ 未获取到详细测试结果\n';
+            }
+            
+            alert(message);
+        } else {
+            const errorMessage = response.error || 
+                                (response.errors && response.errors.length > 0 ? response.errors.join(', ') : null) ||
+                                '播报测试失败';
+            
+            console.error('❌ 播报测试API返回错误:', errorMessage);
+            showError(errorMessage);
+        }
+        
+    } catch (error) {
+        console.error('❌ 测试播报功能失败:', error);
+        showError(`播报测试失败: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+} 

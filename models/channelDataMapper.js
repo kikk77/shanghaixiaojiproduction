@@ -40,6 +40,11 @@ class ChannelDataMapper {
                 sequentialMode: Boolean(configData.sequential_mode),
                 rules: configData.clone_rules || {},
                 
+                // 播报设置
+                broadcastEnabled: Boolean(configData.broadcast_enabled),
+                broadcastTargetGroups: configData.broadcast_target_groups ? 
+                    (Array.isArray(configData.broadcast_target_groups) ? configData.broadcast_target_groups : JSON.parse(configData.broadcast_target_groups)) : [],
+                
                 // 🆕 新增：消息过滤功能（借鉴Telegram_Forwarder）
                 messageFilters: {
                     // 关键词过滤：包含这些词的消息会被转发
@@ -135,10 +140,12 @@ class ChannelDataMapper {
                 rateLimit = 30,
                 delaySeconds = 0,
                 sequentialMode = false,
-                rules = {}
+                rules = {},
+                broadcastEnabled = false,
+                broadcastTargetGroups = []
             } = configData;
 
-            console.log('📺 保存配置数据:', {
+                            console.log('📺 保存配置数据:', {
                 name,
                 sourceChannelId,
                 targetChannelId,
@@ -148,7 +155,9 @@ class ChannelDataMapper {
                 rateLimit,
                 delaySeconds,
                 sequentialMode,
-                rules
+                rules,
+                broadcastEnabled,
+                broadcastTargetGroups
             });
 
             // 检查是否存在
@@ -165,7 +174,9 @@ class ChannelDataMapper {
                     rate_limit: rateLimit,
                     delay_seconds: delaySeconds,
                     sequential_mode: sequentialMode,
-                    clone_rules: rules
+                    clone_rules: rules,
+                    broadcast_enabled: broadcastEnabled,
+                    broadcast_target_groups: JSON.stringify(broadcastTargetGroups)
                 });
                 
                 console.log('📺 更新配置结果:', success);
@@ -182,7 +193,9 @@ class ChannelDataMapper {
                     rateLimit,
                     delaySeconds,
                     sequentialMode,
-                    cloneRules: rules
+                    cloneRules: rules,
+                    broadcastEnabled,
+                    broadcastTargetGroups
                 });
                 
                 console.log('📺 创建配置结果:', entityId);

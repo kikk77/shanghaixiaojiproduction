@@ -147,6 +147,154 @@
     max-height: 300px;
 }
 
+/* 实时频道点击样式 */
+.realtime-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e9ecef;
+    margin-bottom: 2rem;
+}
+
+.realtime-section h3 {
+    margin: 0 0 1rem 0;
+    color: #2c3e50;
+    font-size: 1.25rem;
+}
+
+.realtime-stats {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.realtime-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.realtime-stat .stat-label {
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.realtime-stat .stat-value {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #28a745;
+}
+
+.realtime-table-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.realtime-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    font-weight: 600;
+    color: #495057;
+}
+
+.realtime-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.realtime-controls .btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.realtime-table {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.realtime-table .loading {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+}
+
+.realtime-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f3f4;
+    transition: all 0.3s ease;
+    animation: slideInFromTop 0.5s ease-out;
+}
+
+.realtime-item:hover {
+    background: #f8f9fa;
+}
+
+.realtime-item.new {
+    background: #d4edda;
+    animation: highlightNew 2s ease-out;
+}
+
+@keyframes slideInFromTop {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes highlightNew {
+    0% {
+        background: #d1ecf1;
+        transform: scale(1.02);
+    }
+    100% {
+        background: transparent;
+        transform: scale(1);
+    }
+}
+
+.realtime-item-content {
+    flex: 1;
+}
+
+.realtime-item-time {
+    font-size: 0.875rem;
+    color: #6c757d;
+    min-width: 120px;
+    text-align: right;
+}
+
+.realtime-item-text {
+    font-size: 0.9rem;
+    color: #495057;
+    line-height: 1.4;
+}
+
+.realtime-item-text .username {
+    font-weight: 600;
+    color: #007bff;
+}
+
+.realtime-item-text .merchant {
+    font-weight: 600;
+    color: #28a745;
+}
+
 /* 订单列表样式 */
 .orders-section {
     margin-bottom: 3rem;

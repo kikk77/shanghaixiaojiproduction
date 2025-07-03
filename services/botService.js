@@ -2,6 +2,13 @@ const TelegramBot = require('node-telegram-bot-api');
 const dbOperations = require('../models/dbOperations');
 const evaluationService = require('./evaluationService');
 
+// 频道克隆服务导入
+const ChannelCloneService = require('./channelCloneService');
+const MessageQueueService = require('./messageQueueService');
+const ChannelConfigService = require('./channelConfigService');
+const ContentFilterService = require('./contentFilterService');
+const ChannelBroadcastService = require('./channelBroadcastService');
+
 // 环境变量
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
@@ -64,12 +71,24 @@ let scheduledTasks = [];
 let bindCodes = [];
 let regions = [];
 
+// 工具函数：安全处理用户名，避免重复@符号
+function formatUsername(rawUsername) {
+    if (!rawUsername) return '未设置用户名';
+    return rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`;
+}
+
 // 快速查找索引
 let merchantsMap = new Map();
 let regionsMap = new Map();
 
 // 播报倒计时管理器
 const broadcastTimers = new Map(); // 存储用户的播报倒计时
+
+// 频道克隆服务实例
+let channelCloneService = null;
+let messageQueueService = null;
+let channelConfigService = null;
+let contentFilterService = null;
 
 // 内存映射管理 - 添加自动清理机制
 // 用户绑定状态变量已移除（绑定流程已简化）
@@ -324,6 +343,67 @@ async function handleBackButton(userId, messageType, data = {}) {
     }
 }
 
+// 初始化频道克隆服务
+async function initializeChannelServices() {
+    try {
+        if (!bot) {
+            console.log('⚠️ Bot未初始化，跳过频道克隆服务初始化');
+            return;
+        }
+
+        // 检查是否启用频道克隆功能
+        const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
+        if (!channelCloneEnabled) {
+            console.log('📺 频道克隆功能未启用，跳过初始化');
+            return;
+        }
+
+        console.log('📺 开始初始化频道克隆服务...');
+
+        // 先重置全局状态，避免多实例冲突
+        const ChannelCloneService = require('./channelCloneService');
+        ChannelCloneService.resetGlobalState();
+
+        // 初始化配置服务
+        channelConfigService = new ChannelConfigService();
+        
+        // 初始化内容过滤服务
+        contentFilterService = new ContentFilterService();
+        
+        // 初始化克隆服务
+        channelCloneService = new ChannelCloneService(bot);
+        
+        // 初始化消息队列服务
+        messageQueueService = new MessageQueueService(bot);
+        messageQueueService.start(); // 启动队列处理
+        
+        // 初始化频道播报服务
+        channelBroadcastService = new ChannelBroadcastService(bot);
+        console.log('📢 频道播报服务已初始化');
+
+        // 获取启用的配置数量
+        const enabledConfigs = await channelConfigService.getEnabledConfigs();
+        
+        console.log(`✅ 频道克隆服务初始化完成`);
+        console.log(`📺 已启用 ${enabledConfigs.length} 个频道配置`);
+        
+        // 记录服务状态
+        if (enabledConfigs.length > 0) {
+            console.log('📺 频道克隆服务正在监听以下配置:');
+            for (const config of enabledConfigs) {
+                console.log(`   - ${config.name}: ${config.sourceChannel.id} -> ${config.targetChannel.id}`);
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ 频道克隆服务初始化失败:', error);
+        
+        // 即使初始化失败，也要确保服务实例存在（避免后续调用报错）
+        if (!channelConfigService) channelConfigService = new ChannelConfigService();
+        if (!contentFilterService) contentFilterService = new ContentFilterService();
+    }
+}
+
 // 优化的缓存加载函数
 async function loadCacheData() {
     const startTime = Date.now();
@@ -568,9 +648,20 @@ function initBotHandlers() {
     // Bot消息处理
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
-        const userId = msg.from.id;
+        const userId = msg.from?.id;
         const text = msg.text;
-        const username = msg.from.username;
+        const username = msg.from?.username;
+
+        // 🔥 重要修复：跳过频道消息，交给channelCloneService处理
+        if (msg.chat.type === 'channel') {
+            console.log(`📺 [botService] 跳过频道消息，交给频道克隆服务处理: ${chatId} - ${msg.message_id}`);
+            return;
+        }
+
+        // 确保是私聊消息且有发送者信息
+        if (!userId || msg.chat.type !== 'private') {
+            return;
+        }
 
         // 处理 /start 命令
         if (text && text.startsWith('/start')) {
@@ -610,10 +701,7 @@ function initBotHandlers() {
                                        `缺点：${merchant.disadvantages || '未填写'}\n` +
                                        `价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp\n\n` +
                                        `老师💃自填基本功：\n` +
-                                       `💦洗:${merchant.skill_wash || '未填写'}\n` +
-                                       `👄吹:${merchant.skill_blow || '未填写'}\n` +
-                                       `❤️做:${merchant.skill_do || '未填写'}\n` +
-                                       `🐍吻:${merchant.skill_kiss || '未填写'}`;
+                                                   dbOperations.formatMerchantSkillsDisplay(merchant.id);
                     
                     // 构建按钮 - 三个标准按钮
                     const buttons = [
@@ -906,7 +994,7 @@ function initBotHandlers() {
             const userName = query.from.first_name || '';
             const userLastName = query.from.last_name || '';
             const fullName = `${userName} ${userLastName}`.trim() || '未设置名称';
-            const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+            const username = formatUsername(query.from.username);
             
             // 创建"尝试预约"状态的订单
             try {
@@ -981,7 +1069,7 @@ function initBotHandlers() {
             const userName = query.from.first_name || '';
             const userLastName = query.from.last_name || '';
             const fullName = `${userName} ${userLastName}`.trim() || '未设置名称';
-            const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+            const username = formatUsername(query.from.username);
             
             try {
                 // 记录频道点击到数据库
@@ -1060,7 +1148,7 @@ function initBotHandlers() {
             const userName = query.from.first_name || '';
             const userLastName = query.from.last_name || '';
             const fullName = `${userName} ${userLastName}`.trim() || '未设置名称';
-            const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+            const username = formatUsername(query.from.username);
             
             // 异步获取商家信息，避免阻塞
             const merchant = dbOperations.getMerchantById(merchantId);
@@ -1145,7 +1233,7 @@ function initBotHandlers() {
                             // 正常绑定的商家，直接发送通知
                             const merchantNotification = `老师您好，
 用户名称 ${fullName}（${username}）即将与您进行联系。他想跟您预约${bookTypeText}课程
-请及时关注私聊信息。
+您无需向他主动私信，等待狼友私信你即可。
 ————————————————————————
 🐤小鸡出征！请尽力服务好我们的勇士～
 如遇任何问题，请群内联系小鸡管理员。`;
@@ -1620,7 +1708,7 @@ async function handleRebookFlow(userId, data, query) {
             const userName = query.from.first_name || '';
             const userLastName = query.from.last_name || '';
             const fullName = `${userName} ${userLastName}`.trim() || '未设置名称';
-            const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+            const username = formatUsername(query.from.username);
             
             // 获取商家信息
             const merchant = dbOperations.getMerchantById(merchantId);
@@ -1686,7 +1774,7 @@ async function handleRebookFlow(userId, data, query) {
                     // 正常绑定的商家，直接发送通知
                     const merchantNotification = `老师您好，
 用户名称 ${fullName}（${username}）即将与您进行联系。他想跟您重新预约${bookTypeText}课程
-请及时关注私聊信息。
+您无需向他主动私信，等待狼友私信你即可。
 ————————————————————————
 🐤小鸡出征！请尽力服务好我们的勇士～
 如遇任何问题，请群内联系小鸡管理员。`;
@@ -1758,7 +1846,7 @@ async function handleRebookFlow(userId, data, query) {
                 console.log(`重新预约时已清除用户 ${userId} 对商家 ${merchant.id} 的预约冷却时间`);
                 
                 const userFullName = `${query.from.first_name || ''} ${query.from.last_name || ''}`.trim() || '未设置名称';
-                const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+                const username = formatUsername(query.from.username);
                 
                 console.log(`用户 ${userId} 选择重新预约，预约会话 ${bookingSessionId}`);
                 
@@ -2540,8 +2628,15 @@ async function handleEvaluationSubmit(userId, data, query) {
         
         // 先保存12项评价数据到数据库
         const scores = userState.scores;
-        dbOperations.updateEvaluation(evaluationId, null, scores, null, 'completed');
+        try {
+            const updateResult = dbOperations.updateEvaluation(evaluationId, null, scores, null, 'completed');
         console.log(`📝 12项评价数据已保存到数据库: ${evaluationId}`, scores);
+            console.log('数据库更新结果:', updateResult);
+        } catch (error) {
+            console.error('保存12项评价数据失败:', error);
+            await bot.sendMessage(userId, '保存评价数据失败，请重试！');
+            return;
+        }
         
         // 删除评价消息
         if (userState.messageId) {
@@ -2563,7 +2658,9 @@ async function handleEvaluationSubmit(userId, data, query) {
         }
         
         // 显示用户文字评价步骤
+        console.log(`🔄 准备显示文字评价步骤: userId=${userId}, evaluationId=${evaluationId}`);
         await showUserTextCommentStep(userId, evaluationId, userState.scores);
+        console.log(`✅ 文字评价步骤已发送`);
         
     } catch (error) {
         console.error('处理评价提交失败:', error);
@@ -2625,6 +2722,9 @@ function getScoreKeyboard(step, evaluationId) {
 // 显示用户文字评价步骤
 async function showUserTextCommentStep(userId, evaluationId, scores) {
     try {
+        console.log(`📝 showUserTextCommentStep调用: userId=${userId}, evaluationId=${evaluationId}`);
+        console.log(`📊 用户评分数据:`, scores);
+        
         const message = `✅ 您的12项评价已提交成功！
 
 额外点评（额外输入文字点评，任何都行）：
@@ -2642,12 +2742,14 @@ async function showUserTextCommentStep(userId, evaluationId, scores) {
             ]
         };
         
-        await sendMessageWithoutDelete(userId, message, { 
+        console.log(`📤 准备发送文字评价消息给用户 ${userId}`);
+        const sentMessage = await sendMessageWithoutDelete(userId, message, { 
             reply_markup: keyboard 
         }, 'user_text_comment', {
             evaluationId,
             scores
         });
+        console.log(`✅ 文字评价消息已发送, messageId: ${sentMessage?.message_id}`);
         
     } catch (error) {
         console.error('显示用户文字评价步骤失败:', error);
@@ -2772,7 +2874,8 @@ async function handleUserEvaluationConfirm(userId, data, query) {
             // 清理内存状态
             userEvaluationStates.delete(userId);
             
-            // 直接调用播报选择函数
+            // 确保进入播报选择阶段
+            console.log(`✅ 用户评价完成，进入播报选择阶段: userId=${userId}, evaluationId=${evaluationId}`);
             await showBroadcastChoice(userId, evaluationId);
         }
         
@@ -2946,7 +3049,8 @@ async function handleUserTextCommentInput(userId, text, evalSession) {
             console.log(`📝 文字评价已更新到数据库: "${text}"`);
         }
         
-        // 直接进入播报选择阶段
+        // 确保进入播报选择阶段
+        console.log(`✅ 用户文字评价完成，进入播报选择阶段: userId=${userId}, evaluationId=${evaluationId}`);
         await showBroadcastChoice(userId, evaluationId);
         
         console.log(`=== 用户文字评价输入调试结束 ===`);
@@ -2963,9 +3067,9 @@ async function handleUserTextComment(userId, data, query) {
         if (data.startsWith('user_text_skip_')) {
             // 跳过文字评价，进入播报选择
             const evaluationId = data.replace('user_text_skip_', '');
-            console.log(`用户${userId}跳过文字评价，直接进入播报选择`);
+            console.log(`✅ 用户${userId}跳过文字评价，进入播报选择阶段: evaluationId=${evaluationId}`);
             
-            // 直接进入播报选择阶段
+            // 确保进入播报选择阶段
             await showBroadcastChoice(userId, evaluationId);
             
         } else if (data.startsWith('user_text_submit_')) {
@@ -2982,7 +3086,8 @@ async function handleUserTextComment(userId, data, query) {
                 dbOperations.updateEvaluation(evaluationId, null, userState.scores, userState.scores.textComment, 'completed');
                 console.log(`📝 文字评价已更新到数据库: "${userState.scores.textComment}"`);
                 
-                // 直接进入播报选择阶段
+                // 确保进入播报选择阶段
+                console.log(`✅ 用户${userId}提交文字报告完成，进入播报选择阶段: evaluationId=${evaluationId}`);
                 await showBroadcastChoice(userId, evaluationId);
             } else {
                 // 用户还没有输入文字内容
@@ -3570,8 +3675,11 @@ async function handleRealBroadcast(userId, evaluationId, query) {
             return;
         }
 
-        // 获取用户信息
-        const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+        // 获取用户信息 - 避免重复添加@符号
+        const rawUsername = query.from.username;
+        const username = rawUsername ? 
+            (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`) : 
+            '未设置用户名';
         const teacherName = merchant.teacher_name || '未知老师';
         console.log(`用户信息: ${username}, 老师名称: ${teacherName}`);
 
@@ -4398,7 +4506,7 @@ async function handleBookingSuccessFlow(userId, data, query) {
                 setTimeout(async () => {
                     const merchant = dbOperations.getMerchantById(bookingSession.merchant_id);
                     const userFullName = `${query.from.first_name || ''} ${query.from.last_name || ''}`.trim() || '未设置名称';
-                    const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+                    const username = formatUsername(query.from.username);
                     
                     // 在发送课程完成检查前清空对话历史（包括小鸡出征消息）
                     await clearUserConversation(userId);
@@ -4449,7 +4557,7 @@ async function createOrderData(bookingSession, userId, query) {
     try {
         const merchant = dbOperations.getMerchantById(bookingSession.merchant_id);
         const userFullName = `${query.from.first_name || ''} ${query.from.last_name || ''}`.trim() || '未设置名称';
-        const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+        const username = formatUsername(query.from.username);
         
         // 确定课程内容和价格
         let courseContent = '';
@@ -4570,5 +4678,41 @@ module.exports = {
         scheduledTasks,
         bindCodes,
         regions
-    })
+    }),
+    // 频道克隆服务相关
+    initializeChannelServices,
+    getChannelServices: () => ({
+        cloneService: channelCloneService,
+        queueService: messageQueueService,
+        configService: channelConfigService,
+        filterService: contentFilterService,
+        broadcastService: channelBroadcastService
+    }),
+    // 频道克隆服务管理
+    startChannelServices: async () => {
+        if (messageQueueService && !messageQueueService.isRunning) {
+            messageQueueService.start();
+        }
+        console.log('📺 频道克隆服务已启动');
+        return { success: true, message: '频道克隆服务已启动' };
+    },
+    stopChannelServices: async () => {
+        if (messageQueueService && messageQueueService.isRunning) {
+            messageQueueService.stop();
+        }
+        if (channelCloneService) {
+            channelCloneService.stop();
+        }
+        if (channelBroadcastService) {
+            channelBroadcastService.stop();
+        }
+        console.log('📺 频道克隆服务已停止');
+        return { success: true, message: '频道克隆服务已停止' };
+    },
+    reloadChannelConfigs: async () => {
+        if (channelCloneService) {
+            return await channelCloneService.reloadConfigs();
+        }
+        return { success: false, error: '频道克隆服务未初始化' };
+    }
 }; 

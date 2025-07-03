@@ -1,2 +1,7 @@
-# 此文件确保data目录在git中被保留
-# Railway Volume将挂载到此目录，实现数据持久化 
+# 此文件确保data目录被Git跟踪
+# 但数据库文件(.db, .db-shm, .db-wal)会被.gitignore排除
+# 
+# Railway部署时：
+# - 生产环境数据库文件将存储在Railway Volume中
+# - 本地开发时数据库文件会在此目录中创建
+# - 敏感的生产数据不会被推送到GitHub 

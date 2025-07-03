@@ -60,6 +60,18 @@ async function startFullApplication() {
     try {
         console.log(`🔄 开始启动完整应用服务...`);
         
+        // 运行EAV完整修复脚本
+        if (process.env.NODE_ENV === 'production') {
+            console.log(`🔧 运行EAV完整修复脚本...`);
+            try {
+                require('./scripts/complete-eav-fix');
+            } catch (error) {
+                console.error('❌ EAV完整修复脚本运行失败:', error.message);
+            }
+            
+
+        }
+        
         // 不关闭HTTP服务器，而是扩展其功能
         // 将HTTP服务器的处理函数替换为完整的API处理器
         const { handleHttpRequest } = require('./services/httpService');

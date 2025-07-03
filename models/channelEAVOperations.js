@@ -22,7 +22,9 @@ class ChannelEAVOperations {
                 rateLimit = 30,
                 delaySeconds = 0,
                 sequentialMode = false,
-                cloneRules = {}
+                cloneRules = {},
+                broadcastEnabled = false,
+                broadcastTargetGroups = []
             } = configData;
 
             // 检查是否已存在同名配置
@@ -49,7 +51,9 @@ class ChannelEAVOperations {
                 rate_limit: rateLimit,
                 delay_seconds: delaySeconds,
                 sequential_mode: sequentialMode,
-                clone_rules: cloneRules
+                clone_rules: cloneRules,
+                broadcast_enabled: broadcastEnabled,
+                broadcast_target_groups: JSON.stringify(broadcastTargetGroups)
             });
 
             return success ? entityId : null;
@@ -93,6 +97,8 @@ class ChannelEAVOperations {
                 delay_seconds: values.delay_seconds || 0,
                 sequential_mode: values.sequential_mode || false,
                 clone_rules: values.clone_rules || {},
+                broadcast_enabled: values.broadcast_enabled || false,
+                broadcast_target_groups: values.broadcast_target_groups || '[]',
                 created_at: entity.created_at,
                 updated_at: entity.updated_at
             };
@@ -131,6 +137,8 @@ class ChannelEAVOperations {
                     delay_seconds: values.delay_seconds || 0,
                     sequential_mode: values.sequential_mode || false,
                     clone_rules: values.clone_rules || {},
+                    broadcast_enabled: values.broadcast_enabled || false,
+                    broadcast_target_groups: values.broadcast_target_groups || '[]',
                     created_at: entity.created_at,
                     updated_at: entity.updated_at,
                     status: entity.status

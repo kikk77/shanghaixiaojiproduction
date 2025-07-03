@@ -63,7 +63,9 @@ class AppointmentService {
                     setTimeout(async () => {
                         const merchant = dbOperations.getMerchantById(bookingSession.merchant_id);
                         const userFullName = `${query.from.first_name || ''} ${query.from.last_name || ''}`.trim() || '未设置名称';
-                        const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+                        const username = query.from.username ? 
+                            (query.from.username.startsWith('@') ? query.from.username : `@${query.from.username}`) : 
+                            '未设置用户名';
                         
                         await this.sendCourseCompletionCheck(userId, merchant.user_id, bookingSessionId, userFullName, username, merchant.teacher_name);
                     }, 10 * 60 * 1000); // 10分钟 = 10 * 60 * 1000毫秒
@@ -98,7 +100,9 @@ class AppointmentService {
         try {
             const merchant = dbOperations.getMerchantById(bookingSession.merchant_id);
             const userFullName = `${query.from.first_name || ''} ${query.from.last_name || ''}`.trim() || '未设置名称';
-            const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+            const username = query.from.username ? 
+                (query.from.username.startsWith('@') ? query.from.username : `@${query.from.username}`) : 
+                '未设置用户名';
             
             // 确定课程内容和价格
             let courseContent = '';
@@ -189,7 +193,9 @@ class AppointmentService {
                 const userName = query.from.first_name || '';
                 const userLastName = query.from.last_name || '';
                 const fullName = `${userName} ${userLastName}`.trim() || '未设置名称';
-                const username = query.from.username ? `@${query.from.username}` : '未设置用户名';
+                const username = query.from.username ? 
+                    (query.from.username.startsWith('@') ? query.from.username : `@${query.from.username}`) : 
+                    '未设置用户名';
                 
                 // 确定预约类型的中文描述
                 let bookTypeText = '';
@@ -213,7 +219,7 @@ class AppointmentService {
                     // 正常绑定的商家，直接发送通知
                     const merchantNotification = `老师您好，
 用户名称 ${fullName}（${username}）即将与您进行联系。他想跟您预约${bookTypeText}课程
-请及时关注私聊信息。
+您无需向他主动私信，等待狼友私信你即可。
 ————————————————————————
 🐤小鸡出征！请尽力服务好我们的勇士～
 如遇任何问题，请群内联系小鸡管理员。`;

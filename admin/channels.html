@@ -657,7 +657,10 @@
             <div class="actions-section">
                 <div class="actions-grid">
                     <button class="action-btn btn-primary" onclick="showCreateModal()">
-                        ➕ 新建配置
+                        ➕ 新建克隆配置
+                    </button>
+                    <button class="action-btn btn-broadcast" onclick="showBroadcastModal()" style="background: linear-gradient(45deg, #ff6b6b, #ffa500); color: white;">
+                        📢 新建播报配置
                     </button>
                     <button class="action-btn btn-success" onclick="refreshData()">
                         🔄 刷新数据
@@ -785,6 +788,74 @@
                     <div style="display: flex; gap: 15px; margin-top: 30px;">
                         <button type="submit" class="action-btn btn-primary" style="flex: 1;">💾 保存配置</button>
                         <button type="button" class="action-btn btn-secondary" onclick="closeModal('configModal')">❌ 取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 播报配置模态框 -->
+    <div id="broadcastModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="broadcastModalTitle">📢 新建播报配置</h3>
+                <span class="close" onclick="closeModal('broadcastModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="broadcastForm">
+                    <div class="form-group">
+                        <label for="broadcastConfigName">配置名称 *</label>
+                        <input type="text" id="broadcastConfigName" name="name" required placeholder="例如：小鸡播报-新闻频道">
+                        <small>为这个播报配置起一个容易识别的名称</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="broadcastSourceChannelId">源频道ID *</label>
+                        <input type="text" id="broadcastSourceChannelId" name="sourceChannelId" required placeholder="-1002686133634">
+                        <small>要监听小鸡报告的频道ID，格式如：-1002686133634</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="broadcastTargetGroups">播报目标群组ID *</label>
+                        <input type="text" id="broadcastTargetGroups" name="broadcastTargetGroups" required placeholder="-1001234567890,-1001234567891">
+                        <small>多个群组ID用逗号分隔，格式如：-1001234567890</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="broadcastEnabled" name="enabled" checked>
+                            <label for="broadcastEnabled">启用播报配置</label>
+                        </div>
+                        <small>取消勾选可以暂时禁用此播报配置</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="broadcastRateLimit">播报速率限制 (条/分钟)</label>
+                        <input type="number" id="broadcastRateLimit" name="rateLimit" value="10" min="1" max="60">
+                        <small>每分钟最多播报的消息数量，避免刷屏</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="broadcastDelaySeconds">播报延时 (秒)</label>
+                        <input type="number" id="broadcastDelaySeconds" name="delaySeconds" value="0" min="0" max="300">
+                        <small>检测到小鸡报告后延时多少秒再播报（0=立即播报，最大5分钟）</small>
+                    </div>
+
+                    <hr style="margin: 25px 0; border: 1px solid #eee;">
+                    
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="color: #ff6b6b; margin-bottom: 15px;">🎯 播报模板设置</h4>
+                        <div class="form-group">
+                            <label for="broadcastTemplate">播报消息模板</label>
+                            <textarea id="broadcastTemplate" name="template" rows="4" placeholder="🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！&#10;🐤 小鸡出征！咯咯哒咯咯哒～">🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！
+🐤 小鸡出征！咯咯哒咯咯哒～</textarea>
+                            <small>可使用变量：{warrior} - 战士名称，{teacher} - 老师名称，{cost} - 费用，{location} - 位置</small>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; margin-top: 30px;">
+                        <button type="submit" class="action-btn btn-primary" style="flex: 1; background: linear-gradient(45deg, #ff6b6b, #ffa500);">📢 保存播报配置</button>
+                        <button type="button" class="action-btn btn-secondary" onclick="closeModal('broadcastModal')">❌ 取消</button>
                     </div>
                 </form>
             </div>

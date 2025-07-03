@@ -64,6 +64,12 @@ function setupEventListeners() {
         configForm.addEventListener('submit', handleConfigSubmit);
     }
 
+    // 播报表单提交
+    const broadcastForm = document.getElementById('broadcastForm');
+    if (broadcastForm) {
+        broadcastForm.addEventListener('submit', handleBroadcastSubmit);
+    }
+
     // 播报功能开关控制
     const broadcastEnabledCheckbox = document.getElementById('broadcastEnabled');
     if (broadcastEnabledCheckbox) {
@@ -335,6 +341,7 @@ function createConfigCard(config) {
         
         const enabled = Boolean(settings.enabled);
         const status = config.status || 'active';
+        const isBroadcastConfig = Boolean(settings.broadcastEnabled);
         
         const statusClass = enabled ? 
             (status === 'active' ? 'status-running' : 'status-stopped') : 
@@ -344,14 +351,20 @@ function createConfigCard(config) {
             (status === 'active' ? '运行中' : '已停止') : 
             '已禁用';
 
+        const cardStyle = isBroadcastConfig ? 
+            'cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border-left: 4px solid #ff6b6b; background: linear-gradient(135deg, #fff 0%, #fff8f8 100%);' :
+            'cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;';
+
+        const editFunction = isBroadcastConfig ? 'editBroadcastConfig' : 'editConfig';
+
         return `
-            <div class="config-card" onclick="editConfig('${escapeHtml(config.name || '')}')" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+            <div class="config-card" onclick="${editFunction}('${escapeHtml(config.name || '')}')" style="${cardStyle}" 
                  onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.15)';"
                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
                 <div class="config-info">
                     <div class="config-details">
                         <h3>
-                            ${escapeHtml(config.name || '未命名配置')}
+                            ${isBroadcastConfig ? '📢 ' : '📺 '}${escapeHtml(config.name || '未命名配置')}
                             <span class="status-badge ${statusClass}">${statusText}</span>
                         </h3>
                         
@@ -391,7 +404,7 @@ function createConfigCard(config) {
                     </div>
 
                     <div class="config-actions" onclick="event.stopPropagation();">
-                        <button class="config-btn btn-primary" onclick="editConfig('${escapeHtml(config.name || '')}')" title="编辑配置">
+                        <button class="config-btn btn-primary" onclick="${editFunction}('${escapeHtml(config.name || '')}')" title="${isBroadcastConfig ? '编辑播报配置' : '编辑克隆配置'}">
                             ✏️ 编辑
                         </button>
                         <button class="config-btn ${enabled ? 'btn-warning' : 'btn-success'}" 
@@ -399,16 +412,10 @@ function createConfigCard(config) {
                                 title="${enabled ? '禁用配置' : '启用配置'}">
                             ${enabled ? '⏸️ 禁用' : '▶️ 启用'}
                         </button>
-                        <button class="config-btn btn-secondary" onclick="testConfig('${escapeHtml(config.name || '')}')" title="测试配置">
-                            🔍 测试
+                        <button class="config-btn btn-secondary" onclick="${isBroadcastConfig ? 'testBroadcastConfig' : 'testConfig'}('${escapeHtml(config.name || '')}')" title="${isBroadcastConfig ? '测试播报配置' : '测试克隆配置'}">
+                            ${isBroadcastConfig ? '📢' : '🔍'} 测试
                         </button>
-                        ${Boolean(settings.broadcastEnabled) ? 
-                            `<button class="config-btn btn-info" onclick="testBroadcast('${escapeHtml(config.name || '')}')" title="测试播报功能">
-                                📢 测试播报
-                            </button>` : 
-                            ''
-                        }
-                        <button class="config-btn btn-danger" onclick="confirmDeleteConfig('${escapeHtml(config.name || '')}')" title="删除配置">
+                        <button class="config-btn btn-danger" onclick="${isBroadcastConfig ? 'deleteBroadcastConfig' : 'confirmDeleteConfig'}('${escapeHtml(config.name || '')}')" title="${isBroadcastConfig ? '删除播报配置' : '删除克隆配置'}">
                             🗑️ 删除
                         </button>
                     </div>
@@ -1325,6 +1332,224 @@ document.head.appendChild(style);
 
 // ==================== 历史消息功能已移除 ====================
 // 由于Telegram Bot API限制，无法可靠获取频道历史消息，因此移除相关功能
+
+// ==================== 播报配置管理 ====================
+
+// 显示播报配置模态框
+function showBroadcastModal() {
+    currentEditingBroadcast = null;
+    
+    // 重置表单
+    document.getElementById('broadcastForm').reset();
+    document.getElementById('broadcastModalTitle').textContent = '📢 新建播报配置';
+    
+    // 设置默认值
+    document.getElementById('broadcastEnabled').checked = true;
+    document.getElementById('broadcastRateLimit').value = 10;
+    document.getElementById('broadcastDelaySeconds').value = 0;
+    document.getElementById('broadcastTemplate').value = '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！\n🐤 小鸡出征！咯咯哒咯咯哒～';
+    
+    showModal('broadcastModal');
+}
+
+// 处理播报配置表单提交
+async function handleBroadcastSubmit(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    const broadcastData = {
+        name: formData.get('name'),
+        sourceChannelId: formData.get('sourceChannelId'),
+        targetChannelId: formData.get('sourceChannelId'), // 播报模式下目标频道ID等于源频道ID
+        enabled: formData.has('enabled'),
+        broadcastEnabled: true, // 播报配置强制启用播报功能
+        broadcastTargetGroups: formData.get('broadcastTargetGroups') ? 
+            formData.get('broadcastTargetGroups').split(',').map(id => id.trim()).filter(id => id) : [],
+        rateLimit: parseInt(formData.get('rateLimit')) || 10,
+        delaySeconds: parseInt(formData.get('delaySeconds')) || 0,
+        template: formData.get('template') || '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！\n🐤 小鸡出征！咯咯哒咯咯哒～',
+        // 播报配置的默认设置
+        syncEdits: false,
+        filterEnabled: false,
+        sequentialMode: false
+    };
+
+    // 验证播报配置数据
+    const validation = validateBroadcastData(broadcastData);
+    if (!validation.valid) {
+        showError(validation.errors.join('\n'));
+        return;
+    }
+
+    try {
+        showLoading('保存播报配置中...');
+        
+        const response = await apiRequest('/api/channel/broadcast/configs', {
+            method: 'POST',
+            body: JSON.stringify(broadcastData)
+        });
+
+        if (response.success) {
+            showSuccess(currentEditingBroadcast ? '播报配置更新成功' : '播报配置创建成功');
+            closeModal('broadcastModal');
+            
+            // 刷新数据显示
+            setTimeout(async () => {
+                await refreshData();
+            }, 100);
+        } else {
+            showError(response.errors ? response.errors.join('\n') : '保存播报配置失败');
+        }
+        
+    } catch (error) {
+        console.error('保存播报配置失败:', error);
+        showError(`保存播报配置失败: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 验证播报配置数据
+function validateBroadcastData(data) {
+    const errors = [];
+    
+    // 基本验证
+    if (!data.name || data.name.trim() === '') {
+        errors.push('配置名称不能为空');
+    }
+    
+    if (!data.sourceChannelId || data.sourceChannelId.trim() === '') {
+        errors.push('源频道ID不能为空');
+    }
+    
+    if (!data.broadcastTargetGroups || data.broadcastTargetGroups.length === 0) {
+        errors.push('播报目标群组ID不能为空');
+    }
+    
+    // 频道ID格式验证
+    const channelIdPattern = /^-?\d+$/;
+    if (data.sourceChannelId && !channelIdPattern.test(data.sourceChannelId)) {
+        errors.push('源频道ID格式不正确，应为数字格式（如：-1002686133634）');
+    }
+    
+    // 验证每个群组ID格式
+    if (data.broadcastTargetGroups && data.broadcastTargetGroups.length > 0) {
+        const invalidGroupIds = data.broadcastTargetGroups.filter(id => 
+            !channelIdPattern.test(id.trim())
+        );
+        if (invalidGroupIds.length > 0) {
+            errors.push(`播报目标群组ID格式不正确：${invalidGroupIds.join(', ')}`);
+        }
+    }
+    
+    // 数值验证
+    if (data.rateLimit && (data.rateLimit < 1 || data.rateLimit > 60)) {
+        errors.push('播报速率限制必须在1-60之间');
+    }
+    
+    if (data.delaySeconds && (data.delaySeconds < 0 || data.delaySeconds > 300)) {
+        errors.push('播报延时必须在0-300秒之间');
+    }
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
+// 编辑播报配置
+function editBroadcastConfig(configName) {
+    const config = allConfigs.find(c => c.name === configName && c.settings.broadcastEnabled);
+    if (!config) {
+        showError('播报配置不存在');
+        return;
+    }
+
+    currentEditingBroadcast = configName;
+    
+    const settings = config.settings || {};
+    const sourceChannel = config.sourceChannel || {};
+    
+    // 填充表单
+    document.getElementById('broadcastConfigName').value = config.name || '';
+    document.getElementById('broadcastSourceChannelId').value = sourceChannel.id || '';
+    document.getElementById('broadcastTargetGroups').value = (settings.broadcastTargetGroups || []).join(',');
+    document.getElementById('broadcastEnabled').checked = Boolean(settings.enabled);
+    document.getElementById('broadcastRateLimit').value = settings.rateLimit || 10;
+    document.getElementById('broadcastDelaySeconds').value = settings.delaySeconds || 0;
+    document.getElementById('broadcastTemplate').value = settings.template || '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！\n🐤 小鸡出征！咯咯哒咯咯哒～';
+    
+    document.getElementById('broadcastModalTitle').textContent = '📢 编辑播报配置';
+    showModal('broadcastModal');
+}
+
+// 删除播报配置
+async function deleteBroadcastConfig(configName) {
+    if (!confirm(`确定要删除播报配置 "${configName}" 吗？\n\n此操作不可撤销！`)) {
+        return;
+    }
+
+    try {
+        showLoading('删除播报配置中...');
+        
+        const response = await apiRequest(`/api/channel/broadcast/configs/${encodeURIComponent(configName)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.success) {
+            showSuccess('播报配置删除成功');
+            await refreshData();
+        } else {
+            showError(response.error || '删除播报配置失败');
+        }
+    } catch (error) {
+        console.error('删除播报配置失败:', error);
+        showError(`删除播报配置失败: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 测试播报配置
+async function testBroadcastConfig(configName) {
+    try {
+        showLoading('测试播报配置中...');
+        
+        const response = await apiRequest(`/api/channel/broadcast/configs/${encodeURIComponent(configName)}/test`, {
+            method: 'POST'
+        });
+
+        if (response.success) {
+            const results = response.results || response.data;
+            let message = '播报配置测试完成:\n\n';
+            
+            if (results) {
+                message += `目标群组数量: ${results.targetGroupsCount || 0}\n`;
+                message += `群组访问测试: ${results.groupsAccessible || 0}/${results.targetGroupsCount || 0} 可访问\n`;
+                message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
+                message += `模板解析: ${results.templateParser?.working ? '✅ 正常' : '❌ 异常'}\n`;
+                
+                if (results.testMessage) {
+                    message += `\n测试消息已发送到群组`;
+                }
+            }
+            
+            alert(message);
+        } else {
+            showError(response.error || '播报配置测试失败');
+        }
+    } catch (error) {
+        console.error('测试播报配置失败:', error);
+        showError(`测试播报配置失败: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 全局变量
+let currentEditingBroadcast = null;
 
 // 页面初始化完成
 console.log('📺 频道管理页面加载完成'); 

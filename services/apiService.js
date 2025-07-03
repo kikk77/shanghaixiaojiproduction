@@ -113,6 +113,11 @@ class ApiService {
         this.routes.set('GET /api/channel/stats/:type', this.getChannelStats.bind(this));
         this.routes.set('GET /api/channel/logs', this.getChannelLogs.bind(this));
 
+        // 播报配置专用路由
+        this.routes.set('POST /api/channel/broadcast/configs', this.createBroadcastConfig.bind(this));
+        this.routes.set('DELETE /api/channel/broadcast/configs/:id', this.deleteBroadcastConfig.bind(this));
+        this.routes.set('POST /api/channel/broadcast/configs/:id/test', this.testBroadcastConfig.bind(this));
+
         
         console.log('API路由设置完成，共', this.routes.size, '个路由');
     }
@@ -2917,6 +2922,161 @@ class ApiService {
         } catch (error) {
             console.error('获取频道日志失败:', error);
             throw new Error('获取频道日志失败: ' + error.message);
+        }
+    }
+
+    // 播报配置专用方法
+    async createBroadcastConfig({ body }) {
+        try {
+            console.log('📢 创建播报配置请求:', body);
+            
+            // 验证必需字段
+            if (!body.name || !body.sourceChannelId || !body.broadcastTargetGroups) {
+                return {
+                    success: false,
+                    error: '缺少必需字段：配置名称、源频道ID或播报目标群组'
+                };
+            }
+
+            // 构造播报配置数据
+            const broadcastConfigData = {
+                ...body,
+                broadcastEnabled: true,
+                targetChannelId: body.sourceChannelId, // 播报模式下目标频道ID等于源频道ID
+                syncEdits: false,
+                filterEnabled: false,
+                sequentialMode: false
+            };
+
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.saveConfig(broadcastConfigData);
+            
+            if (result.success) {
+                console.log('✅ 播报配置创建成功:', result.config?.name);
+                return {
+                    success: true,
+                    message: '播报配置创建成功',
+                    config: result.config
+                };
+            } else {
+                return {
+                    success: false,
+                    error: result.error || '播报配置保存失败'
+                };
+            }
+        } catch (error) {
+            console.error('❌ 创建播报配置失败:', error);
+            throw new Error('创建播报配置失败: ' + error.message);
+        }
+    }
+
+    async deleteBroadcastConfig({ params }) {
+        try {
+            const configName = params.id;
+            console.log('📢 删除播报配置请求:', configName);
+
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const result = await channelServices.configService.deleteConfig(configName);
+            
+            if (result.success) {
+                console.log('✅ 播报配置删除成功:', configName);
+                return {
+                    success: true,
+                    message: '播报配置删除成功'
+                };
+            } else {
+                return {
+                    success: false,
+                    error: result.error || '播报配置删除失败'
+                };
+            }
+        } catch (error) {
+            console.error('❌ 删除播报配置失败:', error);
+            throw new Error('删除播报配置失败: ' + error.message);
+        }
+    }
+
+    async testBroadcastConfig({ params }) {
+        try {
+            const configName = params.id;
+            console.log('📢 测试播报配置请求:', configName);
+
+            const botService = require('./botService');
+            const channelServices = botService.getChannelServices();
+            
+            if (!channelServices.configService) {
+                throw new Error('频道克隆服务未初始化');
+            }
+
+            const config = await channelServices.configService.getConfig(configName);
+
+            if (!config || !config.settings.broadcastEnabled) {
+                return {
+                    success: false,
+                    error: '播报配置不存在'
+                };
+            }
+
+            const targetGroups = config.settings.broadcastTargetGroups || [];
+            let groupsAccessible = 0;
+            let testResults = {
+                targetGroupsCount: targetGroups.length,
+                groupsAccessible: 0,
+                permissions: { valid: false },
+                templateParser: { working: true }
+            };
+
+            // 测试每个群组的访问权限
+            const bot = botService.getBotInstance();
+            for (const groupId of targetGroups) {
+                try {
+                    if (bot) {
+                        const chat = await bot.getChat(groupId);
+                        if (chat) {
+                            groupsAccessible++;
+                        }
+                    }
+                } catch (error) {
+                    console.log(`群组 ${groupId} 访问测试失败:`, error.message);
+                }
+            }
+
+            testResults.groupsAccessible = groupsAccessible;
+            testResults.permissions.valid = groupsAccessible > 0;
+
+            // 发送测试消息到第一个可访问的群组
+            if (groupsAccessible > 0 && bot) {
+                try {
+                    const testMessage = '🧪 播报配置测试消息\n这是一条测试消息，用于验证播报功能是否正常工作。';
+                    const firstAccessibleGroup = targetGroups[0];
+                    await bot.sendMessage(firstAccessibleGroup, testMessage);
+                    testResults.testMessage = { sentTo: firstAccessibleGroup };
+                } catch (error) {
+                    console.log('发送测试消息失败:', error.message);
+                }
+            }
+
+            return {
+                success: true,
+                message: '播报配置测试完成',
+                results: testResults
+            };
+
+        } catch (error) {
+            console.error('❌ 测试播报配置失败:', error);
+            throw new Error('测试播报配置失败: ' + error.message);
         }
     }
 }

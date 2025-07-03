@@ -68,8 +68,6 @@ async function startFullApplication() {
             } catch (error) {
                 console.error('❌ EAV完整修复脚本运行失败:', error.message);
             }
-            
-
         }
         
         // 不关闭HTTP服务器，而是扩展其功能
@@ -112,7 +110,6 @@ async function startFullApplication() {
     }
 }
 
-
 // 优雅关闭处理
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully...');
@@ -121,5 +118,4 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully...');
-    process.exit(0);
-}); 
+    process.exit(0); 

@@ -293,9 +293,10 @@ async function handleChannelApiRequest(pathname, method, data) {
 
             if (method === 'DELETE' && configId && !action) {
                 // 删除播报配置: DELETE /api/channel/broadcast/configs/{id}
-                console.log('📢 处理播报配置删除请求:', configId);
+                const decodedConfigId = decodeURIComponent(configId);
+                console.log('📢 处理播报配置删除请求:', decodedConfigId);
                 
-                const result = await configService.deleteConfig(configId);
+                const result = await configService.deleteConfig(decodedConfigId);
                 
                 if (result.success) {
                     console.log('✅ 播报配置删除成功:', configId);
@@ -313,9 +314,10 @@ async function handleChannelApiRequest(pathname, method, data) {
 
             if (method === 'POST' && configId && action === 'test') {
                 // 测试播报配置: POST /api/channel/broadcast/configs/{id}/test
-                console.log('📢 处理播报配置测试请求:', configId);
+                const decodedConfigId = decodeURIComponent(configId);
+                console.log('📢 处理播报配置测试请求:', decodedConfigId);
                 
-                const config = await configService.getConfig(configId);
+                const config = await configService.getConfig(decodedConfigId);
 
                 if (!config || !config.settings.broadcastEnabled) {
                     return {

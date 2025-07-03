@@ -145,10 +145,17 @@ class ChannelDataMapper {
                 broadcastTargetGroups = []
             } = configData;
 
+            // 当启用播报功能且没有目标频道ID时，使用源频道ID作为目标频道ID
+            let finalTargetChannelId = targetChannelId;
+            if (broadcastEnabled && (!targetChannelId || targetChannelId.trim() === '')) {
+                finalTargetChannelId = sourceChannelId;
+                console.log('📺 启用播报功能且无目标频道ID，使用源频道ID作为目标频道ID:', finalTargetChannelId);
+            }
+
                             console.log('📺 保存配置数据:', {
                 name,
                 sourceChannelId,
-                targetChannelId,
+                targetChannelId: finalTargetChannelId,
                 enabled,
                 syncEdits,
                 filterEnabled,
@@ -167,7 +174,7 @@ class ChannelDataMapper {
                 // 更新现有配置
                 const success = this.eavOps.updateChannelConfig(name, {
                     source_channel_id: sourceChannelId,
-                    target_channel_id: targetChannelId,
+                    target_channel_id: finalTargetChannelId,
                     clone_enabled: enabled,
                     sync_edits: syncEdits,
                     filter_enabled: filterEnabled,
@@ -186,7 +193,7 @@ class ChannelDataMapper {
                 const entityId = this.eavOps.createChannelConfig({
                     configName: name,
                     sourceChannelId,
-                    targetChannelId,
+                    targetChannelId: finalTargetChannelId,
                     cloneEnabled: enabled,
                     syncEdits,
                     filterEnabled,

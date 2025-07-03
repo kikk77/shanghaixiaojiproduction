@@ -69,10 +69,49 @@ function setupEventListeners() {
     if (broadcastEnabledCheckbox) {
         broadcastEnabledCheckbox.addEventListener('change', function() {
             const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+            const targetChannelDiv = document.querySelector('input[name="targetChannelId"]').closest('.form-group');
+            const targetChannelInput = document.getElementById('targetChannelId');
+            
             if (this.checked) {
+                // 启用播报功能
                 targetGroupDiv.style.display = 'block';
+                
+                // 目标频道ID变为可选
+                targetChannelDiv.style.opacity = '0.5';
+                targetChannelInput.removeAttribute('required');
+                targetChannelInput.placeholder = '启用播报功能时可选，留空表示仅播报不克隆';
+                
+                // 更新标签文本
+                const targetChannelLabel = targetChannelDiv.querySelector('label');
+                if (targetChannelLabel) {
+                    targetChannelLabel.textContent = '目标频道ID (可选)';
+                }
+                
+                // 更新帮助文本
+                const targetChannelSmall = targetChannelDiv.querySelector('small');
+                if (targetChannelSmall) {
+                    targetChannelSmall.textContent = '启用播报功能时可选，如需同时克隆到频道则填写';
+                }
             } else {
+                // 禁用播报功能
                 targetGroupDiv.style.display = 'none';
+                
+                // 目标频道ID变为必填
+                targetChannelDiv.style.opacity = '1';
+                targetChannelInput.setAttribute('required', 'required');
+                targetChannelInput.placeholder = '-1002763598790';
+                
+                // 恢复标签文本
+                const targetChannelLabel = targetChannelDiv.querySelector('label');
+                if (targetChannelLabel) {
+                    targetChannelLabel.textContent = '目标频道ID *';
+                }
+                
+                // 恢复帮助文本
+                const targetChannelSmall = targetChannelDiv.querySelector('small');
+                if (targetChannelSmall) {
+                    targetChannelSmall.textContent = '消息将被克隆到这个频道，格式如：-1002763598790';
+                }
             }
         });
     }
@@ -337,14 +376,16 @@ function createConfigCard(config) {
 
                         <div style="margin-top: 10px;">
                             <small style="color: #666;">
+                                ${Boolean(settings.broadcastEnabled) ? 
+                                    `📢 播报模式: 频道 → 群组 | 播报群组: ${settings.broadcastTargetGroups && settings.broadcastTargetGroups.length > 0 ? 
+                                        settings.broadcastTargetGroups.slice(0, 2).join(', ') + (settings.broadcastTargetGroups.length > 2 ? '...' : '') : 
+                                        '未设置'}<br/>` : 
+                                    '📺 克隆模式: 频道 → 频道 | '
+                                }
                                 同步编辑: ${Boolean(settings.syncEdits) ? '✅' : '❌'} | 
                                 内容过滤: ${Boolean(settings.filterEnabled) ? '✅' : '❌'} | 
                                 转发延时: ${settings.delaySeconds || 0}秒 | 
-                                顺序转发: ${Boolean(settings.sequentialMode) ? '✅' : '❌'} | 
-                                小鸡播报: ${Boolean(settings.broadcastEnabled) ? '✅' : '❌'}
-                                ${Boolean(settings.broadcastEnabled) && settings.broadcastTargetGroups && settings.broadcastTargetGroups.length > 0 ? 
-                                    `<br/>播报群组: ${settings.broadcastTargetGroups.slice(0, 2).join(', ')}${settings.broadcastTargetGroups.length > 2 ? '...' : ''}` : 
-                                    ''}
+                                顺序转发: ${Boolean(settings.sequentialMode) ? '✅' : '❌'}
                             </small>
                         </div>
                     </div>
@@ -471,12 +512,49 @@ function editConfig(configName) {
         document.getElementById('broadcastEnabled').checked = Boolean(settings.broadcastEnabled);
         document.getElementById('broadcastTargetGroups').value = (settings.broadcastTargetGroups || []).join(',');
         
-        // 控制播报目标群组输入框的显示
+        // 控制播报目标群组输入框的显示和目标频道ID的状态
         const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+        const targetChannelDiv = document.querySelector('input[name="targetChannelId"]').closest('.form-group');
+        const targetChannelInput = document.getElementById('targetChannelId');
+        
         if (Boolean(settings.broadcastEnabled)) {
             targetGroupDiv.style.display = 'block';
+            
+            // 目标频道ID变为可选
+            targetChannelDiv.style.opacity = '0.5';
+            targetChannelInput.removeAttribute('required');
+            targetChannelInput.placeholder = '启用播报功能时可选，留空表示仅播报不克隆';
+            
+            // 更新标签文本
+            const targetChannelLabel = targetChannelDiv.querySelector('label');
+            if (targetChannelLabel) {
+                targetChannelLabel.textContent = '目标频道ID (可选)';
+            }
+            
+            // 更新帮助文本
+            const targetChannelSmall = targetChannelDiv.querySelector('small');
+            if (targetChannelSmall) {
+                targetChannelSmall.textContent = '启用播报功能时可选，如需同时克隆到频道则填写';
+            }
         } else {
             targetGroupDiv.style.display = 'none';
+            
+            // 目标频道ID变为必填
+            targetChannelDiv.style.opacity = '1';
+            targetChannelInput.setAttribute('required', 'required');
+            targetChannelInput.placeholder = '-1002763598790';
+            
+            // 恢复标签文本
+            const targetChannelLabel = targetChannelDiv.querySelector('label');
+            if (targetChannelLabel) {
+                targetChannelLabel.textContent = '目标频道ID *';
+            }
+            
+            // 恢复帮助文本
+            const targetChannelSmall = targetChannelDiv.querySelector('small');
+            if (targetChannelSmall) {
+                targetChannelSmall.textContent = '消息将被克隆到这个频道，格式如：-1002763598790';
+            }
         }
         
         document.getElementById('modalTitle').textContent = '编辑频道配置';
@@ -1019,8 +1097,17 @@ function validateConfigData(data) {
         errors.push('源频道ID不能为空');
     }
     
-    if (!data.targetChannelId || data.targetChannelId.trim() === '') {
-        errors.push('目标频道ID不能为空');
+    // 目标频道ID验证：启用播报功能时可选，否则必填
+    if (!data.broadcastEnabled) {
+        if (!data.targetChannelId || data.targetChannelId.trim() === '') {
+            errors.push('目标频道ID不能为空（或启用播报功能）');
+        }
+    } else {
+        // 启用播报功能时，如果没有目标频道ID，确保至少有播报群组
+        if ((!data.targetChannelId || data.targetChannelId.trim() === '') && 
+            (!data.broadcastTargetGroups || data.broadcastTargetGroups.length === 0)) {
+            errors.push('启用播报功能时，必须设置播报目标群组');
+        }
     }
     
     // 频道ID格式验证
@@ -1029,7 +1116,7 @@ function validateConfigData(data) {
         errors.push('源频道ID格式不正确，应为数字格式（如：-1002686133634）');
     }
     
-    if (data.targetChannelId && !channelIdPattern.test(data.targetChannelId)) {
+    if (data.targetChannelId && data.targetChannelId.trim() !== '' && !channelIdPattern.test(data.targetChannelId)) {
         errors.push('目标频道ID格式不正确，应为数字格式（如：-1002763598790）');
     }
     

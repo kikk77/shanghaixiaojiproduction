@@ -475,6 +475,31 @@ function showCreateModal() {
     document.getElementById('broadcastEnabled').checked = false;
     document.getElementById('broadcastTargetGroups').value = '';
     
+    // 初始化UI状态：新建配置时默认为克隆模式
+    const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+    const targetChannelDiv = document.querySelector('input[name="targetChannelId"]').closest('.form-group');
+    const targetChannelInput = document.getElementById('targetChannelId');
+    
+    // 隐藏播报目标群组输入框
+    targetGroupDiv.style.display = 'none';
+    
+    // 目标频道ID为必填
+    targetChannelDiv.style.opacity = '1';
+    targetChannelInput.setAttribute('required', 'required');
+    targetChannelInput.placeholder = '-1002763598790';
+    
+    // 恢复标签文本
+    const targetChannelLabel = targetChannelDiv.querySelector('label');
+    if (targetChannelLabel) {
+        targetChannelLabel.textContent = '目标频道ID *';
+    }
+    
+    // 恢复帮助文本
+    const targetChannelSmall = targetChannelDiv.querySelector('small');
+    if (targetChannelSmall) {
+        targetChannelSmall.textContent = '消息将被克隆到这个频道，格式如：-1002763598790';
+    }
+    
     showModal('configModal');
 }
 
@@ -1157,6 +1182,33 @@ function showModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+    
+    // 如果关闭的是配置模态框，重置UI状态
+    if (modalId === 'configModal') {
+        const targetGroupDiv = document.getElementById('broadcastTargetGroup');
+        const targetChannelDiv = document.querySelector('input[name="targetChannelId"]').closest('.form-group');
+        const targetChannelInput = document.getElementById('targetChannelId');
+        
+        // 恢复默认状态
+        if (targetGroupDiv) targetGroupDiv.style.display = 'none';
+        if (targetChannelDiv) targetChannelDiv.style.opacity = '1';
+        if (targetChannelInput) {
+            targetChannelInput.setAttribute('required', 'required');
+            targetChannelInput.placeholder = '-1002763598790';
+        }
+        
+        // 恢复标签文本
+        const targetChannelLabel = targetChannelDiv?.querySelector('label');
+        if (targetChannelLabel) {
+            targetChannelLabel.textContent = '目标频道ID *';
+        }
+        
+        // 恢复帮助文本
+        const targetChannelSmall = targetChannelDiv?.querySelector('small');
+        if (targetChannelSmall) {
+            targetChannelSmall.textContent = '消息将被克隆到这个频道，格式如：-1002763598790';
+        }
+    }
 }
 
 function closeAllModals() {

@@ -70,6 +70,16 @@ async function startFullApplication() {
             }
         }
         
+        // 运行播报功能迁移
+        console.log(`🔧 检查播报功能迁移...`);
+        try {
+            const { migrateBroadcastAttributes } = require('./scripts/migrate-broadcast-attributes');
+            await migrateBroadcastAttributes();
+            console.log('✅ 播报功能迁移检查完成');
+        } catch (error) {
+            console.warn('⚠️ 播报功能迁移检查失败:', error.message);
+        }
+        
         // 不关闭HTTP服务器，而是扩展其功能
         // 将HTTP服务器的处理函数替换为完整的API处理器
         const { handleHttpRequest } = require('./services/httpService');

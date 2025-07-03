@@ -196,6 +196,8 @@ class ChannelDatabaseManager {
             { name: 'rate_limit', type: 'integer', category: 'channel_config', description: '速率限制（条/分钟）', default: '30' },
             { name: 'delay_seconds', type: 'integer', category: 'channel_config', description: '转发延时（秒）', default: '0' },
             { name: 'sequential_mode', type: 'boolean', category: 'channel_config', description: '是否启用顺序转发模式', default: 'false' },
+            { name: 'broadcast_enabled', type: 'boolean', category: 'channel_config', description: '是否启用播报功能', default: 'false' },
+            { name: 'broadcast_target_groups', type: 'json', category: 'channel_config', description: '播报目标群组列表', default: '[]' },
             
             // message_mapping 类型属性
             { name: 'source_message_id', type: 'integer', category: 'message_mapping', description: '源消息ID', required: true },

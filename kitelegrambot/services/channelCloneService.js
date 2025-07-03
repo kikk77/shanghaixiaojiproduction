@@ -31,7 +31,7 @@ class ChannelCloneService {
             global.channelCloneProcessedMessages = new Set();
         }
         this.processedMessages = global.channelCloneProcessedMessages;
-        this.messageCleanupInterval = 300000; // 5分钟清理一次已处理消息记录
+        this.messageCleanupInterval = 60000; // 1分钟清理一次已处理消息记录
         
         // 媒体组去重器 - 防止重复处理同一个媒体组
         this.processedMediaGroups = new Set();
@@ -112,14 +112,14 @@ class ChannelCloneService {
             const currentMessageSize = this.processedMessages.size;
             const currentMediaGroupSize = this.processedMediaGroups.size;
             
-            // 清理已处理消息记录（当超过10000条时清理）
-            if (currentMessageSize > 10000) {
+            // 更频繁地清理已处理消息记录（当超过5000条时清理）
+            if (currentMessageSize > 5000) {
                 this.processedMessages.clear();
                 console.log(`🧹 清理消息去重记录: ${currentMessageSize} -> 0`);
             }
             
-            // 清理媒体组去重记录（当超过1000条时清理）
-            if (currentMediaGroupSize > 1000) {
+            // 清理媒体组去重记录（当超过500条时清理）
+            if (currentMediaGroupSize > 500) {
                 this.processedMediaGroups.clear();
                 console.log(`🧹 清理媒体组去重记录: ${currentMediaGroupSize} -> 0`);
             }
@@ -134,21 +134,39 @@ class ChannelCloneService {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
             
-            // 检查消息是否已经处理过
-            if (this.processedMessages.has(messageKey)) {
-                console.log(`📺 [${this.instanceId}] 跳过重复消息: ${chatId} - ${message.message_id}`);
-                return;
-            }
-            
-            // 标记消息为已处理
-            this.processedMessages.add(messageKey);
-            console.log(`📺 [${this.instanceId}] 开始处理消息: ${chatId} - ${message.message_id}`);
-            
             // 查找对应的配置
             const config = await this.configService.getConfigBySourceChannel(chatId);
             if (!config || !config.settings.enabled) {
                 return; // 没有配置或配置已禁用
             }
+            
+            // 改进的去重逻辑：使用消息时间戳和内容哈希进行更准确的去重
+            const messageTimestamp = message.date;
+            const messageContent = message.text || message.caption || '';
+            const messageHash = this.generateMessageHash(message);
+            const enhancedMessageKey = `${chatId}_${message.message_id}_${messageTimestamp}_${messageHash}`;
+            
+            // 检查是否为真正的重复消息（同一消息在短时间内多次处理）
+            if (this.processedMessages.has(enhancedMessageKey)) {
+                console.log(`📺 [${this.instanceId}] 跳过真正的重复消息: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
+            // 检查是否存在相同ID但不同内容的消息（ID复用情况）
+            const existingKeys = Array.from(this.processedMessages).filter(key => 
+                key.startsWith(`${chatId}_${message.message_id}_`) && key !== enhancedMessageKey
+            );
+            
+            if (existingKeys.length > 0) {
+                console.log(`📺 [${this.instanceId}] 检测到消息ID复用: ${chatId} - ${message.message_id}，但内容不同，继续处理`);
+                // 清理旧的相同ID记录，保留新的
+                existingKeys.forEach(key => this.processedMessages.delete(key));
+            }
+            
+            // 标记消息为已处理
+            this.processedMessages.add(enhancedMessageKey);
+            console.log(`📺 [${this.instanceId}] 开始处理消息: ${chatId} - ${message.message_id} (${messageContent.substring(0, 50)}...)`);
+            
 
             console.log(`📺 收到源频道 ${chatId} 的新消息 ${message.message_id}`);
 
@@ -782,6 +800,43 @@ class ChannelCloneService {
         if (message.poll) return 'poll';
         if (message.text) return 'text';
         return 'unknown';
+    }
+
+    /**
+     * 生成消息哈希，用于更准确的去重
+     */
+    generateMessageHash(message) {
+        const content = message.text || message.caption || '';
+        const messageType = this.getMessageType(message);
+        
+        // 对于媒体消息，使用文件ID作为哈希的一部分
+        let mediaId = '';
+        if (message.photo && message.photo.length > 0) {
+            mediaId = message.photo[message.photo.length - 1].file_id;
+        } else if (message.video) {
+            mediaId = message.video.file_id;
+        } else if (message.document) {
+            mediaId = message.document.file_id;
+        } else if (message.audio) {
+            mediaId = message.audio.file_id;
+        } else if (message.voice) {
+            mediaId = message.voice.file_id;
+        } else if (message.sticker) {
+            mediaId = message.sticker.file_id;
+        } else if (message.animation) {
+            mediaId = message.animation.file_id;
+        }
+        
+        // 生成简单的哈希值
+        const hashContent = `${messageType}_${content}_${mediaId}`;
+        let hash = 0;
+        for (let i = 0; i < hashContent.length; i++) {
+            const char = hashContent.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // 转换为32位整数
+        }
+        
+        return Math.abs(hash).toString(36);
     }
 
     /**

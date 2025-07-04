@@ -43,7 +43,7 @@ class ChannelBroadcastService {
         };
         
         // 播报模板
-        this.broadcastTemplate = '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 #{teacher} 老师！\n🐤 小鸡出征！咯咯哒咯咯哒～';
+        this.broadcastTemplate = '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 {teacher}！\n🐤 小鸡出征！咯咯哒咯咯哒～';
         
         // 初始化监听器
         this.initializeMessageListeners();
@@ -128,7 +128,7 @@ class ChannelBroadcastService {
             console.log(`📢 [播报服务] 解析到小鸡报告:`, reportData);
             
             // 生成播报消息
-            const broadcastMessage = this.generateBroadcastMessage(reportData, message);
+            const broadcastMessage = await this.generateBroadcastMessage(reportData, message);
             
             // 发送播报到目标群组
             await this.sendBroadcastToGroups(broadcastConfig, broadcastMessage);
@@ -196,22 +196,25 @@ class ChannelBroadcastService {
     /**
      * 生成播报消息
      */
-    generateBroadcastMessage(reportData, originalMessage) {
+    async generateBroadcastMessage(reportData, originalMessage) {
         try {
             // 处理战士名称
             const warriorName = reportData.warrior === '匿名' ? '匿名' : reportData.warrior;
             
+            // 匹配活跃商家并处理老师名称格式
+            const teacherName = await this.matchAndFormatTeacherName(reportData.teacher);
+            
             // 生成播报内容
             let broadcastText = this.broadcastTemplate
                 .replace('{warrior}', warriorName)
-                .replace('{teacher}', reportData.teacher);
+                .replace('{teacher}', teacherName);
             
             // 生成消息链接
             const messageLink = this.generateMessageLink(originalMessage);
             
             // 添加消息链接
             if (messageLink) {
-                broadcastText += `\n\n📎 原始消息：${messageLink}`;
+                broadcastText += `\n\n📎 查看报告：${messageLink}`;
             }
             
             return broadcastText;
@@ -219,6 +222,81 @@ class ChannelBroadcastService {
         } catch (error) {
             console.error('生成播报消息失败:', error);
             return null;
+        }
+    }
+
+    /**
+     * 匹配活跃商家并格式化老师名称
+     */
+    async matchAndFormatTeacherName(inputTeacherName) {
+        try {
+            // 获取活跃商家列表
+            const dbOperations = require('../models/dbOperations');
+            const activeMerchants = dbOperations.getActiveMerchants();
+            
+            console.log(`📢 [播报服务] 匹配老师名称: ${inputTeacherName}`);
+            console.log(`📢 [播报服务] 活跃商家数量: ${activeMerchants.length}`);
+            
+            // 清理输入的老师名称（移除可能的#号和空格）
+            const cleanInputName = inputTeacherName.replace(/^#+\s*/, '').trim();
+            
+            // 尝试匹配商家
+            let matchedMerchant = null;
+            
+            // 1. 精确匹配 teacher_name
+            matchedMerchant = activeMerchants.find(merchant => 
+                merchant.teacher_name && merchant.teacher_name.replace(/^#+\s*/, '').trim() === cleanInputName
+            );
+            
+            // 2. 如果没有精确匹配，尝试模糊匹配
+            if (!matchedMerchant) {
+                matchedMerchant = activeMerchants.find(merchant => 
+                    merchant.teacher_name && 
+                    (merchant.teacher_name.replace(/^#+\s*/, '').trim().includes(cleanInputName) ||
+                     cleanInputName.includes(merchant.teacher_name.replace(/^#+\s*/, '').trim()))
+                );
+            }
+            
+            // 3. 尝试匹配用户名
+            if (!matchedMerchant) {
+                matchedMerchant = activeMerchants.find(merchant => 
+                    merchant.username && merchant.username === cleanInputName
+                );
+            }
+            
+            if (matchedMerchant) {
+                console.log(`📢 [播报服务] 匹配到商家: ${matchedMerchant.teacher_name}`);
+                
+                // 使用匹配到的商家名称，确保格式正确
+                let teacherName = matchedMerchant.teacher_name.trim();
+                
+                // 如果商家名称不以#开头，添加#
+                if (!teacherName.startsWith('#')) {
+                    teacherName = '#' + teacherName;
+                }
+                
+                return teacherName;
+            } else {
+                console.log(`📢 [播报服务] 未匹配到商家，使用原始名称: ${inputTeacherName}`);
+                
+                // 如果没有匹配到商家，格式化原始名称
+                let formattedName = cleanInputName;
+                if (!formattedName.startsWith('#')) {
+                    formattedName = '#' + formattedName;
+                }
+                
+                return formattedName;
+            }
+            
+        } catch (error) {
+            console.error('匹配商家名称失败:', error);
+            
+            // 出错时返回格式化的原始名称
+            let fallbackName = inputTeacherName.replace(/^#+\s*/, '').trim();
+            if (!fallbackName.startsWith('#')) {
+                fallbackName = '#' + fallbackName;
+            }
+            return fallbackName;
         }
     }
 

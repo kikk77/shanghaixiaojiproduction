@@ -32,7 +32,7 @@ class ChannelBroadcastService {
         
         // 小鸡报告模板定义
         this.reportTemplate = {
-            prefix: '小鸡报告：',
+            prefixes: ['小鸡报告：', '小鸡报告:', '小鸡报告'],
             fields: {
                 warrior: '战士留名：',
                 teacher: '老师艺名：',
@@ -45,8 +45,47 @@ class ChannelBroadcastService {
         // 播报模板
         this.broadcastTemplate = '🎉 恭喜小鸡的勇士：{warrior}用户 出击了 {teacher}！\n🐤 小鸡出征！咯咯哒咯咯哒～';
         
+        // 🔥 修复: 初始化默认播报配置
+        this.initializeDefaultBroadcastConfigs();
+        
         // 初始化监听器
         this.initializeMessageListeners();
+    }
+
+    /**
+     * 初始化默认播报配置
+     */
+    async initializeDefaultBroadcastConfigs() {
+        try {
+            // 从环境变量获取配置
+            const sourceChannelId = process.env.BROADCAST_SOURCE_CHANNEL_ID || '-1002828316920';
+            const targetGroupId = process.env.GROUP_CHAT_ID;
+            
+            if (!targetGroupId) {
+                console.log('⚠️ [播报服务] 未设置GROUP_CHAT_ID，跳过默认播报配置');
+                return;
+            }
+            
+            console.log(`📢 [播报服务] 初始化默认播报配置: ${sourceChannelId} -> ${targetGroupId}`);
+            
+            // 检查是否已有配置
+            const existingConfig = await this.getBroadcastConfig(sourceChannelId);
+            if (existingConfig) {
+                console.log(`📢 [播报服务] 频道 ${sourceChannelId} 已有播报配置`);
+                return;
+            }
+            
+            // 创建默认播报配置
+            const result = await this.addBroadcastConfig(sourceChannelId, [targetGroupId]);
+            if (result.success) {
+                console.log(`✅ [播报服务] 默认播报配置创建成功`);
+            } else {
+                console.log(`❌ [播报服务] 默认播报配置创建失败:`, result.error);
+            }
+            
+        } catch (error) {
+            console.error('❌ [播报服务] 初始化默认播报配置失败:', error);
+        }
     }
 
     /**
@@ -84,13 +123,24 @@ class ChannelBroadcastService {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
             
+            console.log(`📢 [播报服务] [${this.instanceId}] 收到频道消息: ${chatId} - ${message.message_id}`);
+            
             // 检查是否已处理过
             if (this.processedMessages.has(messageKey)) {
+                console.log(`📢 [播报服务] [${this.instanceId}] 消息已处理过，跳过: ${messageKey}`);
                 return;
             }
             
             // 标记为已处理
             this.processedMessages.add(messageKey);
+            
+            // 检查是否为文字消息
+            if (!message.text) {
+                console.log(`📢 [播报服务] [${this.instanceId}] 非文字消息，跳过处理`);
+                return; // 只处理文字消息
+            }
+            
+            console.log(`📢 [播报服务] [${this.instanceId}] 消息内容: ${message.text.substring(0, 100)}...`);
             
             // 获取播报配置
             const broadcastConfig = await this.getBroadcastConfig(chatId);
@@ -110,25 +160,23 @@ class ChannelBroadcastService {
                 enabled: broadcastConfig.enabled
             });
             
-            // 检查是否为文字消息
-            if (!message.text) {
-                return; // 只处理文字消息
-            }
-            
-            console.log(`📢 [播报服务] [${this.instanceId}] 收到频道消息: ${chatId} - ${message.message_id}`);
-            console.log(`📢 [播报服务] 消息内容: ${message.text.substring(0, 100)}...`);
-            
             // 解析小鸡报告
             const reportData = this.parseChickenReport(message.text);
             if (!reportData) {
-                console.log(`📢 [播报服务] 不是小鸡报告格式，跳过播报`);
+                console.log(`📢 [播报服务] [${this.instanceId}] 不是小鸡报告格式，跳过播报`);
                 return;
             }
             
-            console.log(`📢 [播报服务] 解析到小鸡报告:`, reportData);
+            console.log(`📢 [播报服务] [${this.instanceId}] 解析到小鸡报告:`, reportData);
             
             // 生成播报消息
             const broadcastMessage = await this.generateBroadcastMessage(reportData, message);
+            if (!broadcastMessage) {
+                console.log(`📢 [播报服务] [${this.instanceId}] 生成播报消息失败，跳过播报`);
+                return;
+            }
+            
+            console.log(`📢 [播报服务] [${this.instanceId}] 生成播报消息:`, broadcastMessage);
             
             // 发送播报到目标群组
             await this.sendBroadcastToGroups(broadcastConfig, broadcastMessage);
@@ -136,10 +184,10 @@ class ChannelBroadcastService {
             this.broadcastStats.totalBroadcasts++;
             this.broadcastStats.lastBroadcastTime = new Date();
             
-            console.log(`✅ 播报发送成功`);
+            console.log(`✅ [播报服务] [${this.instanceId}] 播报发送成功`);
             
         } catch (error) {
-            console.error('处理频道播报消息失败:', error);
+            console.error(`❌ [播报服务] [${this.instanceId}] 处理频道播报消息失败:`, error);
             this.broadcastStats.totalErrors++;
         }
     }
@@ -149,34 +197,53 @@ class ChannelBroadcastService {
      */
     parseChickenReport(text) {
         try {
-            // 检查是否包含小鸡报告前缀
-            if (!text.includes(this.reportTemplate.prefix)) {
+            // 🔥 修复: 检查是否包含任何一种小鸡报告前缀
+            let hasValidPrefix = false;
+            for (const prefix of this.reportTemplate.prefixes) {
+                if (text.includes(prefix)) {
+                    hasValidPrefix = true;
+                    break;
+                }
+            }
+            
+            if (!hasValidPrefix) {
+                console.log(`📢 [播报服务] 未找到小鸡报告前缀，跳过播报`);
                 return null;
             }
+            
+            console.log(`📢 [播报服务] 发现小鸡报告前缀，开始解析`);
             
             const lines = text.split('\n');
             const reportData = {};
             
-            // 解析各个字段
+            // 解析各个字段 - 支持多种冒号格式
             for (const line of lines) {
                 const trimmedLine = line.trim();
                 
-                if (trimmedLine.startsWith(this.reportTemplate.fields.warrior)) {
-                    reportData.warrior = trimmedLine.replace(this.reportTemplate.fields.warrior, '').trim();
-                } else if (trimmedLine.startsWith(this.reportTemplate.fields.teacher)) {
-                    reportData.teacher = trimmedLine.replace(this.reportTemplate.fields.teacher, '').trim();
-                } else if (trimmedLine.startsWith(this.reportTemplate.fields.cost)) {
-                    reportData.cost = trimmedLine.replace(this.reportTemplate.fields.cost, '').trim();
-                } else if (trimmedLine.startsWith(this.reportTemplate.fields.location)) {
-                    reportData.location = trimmedLine.replace(this.reportTemplate.fields.location, '').trim();
-                } else if (trimmedLine.startsWith(this.reportTemplate.fields.situation)) {
-                    reportData.situation = trimmedLine.replace(this.reportTemplate.fields.situation, '').trim();
+                // 🔥 修复: 支持中文冒号和英文冒号
+                if (trimmedLine.includes('战士留名')) {
+                    const match = trimmedLine.match(/战士留名[：:]\s*(.+)/);
+                    if (match) reportData.warrior = match[1].trim();
+                } else if (trimmedLine.includes('老师艺名')) {
+                    const match = trimmedLine.match(/老师艺名[：:]\s*(.+)/);
+                    if (match) reportData.teacher = match[1].trim();
+                } else if (trimmedLine.includes('出击费用')) {
+                    const match = trimmedLine.match(/出击费用[：:]\s*(.+)/);
+                    if (match) reportData.cost = match[1].trim();
+                } else if (trimmedLine.includes('战场位置')) {
+                    const match = trimmedLine.match(/战场位置[：:]\s*(.+)/);
+                    if (match) reportData.location = match[1].trim();
+                } else if (trimmedLine.includes('交战情况')) {
+                    const match = trimmedLine.match(/交战情况[：:]\s*(.+)/);
+                    if (match) reportData.situation = match[1].trim();
                 }
             }
             
+            console.log(`📢 [播报服务] 解析结果:`, reportData);
+            
             // 检查必要字段
             if (!reportData.teacher) {
-                console.log(`📢 缺少老师艺名，跳过播报`);
+                console.log(`📢 [播报服务] 缺少老师艺名，跳过播报`);
                 return null;
             }
             
@@ -185,6 +252,7 @@ class ChannelBroadcastService {
                 reportData.warrior = '匿名';
             }
             
+            console.log(`📢 [播报服务] 小鸡报告解析成功:`, reportData);
             return reportData;
             
         } catch (error) {

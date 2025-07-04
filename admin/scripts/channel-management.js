@@ -709,33 +709,49 @@ async function toggleConfig(configName, enabled) {
 
 // 测试配置
 async function testConfig(configName) {
-    console.log('🧪 开始测试配置:', configName);
+    console.log('🧪 [前端] 开始测试配置:', configName);
     
     try {
         showLoading('测试配置中...');
         
         const url = `/api/channel/configs/${encodeURIComponent(configName)}/test`;
-        console.log('📡 测试API请求URL:', url);
+        console.log('📡 [前端] 测试API请求URL:', url);
         
         const response = await apiRequest(url, {
             method: 'POST'
         });
 
-        console.log('📡 测试API响应:', response);
-        console.log('📡 测试API响应类型:', typeof response);
-        console.log('📡 测试API响应键值:', Object.keys(response));
-        console.log('📡 response.success:', response.success);
+        console.log('📡 [前端] 测试API响应:', response);
+        console.log('📡 [前端] 测试API响应类型:', typeof response);
+        console.log('📡 [前端] 测试API响应键值:', Object.keys(response));
+        console.log('📡 [前端] response.success:', response.success);
 
         if (response.success) {
             const results = response.results || response.data;
-            console.log('🧪 测试结果:', results);
+            console.log('🧪 [前端] 测试结果:', results);
             
             let message = '配置测试完成:\n\n';
             
             if (results) {
+                message += `Bot实例: ${results.botInstance ? '✅ 正常' : '❌ 未初始化'}\n`;
                 message += `源频道: ${results.sourceChannel?.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
                 message += `目标频道: ${results.targetChannel?.accessible ? '✅ 可访问' : '❌ 无法访问'}\n`;
                 message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
+                message += `配置有效性: ${results.configValid ? '✅ 配置有效' : '❌ 配置无效'}\n`;
+                
+                if (results.errors && results.errors.length > 0) {
+                    message += '\n错误详情:\n';
+                    results.errors.forEach(error => {
+                        message += `❌ ${error}\n`;
+                    });
+                }
+                
+                if (results.testMessage) {
+                    message += `\n测试消息: ${results.testMessage.success ? '✅ 发送成功' : '❌ 发送失败'}`;
+                    if (results.testMessage.error) {
+                        message += `\n错误: ${results.testMessage.error}`;
+                    }
+                }
             } else {
                 message += '⚠️ 未获取到详细测试结果\n';
             }
@@ -747,12 +763,12 @@ async function testConfig(configName) {
                                 (response.errors && response.errors.length > 0 ? response.errors.join(', ') : null) ||
                                 '测试失败';
             
-            console.error('❌ 测试API返回错误:', errorMessage);
+            console.error('❌ [前端] 测试API返回错误:', errorMessage);
             showError(errorMessage);
         }
         
     } catch (error) {
-        console.error('❌ 测试配置失败:', error);
+        console.error('❌ [前端] 测试配置失败:', error);
         showError(`测试失败: ${error.message}`);
     } finally {
         hideLoading();
@@ -1556,31 +1572,43 @@ console.log('📺 频道管理页面加载完成');
 
 // 测试播报功能
 async function testBroadcast(configName) {
-    console.log('📢 开始测试播报功能:', configName);
+    console.log('📢 [前端] 开始测试播报功能:', configName);
     
     try {
         showLoading('测试播报功能中...');
         
         const url = `/api/channel/configs/${encodeURIComponent(configName)}/test-broadcast`;
-        console.log('📡 测试播报API请求URL:', url);
+        console.log('📡 [前端] 测试播报API请求URL:', url);
         
         const response = await apiRequest(url, {
             method: 'POST'
         });
 
-        console.log('📡 测试播报API响应:', response);
+        console.log('📡 [前端] 测试播报API响应:', response);
 
         if (response.success) {
             const results = response.results || response.data;
-            console.log('📢 播报测试结果:', results);
+            console.log('📢 [前端] 播报测试结果:', results);
             
             let message = '播报功能测试完成:\n\n';
             
             if (results) {
                 message += `目标群组数量: ${results.targetGroupsCount || 0}\n`;
                 message += `群组访问测试: ${results.groupsAccessible || 0}/${results.targetGroupsCount || 0} 可访问\n`;
+                message += `Bot实例: ${results.botInstance ? '✅ 正常' : '❌ 未初始化'}\n`;
                 message += `Bot权限: ${results.permissions?.valid ? '✅ 权限充足' : '❌ 权限不足'}\n`;
                 message += `模板解析: ${results.templateParser?.working ? '✅ 正常' : '❌ 异常'}\n`;
+                
+                if (results.groupDetails && results.groupDetails.length > 0) {
+                    message += '\n群组详情:\n';
+                    results.groupDetails.forEach(group => {
+                        if (group.accessible) {
+                            message += `✅ ${group.groupId}: ${group.title} (${group.type})\n`;
+                        } else {
+                            message += `❌ ${group.groupId}: ${group.error}\n`;
+                        }
+                    });
+                }
                 
                 if (results.testMessage) {
                     message += `\n测试消息已发送到群组: ${results.testMessage.sentTo || '未知'}`;
@@ -1595,12 +1623,12 @@ async function testBroadcast(configName) {
                                 (response.errors && response.errors.length > 0 ? response.errors.join(', ') : null) ||
                                 '播报测试失败';
             
-            console.error('❌ 播报测试API返回错误:', errorMessage);
+            console.error('❌ [前端] 播报测试API返回错误:', errorMessage);
             showError(errorMessage);
         }
         
     } catch (error) {
-        console.error('❌ 测试播报功能失败:', error);
+        console.error('❌ [前端] 测试播报功能失败:', error);
         showError(`播报测试失败: ${error.message}`);
     } finally {
         hideLoading();

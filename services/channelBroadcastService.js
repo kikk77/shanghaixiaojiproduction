@@ -11,7 +11,8 @@ class ChannelBroadcastService {
         
         // 实例标识
         this.instanceId = Math.random().toString(36).substring(2, 8);
-        console.log(`📢 频道播报服务实例创建: ${this.instanceId}`);
+        console.log(`📢 [播报服务] 频道播报服务实例创建: ${this.instanceId}`);
+        console.log(`📢 [播报服务] Bot实例状态:`, !!bot);
         
         // 播报配置
         this.broadcastConfigs = new Map(); // configId -> 播报配置
@@ -53,13 +54,13 @@ class ChannelBroadcastService {
      */
     initializeMessageListeners() {
         if (!this.bot) {
-            console.error('❌ Bot未初始化，无法设置播报监听器');
+            console.error('❌ [播报服务] Bot未初始化，无法设置播报监听器');
             return;
         }
 
         // 检查是否已有其他实例的监听器
         if (global.channelBroadcastListenerActive && global.channelBroadcastListenerActive !== this.instanceId) {
-            console.warn(`⚠️ [${this.instanceId}] 检测到其他活跃的播报监听器: ${global.channelBroadcastListenerActive}`);
+            console.warn(`⚠️ [播报服务] [${this.instanceId}] 检测到其他活跃的播报监听器: ${global.channelBroadcastListenerActive}`);
             return;
         }
         
@@ -68,10 +69,11 @@ class ChannelBroadcastService {
 
         // 监听频道消息
         this.bot.on('channel_post', (msg) => {
+            console.log(`📢 [播报服务] [${this.instanceId}] 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleChannelMessage(msg);
         });
 
-        console.log(`📢 [${this.instanceId}] 频道播报监听器已初始化`);
+        console.log(`📢 [播报服务] [${this.instanceId}] 频道播报监听器已初始化`);
     }
 
     /**
@@ -92,26 +94,38 @@ class ChannelBroadcastService {
             
             // 获取播报配置
             const broadcastConfig = await this.getBroadcastConfig(chatId);
-            if (!broadcastConfig || !broadcastConfig.enabled) {
-                return; // 没有配置或配置已禁用
+            if (!broadcastConfig) {
+                console.log(`📢 [播报服务] [${this.instanceId}] 未找到频道 ${chatId} 的播报配置，跳过处理`);
+                return; // 没有配置
             }
+            
+            if (!broadcastConfig.enabled) {
+                console.log(`📢 [播报服务] [${this.instanceId}] 频道 ${chatId} 的播报配置已禁用，跳过处理`);
+                return; // 配置已禁用
+            }
+            
+            console.log(`📢 [播报服务] [${this.instanceId}] 找到有效播报配置:`, {
+                channelId: chatId,
+                targetGroups: broadcastConfig.targetGroups,
+                enabled: broadcastConfig.enabled
+            });
             
             // 检查是否为文字消息
             if (!message.text) {
                 return; // 只处理文字消息
             }
             
-            console.log(`📢 [${this.instanceId}] 收到频道消息: ${chatId} - ${message.message_id}`);
-            console.log(`📢 消息内容: ${message.text.substring(0, 100)}...`);
+            console.log(`📢 [播报服务] [${this.instanceId}] 收到频道消息: ${chatId} - ${message.message_id}`);
+            console.log(`📢 [播报服务] 消息内容: ${message.text.substring(0, 100)}...`);
             
             // 解析小鸡报告
             const reportData = this.parseChickenReport(message.text);
             if (!reportData) {
-                console.log(`📢 不是小鸡报告格式，跳过播报`);
+                console.log(`📢 [播报服务] 不是小鸡报告格式，跳过播报`);
                 return;
             }
             
-            console.log(`📢 解析到小鸡报告:`, reportData);
+            console.log(`📢 [播报服务] 解析到小鸡报告:`, reportData);
             
             // 生成播报消息
             const broadcastMessage = this.generateBroadcastMessage(reportData, message);

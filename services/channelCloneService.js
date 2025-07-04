@@ -13,7 +13,8 @@ class ChannelCloneService {
         
         // 实例标识，用于调试
         this.instanceId = Math.random().toString(36).substring(2, 8);
-        console.log(`📺 频道克隆服务实例创建: ${this.instanceId}`);
+        console.log(`📺 [克隆服务] 频道克隆服务实例创建: ${this.instanceId}`);
+        console.log(`📺 [克隆服务] Bot实例状态:`, !!bot);
         
         // 速率限制管理器
         this.rateLimiters = new Map(); // configId -> { tokens, lastRefill }
@@ -45,6 +46,8 @@ class ChannelCloneService {
         
         // 初始化消息监听器
         this.initializeMessageListeners();
+        
+        console.log(`📺 [克隆服务] 克隆服务初始化完成，实例ID: ${this.instanceId}`);
         
         // 启动消息去重清理定时器
         this.startMessageCleanup();
@@ -91,13 +94,13 @@ class ChannelCloneService {
 
         // 🔥 关键修复：监听频道消息
         this.bot.on('channel_post', (msg) => {
-            console.log(`📺 [${this.instanceId}] 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
+            console.log(`📺 [克隆服务] [${this.instanceId}] 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleNewMessage(msg);
         });
 
         // 🔥 关键修复：监听频道编辑消息
         this.bot.on('edited_channel_post', (msg) => {
-            console.log(`📺 [${this.instanceId}] 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
+            console.log(`📺 [克隆服务] [${this.instanceId}] 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleEditedMessage(msg);
         });
 
@@ -136,9 +139,24 @@ class ChannelCloneService {
             
             // 查找对应的配置
             const config = await this.configService.getConfigBySourceChannel(chatId);
-            if (!config || !config.settings.enabled) {
-                return; // 没有配置或配置已禁用
+            if (!config) {
+                console.log(`📺 [克隆服务] [${this.instanceId}] 未找到频道 ${chatId} 的配置，跳过处理`);
+                return; // 没有配置
             }
+            
+            if (!config.settings.enabled) {
+                console.log(`📺 [克隆服务] [${this.instanceId}] 频道 ${chatId} 的配置已禁用，跳过处理`);
+                return; // 配置已禁用
+            }
+            
+            console.log(`📺 [克隆服务] [${this.instanceId}] 找到有效配置: ${config.name} (${chatId})`);
+            console.log(`📺 [克隆服务] [${this.instanceId}] 配置详情:`, {
+                name: config.name,
+                sourceChannel: config.sourceChannel?.id,
+                targetChannel: config.targetChannel?.id,
+                broadcastEnabled: config.settings.broadcastEnabled,
+                enabled: config.settings.enabled
+            });
             
             // 改进的去重逻辑：使用消息时间戳和内容哈希进行更准确的去重
             const messageTimestamp = message.date;

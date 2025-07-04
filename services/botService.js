@@ -379,20 +379,32 @@ async function initializeChannelServices() {
         
         // 初始化频道播报服务
         channelBroadcastService = new ChannelBroadcastService(bot);
-        console.log('📢 频道播报服务已初始化');
+        console.log('📢 [服务初始化] 频道播报服务已初始化');
+        
+        // 验证所有服务是否正确初始化
+        console.log('🔍 [服务初始化] 验证服务状态:');
+        console.log('   - 配置服务:', !!channelConfigService);
+        console.log('   - 克隆服务:', !!channelCloneService);
+        console.log('   - 队列服务:', !!messageQueueService);
+        console.log('   - 过滤服务:', !!contentFilterService);
+        console.log('   - 播报服务:', !!channelBroadcastService);
+        console.log('   - Bot实例:', !!bot);
 
         // 获取启用的配置数量
         const enabledConfigs = await channelConfigService.getEnabledConfigs();
         
-        console.log(`✅ 频道克隆服务初始化完成`);
-        console.log(`📺 已启用 ${enabledConfigs.length} 个频道配置`);
+        console.log(`✅ [服务初始化] 频道克隆服务初始化完成`);
+        console.log(`📺 [服务初始化] 已启用 ${enabledConfigs.length} 个频道配置`);
         
         // 记录服务状态
         if (enabledConfigs.length > 0) {
-            console.log('📺 频道克隆服务正在监听以下配置:');
+            console.log('📺 [服务初始化] 频道克隆服务正在监听以下配置:');
             for (const config of enabledConfigs) {
-                console.log(`   - ${config.name}: ${config.sourceChannel.id} -> ${config.targetChannel.id}`);
+                const configType = config.settings.broadcastEnabled ? '播报' : '克隆';
+                console.log(`   - ${config.name} (${configType}): ${config.sourceChannel.id} -> ${config.targetChannel.id}`);
             }
+        } else {
+            console.log('⚠️ [服务初始化] 没有启用的频道配置');
         }
 
     } catch (error) {

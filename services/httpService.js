@@ -228,19 +228,38 @@ function handleWebhookRequest(req, res) {
 
 // 频道管理API处理函数
 async function handleChannelApiRequest(pathname, method, data) {
+    console.log(`📺 [API] 频道API请求: ${method} ${pathname}`);
+    console.log(`📺 [API] 请求数据:`, data);
+    
     try {
         // 获取频道服务实例
         const bs = getBotService();
         if (!bs) {
+            console.error('❌ [API] Bot服务未初始化');
             return { success: false, error: 'Bot服务未初始化' };
         }
+        console.log('✅ [API] Bot服务已获取');
 
         const channelServices = bs.getChannelServices();
+        if (!channelServices) {
+            console.error('❌ [API] 频道服务未初始化');
+            return { success: false, error: '频道服务未初始化' };
+        }
+        
         if (!channelServices.configService) {
+            console.error('❌ [API] 频道配置服务未初始化');
             return { success: false, error: '频道克隆服务未初始化' };
         }
+        
+        console.log('✅ [API] 频道服务状态:', {
+            configService: !!channelServices.configService,
+            cloneService: !!channelServices.cloneService,
+            queueService: !!channelServices.queueService,
+            filterService: !!channelServices.filterService,
+            broadcastService: !!channelServices.broadcastService
+        });
 
-        const { configService, cloneService, queueService, filterService } = channelServices;
+        const { configService, cloneService, queueService, filterService, broadcastService } = channelServices;
 
         // 路由匹配
         const pathParts = pathname.split('/');
@@ -315,43 +334,70 @@ async function handleChannelApiRequest(pathname, method, data) {
             if (method === 'POST' && configId && action === 'test') {
                 // 测试播报配置: POST /api/channel/broadcast/configs/{id}/test
                 const decodedConfigId = decodeURIComponent(configId);
-                console.log('📢 处理播报配置测试请求:', decodedConfigId);
+                console.log('📢 [API] 处理播报配置测试请求:', decodedConfigId);
                 
                 const config = await configService.getConfig(decodedConfigId);
+                console.log('📢 [API] 获取到的配置:', config);
 
                 if (!config || !config.settings.broadcastEnabled) {
+                    console.error('❌ [API] 播报配置不存在或未启用播报功能');
                     return {
                         success: false,
-                        error: '播报配置不存在'
+                        error: '播报配置不存在或未启用播报功能'
                     };
                 }
 
                 const targetGroups = config.settings.broadcastTargetGroups || [];
+                console.log('📢 [API] 目标群组列表:', targetGroups);
+                
                 let groupsAccessible = 0;
                 let testResults = {
                     targetGroupsCount: targetGroups.length,
                     groupsAccessible: 0,
                     permissions: { valid: false },
-                    templateParser: { working: true }
+                    templateParser: { working: true },
+                    botInstance: false,
+                    groupDetails: []
                 };
 
-                // 测试每个群组的访问权限
+                // 测试Bot实例
                 const bot = bs.getBotInstance();
+                testResults.botInstance = !!bot;
+                console.log('📢 [API] Bot实例状态:', !!bot);
+
+                // 测试每个群组的访问权限
                 for (const groupId of targetGroups) {
+                    console.log(`📢 [API] 测试群组访问: ${groupId}`);
                     try {
                         if (bot) {
                             const chat = await bot.getChat(groupId);
                             if (chat) {
                                 groupsAccessible++;
+                                testResults.groupDetails.push({
+                                    groupId,
+                                    accessible: true,
+                                    title: chat.title,
+                                    type: chat.type
+                                });
+                                console.log(`✅ [API] 群组 ${groupId} 可访问: ${chat.title}`);
                             }
+                        } else {
+                            console.error(`❌ [API] Bot实例不存在，无法测试群组 ${groupId}`);
                         }
                     } catch (error) {
-                        console.log(`群组 ${groupId} 访问测试失败:`, error.message);
+                        console.error(`❌ [API] 群组 ${groupId} 访问测试失败:`, error.message);
+                        testResults.groupDetails.push({
+                            groupId,
+                            accessible: false,
+                            error: error.message
+                        });
                     }
                 }
 
                 testResults.groupsAccessible = groupsAccessible;
                 testResults.permissions.valid = groupsAccessible > 0;
+                
+                console.log('📢 [API] 播报测试结果:', testResults);
 
                 return {
                     success: true,
@@ -374,7 +420,12 @@ async function handleChannelApiRequest(pathname, method, data) {
 
             if (action === 'test' && method === 'POST') {
                 // 测试配置
-                const result = await configService.testConfig(id, bs.getBotInstance());
+                console.log(`📺 [API] 测试配置请求: ${id}`);
+                const bot = bs.getBotInstance();
+                console.log('📺 [API] Bot实例状态:', !!bot);
+                
+                const result = await configService.testConfig(id, bot);
+                console.log('📺 [API] 配置测试结果:', result);
                 return result;
             }
 
@@ -587,7 +638,10 @@ async function handleChannelApiRequest(pathname, method, data) {
 
             if (method === 'GET' && id === 'status') {
                 // 获取服务状态
+                console.log('📺 [API] 获取服务状态请求');
+                
                 const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
+                console.log('📺 [API] 频道克隆功能启用状态:', channelCloneEnabled);
                 
                 if (!channelCloneEnabled) {
                     return { 
@@ -597,13 +651,32 @@ async function handleChannelApiRequest(pathname, method, data) {
                     };
                 }
                 
+                const bot = bs.getBotInstance();
                 const queueStats = queueService ? await queueService.getQueueStats() : { isRunning: false };
                 const cloneStats = cloneService ? cloneService.getCloneStats() : {};
+                const broadcastStats = broadcastService ? broadcastService.getBroadcastStats() : {};
+                
+                console.log('📺 [API] 服务状态详情:', {
+                    bot: !!bot,
+                    configService: !!configService,
+                    cloneService: !!cloneService,
+                    queueService: !!queueService,
+                    broadcastService: !!broadcastService,
+                    queueRunning: queueStats.isRunning
+                });
                 
                 return { 
                     success: true, 
                     enabled: true,
                     data: {
+                        botInstance: !!bot,
+                        services: {
+                            configService: !!configService,
+                            cloneService: !!cloneService,
+                            queueService: !!queueService,
+                            filterService: !!filterService,
+                            broadcastService: !!broadcastService
+                        },
                         queueService: {
                             running: queueStats.isRunning,
                             pendingTasks: queueStats.pendingTasks || 0
@@ -611,7 +684,14 @@ async function handleChannelApiRequest(pathname, method, data) {
                         cloneService: {
                             totalCloned: cloneStats.totalCloned || 0,
                             totalErrors: cloneStats.totalErrors || 0,
-                            activeConfigs: cloneStats.activeConfigs || 0
+                            activeConfigs: cloneStats.activeConfigs || 0,
+                            instanceId: cloneStats.instanceId || null
+                        },
+                        broadcastService: {
+                            totalBroadcasts: broadcastStats.totalBroadcasts || 0,
+                            totalErrors: broadcastStats.totalErrors || 0,
+                            lastBroadcastTime: broadcastStats.lastBroadcastTime || null,
+                            instanceId: broadcastStats.instanceId || null
                         }
                     }
                 };

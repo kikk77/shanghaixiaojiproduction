@@ -2330,12 +2330,14 @@
 
         // 更新下拉选择框
         function updateSelects() {
-            // 更新商家选择框
+            // 更新商家选择框 - 只显示活跃的商家
             const merchantSelects = document.querySelectorAll('#buttonMerchant, #testMerchant');
             merchantSelects.forEach(select => {
                 const defaultOption = select.id === 'testMerchant' ? '<option value="">请选择商家</option>' : '<option value="">选择商家</option>';
+                // 过滤只显示活跃状态的商家
+                const activeMerchants = merchants.filter(m => m.status === 'active');
                 select.innerHTML = defaultOption + 
-                    merchants.map(m => `<option value="${m.id}">${m.teacher_name || '未知商家'}</option>`).join('');
+                    activeMerchants.map(m => `<option value="${m.id}">${m.teacher_name || '未知商家'}</option>`).join('');
             });
 
             // 更新模板选择框
@@ -2657,7 +2659,10 @@
             
             console.log('🔍 当前商家数据:', merchants);
             
-            merchants.forEach(merchant => {
+            // 只显示活跃状态的商家
+            const activeMerchants = merchants.filter(m => m.status === 'active');
+            
+            activeMerchants.forEach(merchant => {
                 // 放宽筛选条件：只要有商家名称就可以选择
                 if (merchant.teacher_name) {
                     const option = document.createElement('option');
@@ -2672,12 +2677,12 @@
             if (select.children.length === 1) {
                 const option = document.createElement('option');
                 option.value = '';
-                option.textContent = '暂无商家数据，请检查商家管理页面';
+                option.textContent = '暂无活跃商家数据，请检查商家管理页面';
                 option.disabled = true;
                 select.appendChild(option);
-                console.log('⚠️ 没有找到可用商家');
+                console.log('⚠️ 没有找到可用的活跃商家');
             } else {
-                console.log(`✅ 共添加了 ${select.children.length - 1} 个商家选项`);
+                console.log(`✅ 共添加了 ${select.children.length - 1} 个活跃商家选项`);
             }
             
             // 恢复之前选中的值

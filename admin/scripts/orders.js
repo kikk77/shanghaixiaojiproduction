@@ -1325,7 +1325,7 @@ class OptimizedOrdersManager {
     }
 
     async fetchMerchants() {
-        return await this.fetchWithCache('/api/merchants');
+        return await this.fetchWithCache('/api/merchants?activeOnly=true');
     }
 
     populateFilters(regions, merchants) {

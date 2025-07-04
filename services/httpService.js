@@ -1113,7 +1113,15 @@ async function processApiRequest(pathname, method, data) {
     // 商家管理API
     if (pathname === '/api/merchants') {
         if (method === 'GET') {
-            return { success: true, data: dbOperations.getAllMerchants() };
+            // 检查是否只需要活跃商家
+            const url = new URL(`http://localhost${pathname}?${req.url.split('?')[1] || ''}`);
+            const activeOnly = url.searchParams.get('activeOnly') === 'true';
+            
+            if (activeOnly) {
+                return { success: true, data: dbOperations.getActiveMerchants() };
+            } else {
+                return { success: true, data: dbOperations.getAllMerchants() };
+            }
         } else if (method === 'POST') {
             try {
                 if (!data.teacher_name || !data.username) {
@@ -1488,7 +1496,7 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
                 }
                 
                 // 添加"返回榜单"按钮
-                buttons.push([{ text: '返回榜单', url: `https://t.me/${botUsername}?start=xiaoji233` }]);
+                buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]);
                 
                 sendOptions.reply_markup = {
                     inline_keyboard: buttons

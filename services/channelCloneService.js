@@ -137,6 +137,19 @@ class ChannelCloneService {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
             
+            // 🔥 修复Bug2: 检查是否为Bot自己发送的消息，避免无限循环
+            if (message.from && message.from.id === this.bot.options.botId) {
+                console.log(`📺 [${this.instanceId}] 跳过Bot自己发送的消息: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
+            // 🔥 修复Bug2: 检查消息是否来自于克隆目标频道，避免循环克隆
+            const isFromTargetChannel = await this.isMessageFromTargetChannel(chatId);
+            if (isFromTargetChannel) {
+                console.log(`📺 [${this.instanceId}] 跳过来自目标频道的消息，避免循环克隆: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
             // 查找对应的配置
             const config = await this.configService.getConfigBySourceChannel(chatId);
             if (!config) {
@@ -147,6 +160,12 @@ class ChannelCloneService {
             if (!config.settings.enabled) {
                 console.log(`📺 [克隆服务] [${this.instanceId}] 频道 ${chatId} 的配置已禁用，跳过处理`);
                 return; // 配置已禁用
+            }
+            
+            // 🔥 修复Bug2: 检查是否为播报配置，播报配置不进行克隆
+            if (config.settings.broadcastEnabled) {
+                console.log(`📺 [${this.instanceId}] 跳过播报配置的消息，播报由播报服务处理: ${chatId} - ${message.message_id}`);
+                return;
             }
             
             console.log(`📺 [克隆服务] [${this.instanceId}] 找到有效配置: ${config.name} (${chatId})`);
@@ -269,6 +288,29 @@ class ChannelCloneService {
             }
         } catch (error) {
             console.error('处理新消息失败:', error);
+        }
+    }
+
+    /**
+     * 检查消息是否来自目标频道（避免循环克隆）
+     */
+    async isMessageFromTargetChannel(chatId) {
+        try {
+            const allConfigs = await this.configService.getAllConfigs();
+            
+            // 检查当前频道是否是任何配置的目标频道
+            for (const config of allConfigs) {
+                if (config.settings.enabled && 
+                    !config.settings.broadcastEnabled && 
+                    config.targetChannel.id === chatId) {
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('检查目标频道失败:', error);
+            return false;
         }
     }
 

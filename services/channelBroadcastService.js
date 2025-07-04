@@ -339,12 +339,22 @@ class ChannelBroadcastService {
             
             for (const groupId of targetGroups) {
                 try {
-                    await this.bot.sendMessage(groupId, broadcastMessage, {
+                    const sentMessage = await this.bot.sendMessage(groupId, broadcastMessage, {
                         parse_mode: 'HTML',
                         disable_web_page_preview: true
                     });
                     
-                    console.log(`📢 播报已发送到群组: ${groupId}`);
+                    console.log(`📢 播报已发送到群组: ${groupId}, message_id: ${sentMessage.message_id}`);
+                    
+                    // 🔥 修复Bug1: 自动置顶播报消息
+                    try {
+                        console.log(`📌 正在置顶播报消息...`);
+                        await this.bot.pinChatMessage(groupId, sentMessage.message_id);
+                        console.log(`📌 播报消息已置顶: ${sentMessage.message_id}`);
+                    } catch (pinError) {
+                        console.log(`⚠️ 置顶消息失败: ${pinError.message}`);
+                        // 置顶失败不影响播报成功
+                    }
                     
                 } catch (error) {
                     console.error(`发送播报到群组 ${groupId} 失败:`, error);

@@ -526,7 +526,7 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>艺名：</label>
+                                    <label>艺名：#</label>
                                     <input type="text" id="editTeacherName" required placeholder="请输入艺名">
                                 </div>
                             </div>
@@ -1992,7 +1992,7 @@
             const skillKiss = document.getElementById('editKiss').value || '未填写';
             const imageData = window.currentMerchantImageData;
 
-            const preview = `地区：#${regionName}              艺名：${teacherName}
+            const preview = `地区：#${regionName}              艺名：#${teacherName}
 优点：${advantages}
 缺点：${disadvantages}
 价格：${price1}p              ${price2}pp
@@ -2709,7 +2709,7 @@
             const merchant = merchants.find(m => m.id == merchantId); // 已经使用松散比较
             if (merchant) {
                 // 使用与商家管理页面相同的格式
-                const previewText = `地区：#${merchant.region_name || 'xx'}              艺名：${merchant.teacher_name || '未填写'}
+                const previewText = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp

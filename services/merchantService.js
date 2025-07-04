@@ -241,7 +241,7 @@ class MerchantService {
             const region = dbOperations.getRegionById(merchant.region_id);
             const regionName = region ? region.name : 'xx';
             
-            return `地区：#${regionName}              艺名：${merchant.teacher_name || '未填写'}
+            return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp

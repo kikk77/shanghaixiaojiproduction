@@ -1536,7 +1536,7 @@ async function processApiRequest(pathname, method, data) {
                 }
 
                 // 构建商家信息消息，使用正确的数据库字段名
-                messageContent = `地区：#${merchant.region_name || 'xx'}              艺名：${merchant.teacher_name || '未填写'}
+                messageContent = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp

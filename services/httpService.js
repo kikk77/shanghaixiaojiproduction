@@ -875,7 +875,11 @@ async function processApiRequest(pathname, method, data) {
             const rawUsername = order.user_username;
             const username = rawUsername ? 
                 (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`) : 
-                '未设置用户名';
+                '@未设置用户名';
+            
+            // 获取用户名称 - 优先使用订单中的用户名称
+            const userFullName = order.user_name || '未设置用户名称';
+            
             const teacherName = merchant.teacher_name || '未知老师';
 
             // 构建播报消息
@@ -886,7 +890,7 @@ async function processApiRequest(pathname, method, data) {
             } else {
                 // 使用默认格式
                 if (broadcastType === 'real') {
-                    broadcastMessage = `🎉 恭喜小鸡的勇士：用户（${username}）出击了 #${teacherName} 老师！
+                    broadcastMessage = `🎉 恭喜小鸡的勇士：${userFullName}（${username}）出击了 #${teacherName} 老师！
 🐤 小鸡出征！咯咯哒咯咯哒～`;
                 } else {
                     broadcastMessage = `🎉 恭喜小鸡的勇士：隐藏用户 出击了 #${teacherName} 老师！

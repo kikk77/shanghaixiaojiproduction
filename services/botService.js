@@ -3691,12 +3691,18 @@ async function handleRealBroadcast(userId, evaluationId, query) {
         const rawUsername = query.from.username;
         const username = rawUsername ? 
             (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`) : 
-            '未设置用户名';
+            '@未设置用户名';
+        
+        // 获取用户名称 - 优先使用真实姓名
+        const userFirstName = query.from.first_name || '';
+        const userLastName = query.from.last_name || '';
+        const userFullName = `${userFirstName} ${userLastName}`.trim() || '未设置用户名称';
+        
         const teacherName = merchant.teacher_name || '未知老师';
-        console.log(`用户信息: ${username}, 老师名称: ${teacherName}`);
+        console.log(`用户信息: ${username}, 用户名称: ${userFullName}, 老师名称: ${teacherName}`);
 
         // 构建实名播报消息
-        const broadcastMessage = `🎉 恭喜小鸡的勇士：用户（${username}）出击了 #${teacherName} 老师！
+        const broadcastMessage = `🎉 恭喜小鸡的勇士：${userFullName}（${username}）出击了 #${teacherName} 老师！
 🐤 小鸡出征！咯咯哒咯咯哒～`;
         console.log(`播报消息内容:`, broadcastMessage);
 

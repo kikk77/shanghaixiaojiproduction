@@ -1,0 +1,179 @@
+{
+  "bot_id": 609517172,
+  "data": {
+    "notes": {
+      "notes": [
+        {
+          "data_id": "",
+          "name": "aracerids",
+          "text": "🧑‍🚀*群友名称:* Arace Rids\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#笨笨\n||https://t.me/xiaoji369/9||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "brucep",
+          "text": "🧑‍🚀*群友名称:* Bruce P\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#笨笨\n||https://t.me/xiaoji369/42||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "bx",
+          "text": "🧑‍🚀*群友名称:* bx\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#夏染\n||https://t.me/xiaoji369/12||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "chkoch",
+          "text": "🧑‍🚀*群友名称:* chkoch\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#77\n||https://t.me/xiaoji369/15||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "ggl",
+          "text": "🧑‍🚀*群友名称:* ggl\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#糖糖\n||https://t.me/xiaoji369/39||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "haobug",
+          "text": "🧑‍🚀*群友名称:* haobug\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#可心\n||https://t.me/xiaoji369/27||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "kawasaki",
+          "text": "🧑‍🚀*群友名称:* Kawasaki AOI\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#瑞思\n||https://t.me/xiaoji369/49||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "kevinluck",
+          "text": "🧑‍🚀*群友名称:* KevinLuck\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#亚轩\n||https://t.me/xiaoji369/43||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "kk",
+          "text": "🧑‍🚀*群友名称:* kk\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#瑞思 \n||https://t.me/xiaoji369/50||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "lzh",
+          "text": "🧑‍🚀*群友名称:* l zh\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#小不点\n||https://t.me/xiaoji369/14||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "markselby",
+          "text": "🧑‍🚀*群友名称:* Mark Selby\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#林多美\n||https://t.me/xiaoji369/47||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "mensewu",
+          "text": "🧑‍🚀*群友名称:* MenseWu\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#可心\n||https://t.me/xiaoji369/26||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "mml",
+          "text": "🧑‍🚀*群友名称:* mml\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#亚轩\n||https://t.me/xiaoji369/46||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "sks",
+          "text": "🧑‍🚀*群友名称:* SKS\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#可心\n||https://t.me/xiaoji369/30||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "vg",
+          "text": "🧑‍🚀*群友名称:* VG\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#亚轩\n||https://t.me/xiaoji369/41||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "yu",
+          "text": "🧑‍🚀*群友名称:* yu\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#夏染\n||https://t.me/xiaoji369/51||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "上海匈奴人",
+          "text": "🧑‍🚀*群友名称:* 上海匈奴人\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#小不点\n||https://t.me/xiaoji369/10||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "不留名的帅哥",
+          "text": "🧑‍🚀*群友名称:* 不留名的帅哥\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#lemon\n||https://t.me/xiaoji369/48||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "兜兜",
+          "text": "🧑‍🚀*群友名称:* 兜兜\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#糖糖\n||https://t.me/xiaoji369/40||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "包子",
+          "text": "🧑‍🚀*群友名称:* 包子\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:* \n\n#小懒\n||https://t.me/xiaoji369/11||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "卡比兽",
+          "text": "🧑‍🚀*群友名称:* 卡比兽\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#lemon \n||https://t.me/xiaoji369/54||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "小小新",
+          "text": "🧑‍🚀*群友名称:* 小小新\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#小U\n||https://t.me/xiaoji369/25||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "小山",
+          "text": "🧑‍🚀群友名称: 小山\n⭐等级信息: Lv.4\n⚔️出击次数: 4次\n📜收录资料: \n\n#亚轩\n||https://t.me/xiaoji369/31||\n二刷\n||https://t.me/xiaoji369/34||\n\n#洛伊\n||https://t.me/xiaoji369/32||\n\n#小懒\n||https://t.me/xiaoji369/33||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "小怪兽",
+          "text": "🧑‍🚀*群友名称:* 小怪兽\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#糖糖\n||https://t.me/xiaoji369/38||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "汽水",
+          "text": "🧑‍🚀*群友名称:* 汽水\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#笨笨\n||https://t.me/xiaoji369/35||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "稳王",
+          "text": "🧑‍🚀*群友名称:* 稳王\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#笨笨\n||https://t.me/xiaoji369/52||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "赵子龙",
+          "text": "🧑‍🚀*群友名称:* 赵子龙\n⭐*等级信息:* Lv.1\n⚔️*出击次数:* 1次\n📜*收录资料:*\n\n#小不点 \n||https://t.me/xiaoji369/53||",
+          "type": 0
+        },
+        {
+          "data_id": "",
+          "name": "钢铁侠",
+          "text": "🧑‍🚀*群友名称:* @gangtie2\n⭐*等级信息:* Lv.8\n⚔️*出击次数:* 8次\n📜*收录资料:* \n\n#李颖莎\n||https://t.me/xiaoji369/17||\n\n#小语\n||https://t.me/xiaoji369/18||\n\n#小雅\n||https://t.me/xiaoji369/19||\n\n#金秋\n||https://t.me/xiaoji369/20||\n\n#洛伊\n||https://t.me/xiaoji369/21||\n\n#薇薇\n||https://t.me/xiaoji369/22||\n\n#猫老师\n||https://t.me/xiaoji369/23||\n\n#亚轩\n||https://t.me/xiaoji369/24||",
+          "type": 0
+        }
+      ],
+      "private_notes": true
+    }
+  },
+  "version": 2
+}

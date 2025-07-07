@@ -219,37 +219,28 @@
         .badge-rarity-legendary { background: #ffcc80; }
         
         /* 模态框 */
-        .modal, [class*="modal"], .popup, .dialog, .overlay {
+        .modal {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            bottom: 0;
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
             overflow-y: auto;
-            text-align: center;
         }
         
-        .modal:before, [class*="modal"]:before, .popup:before, .dialog:before, .overlay:before {
-            content: '';
-            display: inline-block;
-            height: 100%;
-            vertical-align: middle;
-        }
-        
-        .modal-content, [class*="modal"] > div, .popup > div, .dialog > div, .overlay > div {
-            display: inline-block;
-            vertical-align: middle;
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             background: white;
             padding: 25px;
             width: 90%;
             max-width: 500px;
             border-radius: 8px;
-            position: relative;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             text-align: left;
         }

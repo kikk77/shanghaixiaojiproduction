@@ -76,7 +76,15 @@ class LevelDatabaseManager {
     }
     
     createTables() {
-        // 基于版本A的6表设计
+        // 检查表结构是否已经存在并且是新版本
+        const hasNewStructure = this.checkTableStructure();
+        
+        if (hasNewStructure) {
+            console.log('✅ 数据库表结构已是简化版本，跳过创建');
+            return;
+        }
+        
+        // 简化版本的表设计（以用户为核心）
         const tables = [
             // 1. 等级系统元信息表
             `CREATE TABLE IF NOT EXISTS level_meta (
@@ -87,11 +95,9 @@ class LevelDatabaseManager {
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))
             )`,
             
-            // 2. 用户等级数据表（核心表）
+            // 2. 用户等级数据表（简化：以用户ID为主键）
             `CREATE TABLE IF NOT EXISTS user_levels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                group_id TEXT NOT NULL DEFAULT 'default',
+                user_id INTEGER PRIMARY KEY,
                 level INTEGER DEFAULT 1,
                 total_exp INTEGER DEFAULT 0,
                 available_points INTEGER DEFAULT 0,
@@ -105,15 +111,14 @@ class LevelDatabaseManager {
                 display_name TEXT,
                 last_milestone_points INTEGER DEFAULT 0,
                 created_at INTEGER DEFAULT (strftime('%s', 'now')),
-                updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-                UNIQUE(user_id, group_id)
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
             )`,
             
-            // 3. 积分变更日志表
+            // 3. 积分变更日志表（保留source_group_id用于记录来源）
             `CREATE TABLE IF NOT EXISTS points_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                group_id TEXT NOT NULL DEFAULT 'default',
+                source_group_id TEXT,
                 action_type TEXT NOT NULL,
                 exp_change INTEGER DEFAULT 0,
                 points_change INTEGER DEFAULT 0,
@@ -125,7 +130,7 @@ class LevelDatabaseManager {
                 timestamp INTEGER DEFAULT (strftime('%s', 'now'))
             )`,
             
-            // 4. 群组配置表
+            // 4. 群组配置表（保留，用于播报设置和奖励规则）
             `CREATE TABLE IF NOT EXISTS group_configs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 group_id TEXT NOT NULL UNIQUE,
@@ -139,11 +144,11 @@ class LevelDatabaseManager {
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))
             )`,
             
-            // 5. 勋章定义表
+            // 5. 勋章定义表（保留group_id用于不同群组的勋章配置）
             `CREATE TABLE IF NOT EXISTS badge_definitions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 badge_id TEXT NOT NULL,
-                group_id TEXT NOT NULL DEFAULT 'default',
+                group_id TEXT NOT NULL DEFAULT 'global',
                 badge_name TEXT NOT NULL,
                 badge_emoji TEXT DEFAULT '🏆',
                 badge_desc TEXT,
@@ -155,25 +160,25 @@ class LevelDatabaseManager {
                 UNIQUE(badge_id, group_id)
             )`,
             
-            // 6. 勋章获得记录表
+            // 6. 勋章获得记录表（简化：不依赖群组）
             `CREATE TABLE IF NOT EXISTS user_badges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                group_id TEXT NOT NULL DEFAULT 'default',
                 badge_id TEXT NOT NULL,
+                source_group_id TEXT,
                 awarded_by TEXT DEFAULT 'system',
                 awarded_reason TEXT,
-                awarded_at INTEGER DEFAULT (strftime('%s', 'now'))
+                awarded_at INTEGER DEFAULT (strftime('%s', 'now')),
+                UNIQUE(user_id, badge_id)
             )`
         ];
         
-        // 创建索引
+        // 简化版本的索引
         const indexes = [
-            'CREATE INDEX IF NOT EXISTS idx_user_levels_user_group ON user_levels(user_id, group_id)',
             'CREATE INDEX IF NOT EXISTS idx_user_levels_level ON user_levels(level DESC)',
             'CREATE INDEX IF NOT EXISTS idx_user_levels_points ON user_levels(available_points DESC)',
             'CREATE INDEX IF NOT EXISTS idx_points_log_user_time ON points_log(user_id, timestamp DESC)',
-            'CREATE INDEX IF NOT EXISTS idx_user_badges_user_group ON user_badges(user_id, group_id)',
+            'CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id)',
             'CREATE INDEX IF NOT EXISTS idx_group_configs_group_id ON group_configs(group_id)',
             'CREATE INDEX IF NOT EXISTS idx_badge_definitions_group ON badge_definitions(group_id, status)'
         ];
@@ -196,6 +201,30 @@ class LevelDatabaseManager {
         });
         
         console.log('✅ 等级系统数据库表结构创建完成');
+    }
+    
+    // 检查表结构是否为新版本（简化版本）
+    checkTableStructure() {
+        try {
+            // 检查user_levels表是否为新结构（user_id为主键，没有group_id）
+            const tableInfo = this.db.prepare("PRAGMA table_info(user_levels)").all();
+            
+            if (tableInfo.length === 0) {
+                // 表不存在，需要创建
+                return false;
+            }
+            
+            // 检查是否有group_id列
+            const hasGroupId = tableInfo.some(col => col.name === 'group_id');
+            const userIdIsPrimary = tableInfo.some(col => col.name === 'user_id' && col.pk === 1);
+            
+            // 新结构应该是：user_id为主键且没有group_id列
+            return userIdIsPrimary && !hasGroupId;
+            
+        } catch (error) {
+            console.error('检查表结构失败:', error);
+            return false;
+        }
     }
     
     // 获取数据库实例

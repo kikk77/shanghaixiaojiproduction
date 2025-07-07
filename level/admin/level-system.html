@@ -703,6 +703,25 @@
     <!-- 消息容器 -->
     <div id="messageContainer"></div>
     
+    <!-- 管理员密码验证模态框 -->
+    <div id="adminPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('adminPasswordModal')">&times;</span>
+            <h2>🔐 管理员密码验证</h2>
+            <p id="passwordPromptText">此操作需要管理员密码验证，请输入密码：</p>
+            
+            <div class="form-group">
+                <label>管理员密码：</label>
+                <input type="password" id="adminPasswordInput" placeholder="请输入管理员密码">
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeModal('adminPasswordModal')">取消</button>
+                <button class="btn btn-primary" onclick="confirmAdminAction()">确认</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="/level/admin/level-system.js"></script>
 </body>
 </html> 

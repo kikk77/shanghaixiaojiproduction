@@ -2405,8 +2405,72 @@ async function handleLevelApiRequest(pathname, method, data) {
         
         const pathParts = pathname.split('/');
         const endpoint = pathParts[3]; // /api/level/{endpoint}
-        const id = pathParts[4]; // /api/level/{endpoint}/{id}
+        const id = pathParts[4];
         
+        // 验证管理员密码的辅助函数
+        function verifyAdminPassword(password) {
+            if (!password) {
+                return false;
+            }
+            try {
+                const { verifyAdminPassword } = require('./merchantService');
+                return verifyAdminPassword(password);
+            } catch (error) {
+                console.error('验证管理员密码失败:', error);
+                return false;
+            }
+        }
+        
+        // 需要管理员密码验证的破坏性操作
+        const destructiveOperations = [
+            // 删除操作
+            { endpoint: 'groups', method: 'DELETE' },
+            { endpoint: 'badges', method: 'DELETE' },
+            { endpoint: 'users', method: 'DELETE' },
+            // 批量删除操作
+            { endpoint: 'badges', method: 'POST', action: 'delete' },
+            { endpoint: 'levels', method: 'DELETE' },
+            // 重置操作
+            { endpoint: 'config', method: 'POST', action: 'reset' },
+            { endpoint: 'rewards', method: 'POST', action: 'reset' },
+            // 数据清理操作
+            { endpoint: 'data', method: 'POST', action: 'clear' },
+            { endpoint: 'migrate', method: 'POST' }
+        ];
+        
+        // 检查是否为破坏性操作
+        const isDestructive = destructiveOperations.some(op => {
+            if (op.endpoint === endpoint && op.method === method) {
+                if (op.action) {
+                    return data.action === op.action;
+                }
+                return true;
+            }
+            return false;
+        });
+        
+        // 对破坏性操作进行密码验证
+        if (isDestructive) {
+            const adminPassword = data.adminPassword;
+            if (!adminPassword) {
+                return { 
+                    success: false, 
+                    error: '此操作需要管理员密码验证',
+                    requirePassword: true 
+                };
+            }
+            
+            if (!verifyAdminPassword(adminPassword)) {
+                return { 
+                    success: false, 
+                    error: '管理员密码错误',
+                    requirePassword: true 
+                };
+            }
+            
+            console.log(`🔐 管理员密码验证通过，执行破坏性操作: ${method} ${pathname}`);
+        }
+
         // 用户等级信息API
         if (endpoint === 'users' && method === 'GET') {
             if (id) {
@@ -2686,11 +2750,55 @@ async function handleLevelApiRequest(pathname, method, data) {
                     return { success: false, error: '配置更新失败: ' + error.message };
                 }
             } else if (method === 'DELETE' && id) {
-                // 删除群组配置
+                // 删除群组配置（破坏性操作）
                 try {
-                    db.prepare('DELETE FROM group_configs WHERE group_id = ?').run(id);
-                    return { success: true, message: '群组配置删除成功' };
+                    const db = levelDbManager.getDatabase();
+                    if (!db) {
+                        return { success: false, error: '数据库不可用' };
+                    }
+                    
+                    // 开始事务
+                    db.prepare('BEGIN TRANSACTION').run();
+                    
+                    try {
+                        // 1. 删除群组配置
+                        const deleteConfigResult = db.prepare('DELETE FROM group_configs WHERE group_id = ?').run(id);
+                        
+                        // 2. 删除群组相关的用户等级数据
+                        const deleteUsersResult = db.prepare('DELETE FROM user_levels WHERE group_id = ?').run(id);
+                        
+                        // 3. 删除群组相关的用户勋章数据
+                        const deleteBadgesResult = db.prepare('DELETE FROM user_badges WHERE group_id = ?').run(id);
+                        
+                        // 4. 删除群组专属的勋章定义
+                        const deleteBadgeDefsResult = db.prepare('DELETE FROM badge_definitions WHERE group_id = ?').run(id);
+                        
+                        // 提交事务
+                        db.prepare('COMMIT').run();
+                        
+                        console.log(`🗑️ 群组删除完成: ${id}`);
+                        console.log(`   - 配置删除: ${deleteConfigResult.changes} 条`);
+                        console.log(`   - 用户数据删除: ${deleteUsersResult.changes} 条`);
+                        console.log(`   - 用户勋章删除: ${deleteBadgesResult.changes} 条`);
+                        console.log(`   - 勋章定义删除: ${deleteBadgeDefsResult.changes} 条`);
+                        
+                        return { 
+                            success: true, 
+                            message: '群组配置删除成功',
+                            details: {
+                                configDeleted: deleteConfigResult.changes,
+                                usersDeleted: deleteUsersResult.changes,
+                                badgesDeleted: deleteBadgesResult.changes,
+                                badgeDefsDeleted: deleteBadgeDefsResult.changes
+                            }
+                        };
+                    } catch (error) {
+                        // 回滚事务
+                        db.prepare('ROLLBACK').run();
+                        throw error;
+                    }
                 } catch (error) {
+                    console.error('删除群组配置失败:', error);
                     return { success: false, error: '群组配置删除失败: ' + error.message };
                 }
             }

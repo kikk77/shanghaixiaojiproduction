@@ -4817,20 +4817,20 @@ async function handleLevelCommand(userId, chatId, username) {
         
         const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
         
-        // 获取用户等级信息（使用用户ID作为主键，不依赖群组）
+        // 获取用户等级信息（系统会智能选择群组配置）
         const levelInfo = await levelServiceHook.getUserLevelInfo(userId);
         
         if (!levelInfo || !levelInfo.profile) {
             // 用户还没有等级数据，创建初始档案
             bot.sendMessage(chatId, '🎮 正在初始化您的等级档案...');
             
-            // 触发一个初始化事件（不需要群组ID）
+            // 触发一个初始化事件（系统会智能选择群组配置）
             await levelServiceHook.grantReward(userId, null, 0, 0, '系统初始化');
             
             // 重新获取
             const newLevelInfo = await levelServiceHook.getUserLevelInfo(userId);
             if (!newLevelInfo) {
-                bot.sendMessage(chatId, '❌ 初始化失败，请稍后重试');
+                bot.sendMessage(chatId, '❌ 初始化失败，请联系管理员检查群组配置');
                 return;
             }
             

@@ -106,8 +106,12 @@ class LevelService {
             // 获取用户显示名称（复用现有接口）
             const userInfo = await this.getUserDisplayInfo(userId);
             
-            // 如果没有指定群组，使用'default'作为群组ID
-            const actualGroupId = groupId || 'default';
+            let actualGroupId = groupId;
+            
+            // 如果没有指定群组，智能选择一个已有的群组配置
+            if (!actualGroupId) {
+                actualGroupId = await this.selectBestGroupConfig();
+            }
             
             const stmt = db.prepare(`
                 INSERT INTO user_levels 
@@ -121,6 +125,39 @@ class LevelService {
         } catch (error) {
             console.error('创建用户档案失败:', error);
             return null;
+        }
+    }
+    
+    /**
+     * 智能选择最佳的群组配置
+     */
+    async selectBestGroupConfig() {
+        const db = this.levelDb.getDatabase();
+        if (!db) return 'default';
+        
+        try {
+            // 优先选择非默认的活跃群组配置
+            const stmt = db.prepare(`
+                SELECT group_id FROM group_configs 
+                WHERE status = 'active' 
+                AND group_id != 'default'
+                ORDER BY created_at ASC 
+                LIMIT 1
+            `);
+            
+            const result = stmt.get();
+            if (result) {
+                console.log(`智能选择群组配置: ${result.group_id}`);
+                return result.group_id;
+            }
+            
+            // 如果没有其他群组，才使用默认配置
+            console.log('没有找到其他群组配置，使用默认配置');
+            return 'default';
+            
+        } catch (error) {
+            console.error('选择群组配置失败:', error);
+            return 'default';
         }
     }
     
@@ -173,7 +210,20 @@ class LevelService {
                 SELECT * FROM group_configs 
                 WHERE group_id = ? AND status = 'active'
             `);
-            return stmt.get(groupId) || await this.getDefaultGroupConfig();
+            
+            let config = stmt.get(groupId);
+            
+            // 如果指定的群组配置不存在，尝试获取其他可用配置
+            if (!config && groupId !== 'default') {
+                console.log(`群组配置 ${groupId} 不存在，尝试获取其他配置`);
+                const bestGroupId = await this.selectBestGroupConfig();
+                if (bestGroupId !== groupId) {
+                    config = stmt.get(bestGroupId);
+                }
+            }
+            
+            // 最后才回退到默认配置
+            return config || await this.getDefaultGroupConfig();
         } catch (error) {
             console.error('获取群组配置失败:', error);
             return await this.getDefaultGroupConfig();

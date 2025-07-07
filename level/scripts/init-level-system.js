@@ -25,8 +25,8 @@ class LevelSystemInitializer {
                 return;
             }
             
-            // 创建默认群组配置
-            await this.createDefaultGroupConfig(levelDb);
+            // 检查是否有群组配置，如果没有则创建默认配置
+            await this.ensureGroupConfig(levelDb);
             
             // 初始化默认勋章
             await this.initializeDefaultBadges(levelDb);
@@ -41,11 +41,24 @@ class LevelSystemInitializer {
         }
     }
     
-    async createDefaultGroupConfig(levelDb) {
+    async ensureGroupConfig(levelDb) {
         const db = levelDb.getDatabase();
         if (!db) return;
         
-        // 创建默认群组配置，确保等级系统能正常工作
+        // 检查是否已有群组配置
+        const existingConfigs = db.prepare(`
+            SELECT COUNT(*) as count FROM group_configs 
+            WHERE status = 'active'
+        `).get();
+        
+        if (existingConfigs.count > 0) {
+            console.log(`✅ 已有 ${existingConfigs.count} 个群组配置，跳过默认配置创建`);
+            return;
+        }
+        
+        console.log('🏆 没有找到群组配置，创建默认配置以确保系统正常工作');
+        
+        // 只有在没有任何群组配置时才创建默认配置
         const defaultConfig = {
             group_id: 'default',
             group_name: '默认配置',

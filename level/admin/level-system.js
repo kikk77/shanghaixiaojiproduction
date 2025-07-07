@@ -799,6 +799,271 @@ function removeLevelRow(index) {
     renderLevelConfig(levelConfig.levels);
 }
 
+// 更新等级字段
+function updateLevelField(index, field, value) {
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const config = groupConfigs[groupId];
+    
+    if (!config) return;
+    
+    const levelConfig = JSON.parse(config.level_config || '{}');
+    if (!levelConfig.levels || !levelConfig.levels[index]) return;
+    
+    levelConfig.levels[index][field] = value;
+    config.level_config = JSON.stringify(levelConfig);
+}
+
+// 添加等级行
+function addLevelRow() {
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    let config = groupConfigs[groupId];
+    
+    if (!config) {
+        config = {
+            group_id: groupId,
+            level_config: JSON.stringify({ levels: [] })
+        };
+        groupConfigs[groupId] = config;
+    }
+    
+    const levelConfig = JSON.parse(config.level_config || '{}');
+    if (!levelConfig.levels) {
+        levelConfig.levels = [];
+    }
+    
+    const newLevel = {
+        level: levelConfig.levels.length + 1,
+        name: `等级${levelConfig.levels.length + 1}`,
+        required_exp: (levelConfig.levels.length + 1) * 100,
+        required_evals: (levelConfig.levels.length + 1) * 5
+    };
+    
+    levelConfig.levels.push(newLevel);
+    config.level_config = JSON.stringify(levelConfig);
+    
+    renderLevelConfig(levelConfig.levels);
+}
+
+// 保存等级配置
+async function saveLevelConfig() {
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const config = groupConfigs[groupId];
+    
+    if (!config) {
+        showError('没有配置可保存');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: groupId,
+                levelConfig: JSON.parse(config.level_config || '{}')
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('等级配置保存成功');
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存等级配置失败:', error);
+        showError('保存失败');
+    }
+}
+
+// 重置等级配置
+function resetLevelConfig() {
+    if (!confirm('确定要重置为默认配置吗？')) return;
+    
+    const defaultLevels = [
+        { level: 1, name: "新手勇士 🟢", required_exp: 0, required_evals: 0 },
+        { level: 2, name: "初级勇士 🔵", required_exp: 50, required_evals: 3 },
+        { level: 3, name: "中级勇士 🟣", required_exp: 150, required_evals: 8 },
+        { level: 4, name: "高级勇士 🟠", required_exp: 300, required_evals: 15 },
+        { level: 5, name: "专家勇士 🔴", required_exp: 500, required_evals: 25 }
+    ];
+    
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    groupConfigs[groupId] = {
+        group_id: groupId,
+        level_config: JSON.stringify({ levels: defaultLevels })
+    };
+    
+    renderLevelConfig(defaultLevels);
+}
+
+// 渲染等级配置
+function renderLevelConfig(levels) {
+    const tbody = document.getElementById('levelConfigBody');
+    
+    if (!levels || levels.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无等级配置</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = levels.map((level, index) => `
+        <tr>
+            <td>Lv.${level.level}</td>
+            <td><input type="text" value="${level.name}" onchange="updateLevelField(${index}, 'name', this.value)"></td>
+            <td><input type="number" value="${level.required_exp}" onchange="updateLevelField(${index}, 'required_exp', parseInt(this.value))"></td>
+            <td><input type="number" value="${level.required_evals}" onchange="updateLevelField(${index}, 'required_evals', parseInt(this.value))"></td>
+            <td><button class="btn btn-danger" onclick="removeLevelRow(${index})">删除</button></td>
+        </tr>
+    `).join('');
+}
+
+// 加载群组等级配置
+async function loadGroupLevelConfig() {
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    
+    try {
+        const response = await fetch(`/api/level/config?groupId=${groupId}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const levelConfig = result.data.levels || [];
+            groupConfigs[groupId] = {
+                group_id: groupId,
+                level_config: JSON.stringify({ levels: levelConfig })
+            };
+            renderLevelConfig(levelConfig);
+        }
+    } catch (error) {
+        console.error('加载群组等级配置失败:', error);
+    }
+}
+
+// 保存奖励配置
+async function saveRewardsConfig() {
+    const rewardsData = {
+        attack: {
+            exp: parseInt(document.getElementById('attackExp').value) || 20,
+            points: parseInt(document.getElementById('attackPoints').value) || 10
+        },
+        user_eval: {
+            exp: parseInt(document.getElementById('userEvalExp').value) || 30,
+            points: parseInt(document.getElementById('userEvalPoints').value) || 25
+        },
+        merchant_eval: {
+            exp: parseInt(document.getElementById('merchantEvalExp').value) || 25,
+            points: parseInt(document.getElementById('merchantEvalPoints').value) || 20
+        },
+        text_eval: {
+            exp: parseInt(document.getElementById('textEvalExp').value) || 15,
+            points: parseInt(document.getElementById('textEvalPoints').value) || 15
+        },
+        perfect_score: {
+            exp: parseInt(document.getElementById('perfectScoreExp').value) || 50,
+            points: parseInt(document.getElementById('perfectScorePoints').value) || 100
+        },
+        level_up: {
+            points: parseInt(document.getElementById('levelUpPoints').value) || 50
+        },
+        multipliers: {
+            exp: parseFloat(document.getElementById('expMultiplier').value) || 1.0,
+            points: parseFloat(document.getElementById('pointsMultiplier').value) || 1.0,
+            weekend: parseFloat(document.getElementById('weekendBonus').value) || 1.2
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/level/rewards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: currentGroupId,
+                rewards: rewardsData
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('奖励配置保存成功');
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存奖励配置失败:', error);
+        showError('保存失败');
+    }
+}
+
+// 保存播报配置
+async function saveBroadcastConfig() {
+    const broadcastData = {
+        enabled: {
+            levelUp: document.getElementById('enableLevelUp').checked,
+            badgeUnlock: document.getElementById('enableBadgeUnlock').checked,
+            milestone: document.getElementById('enableMilestone').checked,
+            perfectScore: document.getElementById('enablePerfectScore').checked
+        },
+        templates: {
+            levelUp: document.getElementById('levelUpTemplate').value,
+            badgeUnlock: document.getElementById('badgeUnlockTemplate').value
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/level/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: currentGroupId,
+                broadcast: broadcastData
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('播报配置保存成功');
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存播报配置失败:', error);
+        showError('保存失败');
+    }
+}
+
+// 插入变量
+function insertVariable(textareaId, variable) {
+    const textarea = document.getElementById(textareaId);
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    textarea.value = text.substring(0, start) + variable + text.substring(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + variable.length, start + variable.length);
+}
+
+// 测试播报
+async function testBroadcast() {
+    const template = document.getElementById('levelUpTemplate').value;
+    const testData = {
+        user_name: '测试用户',
+        old_level: 1,
+        new_level: 2,
+        level_name: '初级勇士 🔵',
+        level_up_points: 50
+    };
+    
+    let preview = template;
+    for (const [key, value] of Object.entries(testData)) {
+        preview = preview.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    }
+    
+    alert('播报预览：\n\n' + preview);
+}
+
 // 加载群组列表
 async function loadGroups() {
     try {

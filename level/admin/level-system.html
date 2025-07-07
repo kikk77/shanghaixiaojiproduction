@@ -638,6 +638,27 @@
         </div>
     </div>
     
+    <!-- 创建群组模态框 -->
+    <div id="createGroupModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('createGroupModal')">&times;</span>
+            <h2>➕ 创建新群组</h2>
+            
+            <div class="form-group">
+                <label>群组ID：</label>
+                <input type="text" id="newGroupId" placeholder="例如：-1001234567890">
+                <small style="display: block; color: #666;">请输入Telegram群组ID（通常以-100开头）</small>
+            </div>
+            
+            <div class="form-group">
+                <label>群组名称：</label>
+                <input type="text" id="newGroupName" placeholder="例如：测试群组">
+            </div>
+            
+            <button class="btn btn-success" onclick="createGroup()">创建群组</button>
+        </div>
+    </div>
+    
     <!-- 用户详情模态框 -->
     <div id="userDetailModal" class="modal">
         <div class="modal-content">
@@ -674,6 +695,9 @@
             </div>
         </div>
     </div>
+    
+    <!-- 消息容器 -->
+    <div id="messageContainer"></div>
     
     <script src="/level/admin/level-system.js"></script>
 </body>

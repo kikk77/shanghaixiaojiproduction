@@ -2341,28 +2341,48 @@ function getDefaultLevelConfig() {
 // 获取默认积分配置
 function getDefaultPointsConfig() {
     return {
-        attack: { exp: 20, points: 10, desc: "完成出击" },
-        user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
-        merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
-        text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
-        perfect_score: { exp: 50, points: 100, desc: "获得满分评价" },
-        level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" },
-        multipliers: { exp: 1.0, points: 1.0, weekend: 1.2 }
+        base_rewards: {
+            attack: { exp: 20, points: 10, desc: "完成出击" },
+            user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
+            merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
+            text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
+            level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" }
+        },
+        special_rewards: {
+            perfect_score: { exp: 50, points: 100, desc: "满分评价奖励" },
+            first_evaluation: { exp: 100, points: 200, desc: "首次评价奖励" },
+            milestone_100: { exp: 200, points: 500, desc: "100次评价里程碑" }
+        },
+        multipliers: {
+            weekend: 1.2,
+            holiday: 1.5,
+            special_event: 2.0
+        }
     };
 }
 
 // 获取默认播报配置
 function getDefaultBroadcastConfig() {
     return {
-        events: {
-            level_up: true,
-            badge_unlock: true,
+        enabled: {
+            levelUp: true,
+            badgeUnlock: true,
             milestone: false,
-            perfect_score: false
+            perfectScore: false
         },
         templates: {
-            level_up: `🎉 恭喜 {{user_name}} 升级了！\n⭐ Lv.{{old_level}} → Lv.{{new_level}} {{level_name}}\n💎 升级奖励：{{level_up_points}}积分\n继续努力，成为传说勇士！💪`,
-            badge_unlock: `🏆 {{user_name}} 解锁了新勋章！\n{{badge_emoji}} {{badge_name}}\n{{badge_desc}}`
+            levelUp: `🎉 恭喜 {{user_name}} 升级了！
+⭐ Lv.{{old_level}} → Lv.{{new_level}} {{level_name}}
+💎 升级奖励：{{level_up_points}}积分
+继续努力，成为传说勇士！💪`,
+            badgeUnlock: `🏆 {{user_name}} 解锁了新勋章！
+{{badge_emoji}} {{badge_name}}
+{{badge_desc}}`
+        },
+        cooldown: {
+            levelUp: 0,
+            badgeUnlock: 300,
+            milestone: 600
         }
     };
 }
@@ -2756,6 +2776,210 @@ async function handleLevelApiRequest(pathname, method, data) {
             };
             
             return { success: true, data: stats };
+        }
+        
+        // 等级配置API
+        if (endpoint === 'config' && method === 'GET') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const config = db.prepare(`
+                SELECT level_config FROM group_configs WHERE group_id = ?
+            `).get(groupId);
+            
+            if (!config) {
+                return { success: true, data: getDefaultLevelConfig() };
+            }
+            
+            return { success: true, data: JSON.parse(config.level_config) };
+        }
+        
+        if (endpoint === 'config' && method === 'POST') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const { groupId, levelConfig } = data;
+            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            
+            try {
+                // 检查群组配置是否存在
+                const exists = db.prepare(`
+                    SELECT 1 FROM group_configs WHERE group_id = ?
+                `).get(targetGroupId);
+                
+                if (exists) {
+                    // 更新现有配置
+                    db.prepare(`
+                        UPDATE group_configs 
+                        SET level_config = ?, updated_at = ?
+                        WHERE group_id = ?
+                    `).run(
+                        JSON.stringify(levelConfig),
+                        Date.now() / 1000,
+                        targetGroupId
+                    );
+                } else {
+                    // 创建新配置
+                    db.prepare(`
+                        INSERT INTO group_configs 
+                        (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(
+                        targetGroupId,
+                        targetGroupId,
+                        JSON.stringify(levelConfig),
+                        JSON.stringify(getDefaultPointsConfig()),
+                        JSON.stringify(getDefaultBroadcastConfig()),
+                        Date.now() / 1000,
+                        Date.now() / 1000
+                    );
+                }
+                
+                return { success: true, message: '等级配置保存成功' };
+            } catch (error) {
+                return { success: false, error: '等级配置保存失败: ' + error.message };
+            }
+        }
+        
+        // 奖励配置API
+        if (endpoint === 'rewards' && method === 'GET') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const config = db.prepare(`
+                SELECT points_config FROM group_configs WHERE group_id = ?
+            `).get(groupId);
+            
+            if (!config) {
+                return { success: true, data: getDefaultPointsConfig() };
+            }
+            
+            return { success: true, data: JSON.parse(config.points_config) };
+        }
+        
+        if (endpoint === 'rewards' && method === 'POST') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const { groupId, rewards } = data;
+            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            
+            try {
+                // 检查群组配置是否存在
+                const exists = db.prepare(`
+                    SELECT 1 FROM group_configs WHERE group_id = ?
+                `).get(targetGroupId);
+                
+                if (exists) {
+                    // 更新现有配置
+                    db.prepare(`
+                        UPDATE group_configs 
+                        SET points_config = ?, updated_at = ?
+                        WHERE group_id = ?
+                    `).run(
+                        JSON.stringify(rewards),
+                        Date.now() / 1000,
+                        targetGroupId
+                    );
+                } else {
+                    // 创建新配置
+                    db.prepare(`
+                        INSERT INTO group_configs 
+                        (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(
+                        targetGroupId,
+                        targetGroupId,
+                        JSON.stringify(getDefaultLevelConfig()),
+                        JSON.stringify(rewards),
+                        JSON.stringify(getDefaultBroadcastConfig()),
+                        Date.now() / 1000,
+                        Date.now() / 1000
+                    );
+                }
+                
+                return { success: true, message: '奖励配置保存成功' };
+            } catch (error) {
+                return { success: false, error: '奖励配置保存失败: ' + error.message };
+            }
+        }
+        
+        // 播报配置API
+        if (endpoint === 'broadcast' && method === 'GET') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const config = db.prepare(`
+                SELECT broadcast_config FROM group_configs WHERE group_id = ?
+            `).get(groupId);
+            
+            if (!config) {
+                return { success: true, data: getDefaultBroadcastConfig() };
+            }
+            
+            return { success: true, data: JSON.parse(config.broadcast_config) };
+        }
+        
+        if (endpoint === 'broadcast' && method === 'POST') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const { groupId, broadcast } = data;
+            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            
+            try {
+                // 检查群组配置是否存在
+                const exists = db.prepare(`
+                    SELECT 1 FROM group_configs WHERE group_id = ?
+                `).get(targetGroupId);
+                
+                if (exists) {
+                    // 更新现有配置
+                    db.prepare(`
+                        UPDATE group_configs 
+                        SET broadcast_config = ?, updated_at = ?
+                        WHERE group_id = ?
+                    `).run(
+                        JSON.stringify(broadcast),
+                        Date.now() / 1000,
+                        targetGroupId
+                    );
+                } else {
+                    // 创建新配置
+                    db.prepare(`
+                        INSERT INTO group_configs 
+                        (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(
+                        targetGroupId,
+                        targetGroupId,
+                        JSON.stringify(getDefaultLevelConfig()),
+                        JSON.stringify(getDefaultPointsConfig()),
+                        JSON.stringify(broadcast),
+                        Date.now() / 1000,
+                        Date.now() / 1000
+                    );
+                }
+                
+                return { success: true, message: '播报配置保存成功' };
+            } catch (error) {
+                return { success: false, error: '播报配置保存失败: ' + error.message };
+            }
         }
         
         // 404 - 未找到的API端点

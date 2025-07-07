@@ -605,7 +605,15 @@ function renderBadgesList(badges) {
     const container = document.getElementById('badgesList');
     
     if (badges.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 40px;">暂无勋章</div>';
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🏆</div>
+                <div>暂无勋章</div>
+                <div style="font-size: 14px; margin-top: 8px; color: #adb5bd;">
+                    点击上方"创建新勋章"按钮来添加第一个勋章
+                </div>
+            </div>
+        `;
         return;
     }
     
@@ -627,30 +635,58 @@ function renderBadgesList(badges) {
     let html = '';
     
     const rarityNames = {
-        mythic: '神话',
-        legendary: '传说',
-        epic: '史诗',
-        rare: '稀有',
-        common: '普通'
+        mythic: '🔴 神话',
+        legendary: '🟡 传说', 
+        epic: '🟣 史诗',
+        rare: '🔵 稀有',
+        common: '⚪ 普通'
     };
     
     for (const [rarity, badgeList] of Object.entries(grouped)) {
         if (badgeList.length === 0) continue;
         
-        html += `<div style="margin-bottom: 30px;">`;
-        html += `<h3>${rarityNames[rarity]}</h3>`;
+        html += `<div class="badge-category">`;
+        html += `<h3 class="badge-category-title">${rarityNames[rarity]} (${badgeList.length})</h3>`;
         html += `<div class="badges-grid">`;
         
         badgeList.forEach(badge => {
+            // 解析解锁条件
+            let conditionText = '未知条件';
+            try {
+                const conditions = JSON.parse(badge.unlock_conditions || '{}');
+                if (conditions.type === 'stat_based') {
+                    const fieldNames = {
+                        'total_exp': '总经验值',
+                        'level': '等级',
+                        'user_eval_count': '评价次数',
+                        'available_points': '可用积分'
+                    };
+                    conditionText = `${fieldNames[conditions.field] || conditions.field} ≥ ${conditions.target}`;
+                } else if (conditions.type === 'evaluation_streak') {
+                    const streakNames = {
+                        'perfect_score': '满分评价',
+                        'high_score': '高分评价'
+                    };
+                    conditionText = `连续${conditions.count}次${streakNames[conditions.streak_type] || conditions.streak_type}`;
+                } else if (conditions.type === 'manual') {
+                    conditionText = '管理员手动授予';
+                }
+            } catch (e) {
+                conditionText = '解析错误';
+            }
+            
             html += `<div class="badge-card badge-rarity-${rarity}">`;
             html += `<div class="badge-header">`;
             html += `<span class="badge-emoji">${badge.badge_emoji}</span>`;
             html += `<span class="badge-name">${badge.badge_name}</span>`;
             html += `</div>`;
             html += `<div class="badge-desc">${badge.badge_desc}</div>`;
+            html += `<div style="font-size: 12px; color: #6c757d; margin-bottom: 12px; font-style: italic;">`;
+            html += `解锁条件: ${conditionText}`;
+            html += `</div>`;
             html += `<div class="badge-actions">`;
-            html += `<button class="btn-sm btn-primary" onclick="editBadge('${badge.badge_id}')">编辑</button>`;
-            html += `<button class="btn-sm btn-danger" onclick="deleteBadge('${badge.badge_id}')">删除</button>`;
+            html += `<button class="btn-sm btn-primary" onclick="editBadge('${badge.badge_id}')" title="编辑勋章">✏️ 编辑</button>`;
+            html += `<button class="btn-sm btn-danger" onclick="deleteBadge('${badge.badge_id}')" title="删除勋章">🗑️ 删除</button>`;
             html += `</div>`;
             html += `</div>`;
         });

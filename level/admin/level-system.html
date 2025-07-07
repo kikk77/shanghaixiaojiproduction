@@ -645,6 +645,63 @@
             <button class="btn btn-success" onclick="createBadge()">创建勋章</button>
         </div>
     </div>
+
+    <!-- 编辑勋章模态框 -->
+    <div id="editBadgeModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('editBadgeModal')">&times;</span>
+            <h2>✏️ 编辑勋章</h2>
+            
+            <div class="form-group">
+                <label>勋章ID：</label>
+                <input type="text" id="editBadgeId" readonly style="background: #f5f5f5;">
+                <small style="color: #666;">勋章ID不可修改</small>
+            </div>
+            
+            <div class="form-group">
+                <label>勋章名称：</label>
+                <input type="text" id="editBadgeName" placeholder="例如：完美战士">
+            </div>
+            
+            <div class="form-group">
+                <label>勋章图标：</label>
+                <input type="text" id="editBadgeEmoji" placeholder="例如：🏆">
+            </div>
+            
+            <div class="form-group">
+                <label>勋章描述：</label>
+                <textarea id="editBadgeDesc" placeholder="例如：连续10次获得满分评价"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>稀有度：</label>
+                <select id="editBadgeRarity">
+                    <option value="common">普通 ⚪</option>
+                    <option value="rare">稀有 🔵</option>
+                    <option value="epic">史诗 🟣</option>
+                    <option value="legendary">传说 🟡</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>解锁条件类型：</label>
+                <select id="editBadgeConditionType" onchange="updateEditConditionForm()">
+                    <option value="stat_based">基于统计数据</option>
+                    <option value="evaluation_streak">评价连击</option>
+                    <option value="manual">手动授予</option>
+                </select>
+            </div>
+            
+            <div id="editConditionDetails">
+                <!-- 动态生成条件表单 -->
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editBadgeModal')">取消</button>
+                <button class="btn btn-success" onclick="updateBadge()">💾 保存修改</button>
+            </div>
+        </div>
+    </div>
     
     <!-- 创建群组模态框 -->
     <div id="createGroupModal" class="modal">

@@ -639,12 +639,20 @@ function renderBadgesList(badges) {
         
         html += `<div style="margin-bottom: 30px;">`;
         html += `<h3>${rarityNames[rarity]}</h3>`;
-        html += `<div>`;
+        html += `<div class="badges-grid">`;
         
         badgeList.forEach(badge => {
-            html += `<span class="badge-item badge-rarity-${rarity}">`;
-            html += `${badge.badge_emoji} ${badge.badge_name}`;
-            html += `</span>`;
+            html += `<div class="badge-card badge-rarity-${rarity}">`;
+            html += `<div class="badge-header">`;
+            html += `<span class="badge-emoji">${badge.badge_emoji}</span>`;
+            html += `<span class="badge-name">${badge.badge_name}</span>`;
+            html += `</div>`;
+            html += `<div class="badge-desc">${badge.badge_desc}</div>`;
+            html += `<div class="badge-actions">`;
+            html += `<button class="btn-sm btn-primary" onclick="editBadge('${badge.badge_id}')">编辑</button>`;
+            html += `<button class="btn-sm btn-danger" onclick="deleteBadge('${badge.badge_id}')">删除</button>`;
+            html += `</div>`;
+            html += `</div>`;
         });
         
         html += `</div></div>`;
@@ -1568,6 +1576,214 @@ async function importData() {
 // 调整用户数据
 async function adjustUserData() {
     showError('用户数据调整功能暂未实现');
+}
+
+// 编辑勋章
+function editBadge(badgeId) {
+    const badge = allBadges.find(b => b.badge_id === badgeId);
+    if (!badge) {
+        showError('勋章不存在');
+        return;
+    }
+    
+    // 填充编辑表单
+    document.getElementById('editBadgeId').value = badge.badge_id;
+    document.getElementById('editBadgeName').value = badge.badge_name;
+    document.getElementById('editBadgeEmoji').value = badge.badge_emoji;
+    document.getElementById('editBadgeDesc').value = badge.badge_desc;
+    document.getElementById('editBadgeRarity').value = badge.rarity;
+    
+    // 解析解锁条件
+    let conditions = {};
+    try {
+        conditions = JSON.parse(badge.unlock_conditions || '{}');
+    } catch (e) {
+        conditions = {};
+    }
+    
+    document.getElementById('editBadgeConditionType').value = conditions.type || 'stat_based';
+    updateEditConditionForm();
+    
+    // 根据条件类型填充具体字段
+    if (conditions.type === 'stat_based') {
+        document.getElementById('editConditionField').value = conditions.field || 'total_exp';
+        document.getElementById('editConditionTarget').value = conditions.target || 0;
+    } else if (conditions.type === 'evaluation_streak') {
+        document.getElementById('editStreakType').value = conditions.streak_type || 'perfect_score';
+        document.getElementById('editStreakCount').value = conditions.count || 1;
+    }
+    
+    // 显示编辑模态框
+    document.getElementById('editBadgeModal').style.display = 'block';
+}
+
+// 删除勋章
+async function deleteBadge(badgeId) {
+    const badge = allBadges.find(b => b.badge_id === badgeId);
+    if (!badge) {
+        showError('勋章不存在');
+        return;
+    }
+    
+    if (!confirm(`确定要删除勋章 "${badge.badge_name}" 吗？\n\n此操作将删除所有用户已获得的该勋章，且不可恢复！`)) {
+        return;
+    }
+    
+    // 需要管理员密码验证
+    pendingAction = {
+        type: 'deleteBadge',
+        badgeId: badgeId,
+        badgeName: badge.badge_name
+    };
+    
+    document.getElementById('passwordPromptText').textContent = 
+        `删除勋章 "${badge.badge_name}" 需要管理员密码验证，请输入密码：`;
+    document.getElementById('adminPasswordModal').style.display = 'block';
+}
+
+// 删除勋章（需要密码验证）
+async function deleteBadgeWithPassword(badgeId, adminPassword) {
+    try {
+        const response = await fetch(`/api/level/badges/${badgeId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminPassword: adminPassword })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('勋章删除成功');
+            if (result.details) {
+                showSuccess(`删除完成：勋章定义删除，用户勋章记录删除 ${result.details.userBadgesDeleted} 条`);
+            }
+            
+            // 刷新勋章列表
+            await loadBadges();
+        } else {
+            showError(result.error || '删除失败');
+        }
+    } catch (error) {
+        console.error('删除勋章失败:', error);
+        showError('删除失败');
+    }
+}
+
+// 更新编辑条件表单
+function updateEditConditionForm() {
+    const type = document.getElementById('editBadgeConditionType').value;
+    const container = document.getElementById('editConditionDetails');
+    
+    switch(type) {
+        case 'stat_based':
+            container.innerHTML = `
+                <div class="form-group">
+                    <label>统计字段：</label>
+                    <select id="editConditionField">
+                        <option value="total_exp">总经验值</option>
+                        <option value="available_points">可用积分</option>
+                        <option value="total_points_earned">累计获得积分</option>
+                        <option value="attack_count">出击次数</option>
+                        <option value="user_eval_count">用户评价次数</option>
+                        <option value="level">等级</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>目标值：</label>
+                    <input type="number" id="editConditionTarget" placeholder="例如：100">
+                </div>
+            `;
+            break;
+            
+        case 'evaluation_streak':
+            container.innerHTML = `
+                <div class="form-group">
+                    <label>评价类型：</label>
+                    <select id="editStreakType">
+                        <option value="perfect_score">满分评价</option>
+                        <option value="high_score">高分评价（8分以上）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>连续次数：</label>
+                    <input type="number" id="editStreakCount" placeholder="例如：10">
+                </div>
+            `;
+            break;
+            
+        case 'manual':
+            container.innerHTML = `
+                <div class="info-box">
+                    此勋章只能由管理员手动授予
+                </div>
+            `;
+            break;
+    }
+}
+
+// 更新勋章
+async function updateBadge() {
+    const badgeId = document.getElementById('editBadgeId').value;
+    const type = document.getElementById('editBadgeConditionType').value;
+    let unlockConditions = {};
+    
+    switch(type) {
+        case 'stat_based':
+            unlockConditions = {
+                type: 'stat_based',
+                field: document.getElementById('editConditionField').value,
+                operator: '>=',
+                target: parseInt(document.getElementById('editConditionTarget').value)
+            };
+            break;
+            
+        case 'evaluation_streak':
+            unlockConditions = {
+                type: 'evaluation_streak',
+                streak_type: document.getElementById('editStreakType').value,
+                count: parseInt(document.getElementById('editStreakCount').value),
+                consecutive: true
+            };
+            break;
+            
+        case 'manual':
+            unlockConditions = {
+                type: 'manual',
+                desc: '仅管理员可授予'
+            };
+            break;
+    }
+    
+    const badgeData = {
+        badge_name: document.getElementById('editBadgeName').value,
+        badge_emoji: document.getElementById('editBadgeEmoji').value || '🏆',
+        badge_desc: document.getElementById('editBadgeDesc').value,
+        badge_type: type === 'manual' ? 'manual' : 'auto',
+        rarity: document.getElementById('editBadgeRarity').value,
+        unlock_conditions: JSON.stringify(unlockConditions)
+    };
+    
+    try {
+        const response = await fetch(`/api/level/badges/${badgeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(badgeData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('勋章更新成功');
+            closeModal('editBadgeModal');
+            // 刷新勋章列表
+            await loadBadges();
+        } else {
+            showError(result.error || '更新失败');
+        }
+    } catch (error) {
+        console.error('更新勋章失败:', error);
+        showError('更新失败');
+    }
 }
 
 // 授予勋章

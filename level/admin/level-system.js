@@ -229,6 +229,25 @@ async function loadStats() {
             updateRanking(stats.topUsers || []);
             
             console.log('✅ 统计数据加载成功:', stats);
+        } else {
+            // 处理API错误
+            if (result.error && result.error.includes('群组ID未设置')) {
+                showError('请在Railway环境变量中设置GROUP_CHAT_ID，或联系管理员配置群组ID');
+                // 显示配置提示
+                const container = document.querySelector('.stats-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #856404;">⚠️ 配置缺失</h3>
+                            <p style="color: #856404; margin: 10px 0;">群组ID未配置，请在Railway环境变量中设置：</p>
+                            <code style="background: #f8f9fa; padding: 8px 12px; border-radius: 4px; color: #495057;">GROUP_CHAT_ID=你的群组ID</code>
+                            <p style="color: #856404; margin: 10px 0; font-size: 14px;">配置完成后重新部署即可正常使用</p>
+                        </div>
+                    `;
+                }
+            } else {
+                showError('加载统计数据失败：' + result.error);
+            }
         }
     } catch (error) {
         console.error('加载统计数据失败:', error);
@@ -391,6 +410,30 @@ async function loadUsers(page = 1) {
             allUsers = result.data.users;
             renderUserTable(allUsers);
             renderPagination(result.data.total, page);
+        } else {
+            // 处理API错误
+            if (result.error && result.error.includes('群组ID未设置')) {
+                showError('请在Railway环境变量中设置GROUP_CHAT_ID，或联系管理员配置群组ID');
+                // 显示配置提示在用户表格中
+                const tbody = document.getElementById('userTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px;">
+                                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 10px;">
+                                    <h4 style="color: #856404; margin-bottom: 10px;">⚠️ 配置缺失</h4>
+                                    <p style="color: #856404; margin: 5px 0;">群组ID未配置，请在Railway环境变量中设置：</p>
+                                    <code style="background: #f8f9fa; padding: 8px 12px; border-radius: 4px; color: #495057;">GROUP_CHAT_ID=你的群组ID</code>
+                                    <p style="color: #856404; margin: 5px 0; font-size: 14px;">配置完成后重新部署即可正常使用</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+            } else {
+                showError('加载用户列表失败：' + result.error);
+                renderUserTable([]); // 显示空表格
+            }
         }
     } catch (error) {
         console.error('加载用户列表失败:', error);

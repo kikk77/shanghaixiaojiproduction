@@ -2490,20 +2490,73 @@ async function handleLevelApiRequest(pathname, method, data) {
                     return { success: false, error: '数据库不可用' };
                 }
                 
+                // 从URL查询参数中获取参数
                 const groupId = data.groupId || process.env.GROUP_CHAT_ID;
                 const limit = parseInt(data.limit) || 50;
                 const offset = parseInt(data.offset) || 0;
+                const search = data.search || '';
                 
-                const users = db.prepare(`
-                    SELECT * FROM user_levels 
-                    WHERE group_id = ?
-                    ORDER BY level DESC, total_exp DESC
-                    LIMIT ? OFFSET ?
-                `).all(groupId, limit, offset);
+                // 检查是否有有效的群组ID
+                if (!groupId) {
+                    return { 
+                        success: false, 
+                        error: '群组ID未设置，请在Railway环境变量中设置GROUP_CHAT_ID或在请求中提供groupId参数' 
+                    };
+                }
                 
-                const total = db.prepare(`
-                    SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
-                `).get(groupId);
+                console.log(`🏆 [API] 查询用户列表: groupId=${groupId}, limit=${limit}, offset=${offset}, search=${search}`);
+                
+                let users, total;
+                
+                if (search) {
+                    // 搜索用户
+                    users = db.prepare(`
+                        SELECT * FROM user_levels 
+                        WHERE group_id = ? AND (
+                            user_id LIKE ? OR 
+                            display_name LIKE ?
+                        )
+                        ORDER BY level DESC, total_exp DESC
+                        LIMIT ? OFFSET ?
+                    `).all(groupId, `%${search}%`, `%${search}%`, limit, offset);
+                    
+                    const searchTotal = db.prepare(`
+                        SELECT COUNT(*) as count FROM user_levels 
+                        WHERE group_id = ? AND (
+                            user_id LIKE ? OR 
+                            display_name LIKE ?
+                        )
+                    `).get(groupId, `%${search}%`, `%${search}%`);
+                    
+                    total = searchTotal;
+                } else {
+                    // 如果没有指定群组ID且环境变量也没有设置，获取所有群组的用户
+                    if (!data.groupId && !process.env.GROUP_CHAT_ID) {
+                        users = db.prepare(`
+                            SELECT * FROM user_levels 
+                            ORDER BY level DESC, total_exp DESC
+                            LIMIT ? OFFSET ?
+                        `).all(limit, offset);
+                        
+                        total = db.prepare(`
+                            SELECT COUNT(*) as count FROM user_levels
+                        `).get();
+                    } else {
+                        // 获取指定群组的用户
+                        users = db.prepare(`
+                            SELECT * FROM user_levels 
+                            WHERE group_id = ?
+                            ORDER BY level DESC, total_exp DESC
+                            LIMIT ? OFFSET ?
+                        `).all(groupId, limit, offset);
+                        
+                        total = db.prepare(`
+                            SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
+                        `).get(groupId);
+                    }
+                }
+                
+                console.log(`🏆 [API] 查询结果: 找到 ${users.length} 个用户，总计 ${total.count} 个`);
                 
                 return { 
                     success: true, 
@@ -2844,7 +2897,18 @@ async function handleLevelApiRequest(pathname, method, data) {
                 return { success: false, error: '数据库不可用' };
             }
             
+            // 从URL查询参数中获取groupId
             const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            
+            // 检查是否有有效的群组ID
+            if (!groupId) {
+                return { 
+                    success: false, 
+                    error: '群组ID未设置，请在Railway环境变量中设置GROUP_CHAT_ID或在请求中提供groupId参数' 
+                };
+            }
+            
+            console.log(`🏆 [API] 查询统计数据: groupId=${groupId}`);
             
             // 获取统计数据
             const stats = {

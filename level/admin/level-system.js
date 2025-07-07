@@ -9,6 +9,7 @@ let allBadges = [];
 let currentUserId = null;
 let currentGroupId = 'default';
 let groupConfigs = {};
+let autoRefreshInterval = null;
 
 // ==================== 管理员密码验证系统 ====================
 
@@ -157,8 +158,54 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化搜索
     initSearch();
     
+    // 添加页面焦点事件监听，用户切换回页面时自动刷新数据
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            console.log('🔄 页面重新获得焦点，自动刷新数据');
+            // 延迟一点时间再刷新，避免频繁切换
+            setTimeout(() => {
+                loadStats();
+                // 根据当前活跃标签页刷新对应数据
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    const tabName = activeTab.textContent.includes('用户') ? 'users' :
+                                   activeTab.textContent.includes('群组') ? 'groups' :
+                                   activeTab.textContent.includes('勋章') ? 'badges' : null;
+                    if (tabName === 'users') loadUsers();
+                    else if (tabName === 'groups') loadGroups();
+                    else if (tabName === 'badges') loadBadges();
+                }
+            }, 1000);
+        }
+    });
+    
+    // 启动定时自动刷新（每30秒刷新一次统计数据）
+    startAutoRefresh();
+    
     console.log('✅ 等级系统管理界面初始化完成');
 });
+
+// 启动自动刷新
+function startAutoRefresh() {
+    // 清除现有的定时器
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    
+    // 每30秒自动刷新统计数据
+    autoRefreshInterval = setInterval(() => {
+        console.log('🔄 定时自动刷新统计数据');
+        loadStats();
+    }, 30000);
+}
+
+// 停止自动刷新
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+}
 
 // 检查等级系统状态
 async function checkLevelSystemStatus() {
@@ -301,10 +348,11 @@ function switchTab(tabName) {
     });
     document.getElementById(`${tabName}-tab`).classList.add('active');
     
-    // 加载对应内容
+    // 加载对应内容 - 每次切换都刷新数据
     switch(tabName) {
         case 'users':
             loadUsers();
+            loadStats(); // 同时刷新统计数据
             break;
         case 'levels':
             loadLevelConfig();
@@ -498,8 +546,12 @@ async function saveUserEdit() {
         if (result.success) {
             showSuccess('用户信息更新成功');
             closeModal('editUserModal');
-            loadUsers(currentPage);
-            loadStats(); // 重新加载统计数据
+            // 自动刷新相关数据
+            await Promise.all([
+                loadUsers(currentPage),
+                loadStats(),
+                loadInitialData()
+            ]);
         } else {
             showError(result.error || '更新失败');
         }
@@ -708,7 +760,11 @@ async function createBadge() {
         if (result.success) {
             showSuccess('勋章创建成功');
             closeModal('createBadgeModal');
-            loadBadges();
+            // 自动刷新相关数据
+            await Promise.all([
+                loadBadges(),
+                loadStats()
+            ]);
         } else {
             showError(result.error || '创建失败');
         }
@@ -1179,6 +1235,11 @@ async function saveLevelConfig() {
         
         if (result.success) {
             showSuccess('等级配置保存成功');
+            // 自动刷新相关数据
+            await Promise.all([
+                loadLevelConfig(),
+                loadStats()
+            ]);
         } else {
             showError(result.error || '保存失败');
         }
@@ -1295,7 +1356,12 @@ async function createGroup() {
         if (result.success) {
             showSuccess('群组创建成功');
             closeModal('createGroupModal');
-            loadGroups();
+            // 自动刷新相关数据
+            await Promise.all([
+                loadGroups(),
+                loadInitialData(),
+                loadStats()
+            ]);
         } else {
             showError(result.error || '创建失败');
         }
@@ -1416,8 +1482,8 @@ async function importData() {
         
         if (result.success) {
             showSuccess('数据导入成功');
-            loadStats();
-            loadUsers();
+            // 自动刷新所有数据
+            await refreshAllData();
         } else {
             showError(result.error || '导入失败');
         }
@@ -1439,12 +1505,107 @@ async function awardBadge() {
 
 // 保存奖励配置
 async function saveRewardsConfig() {
-    showError('奖励配置保存功能暂未实现');
+    const groupId = currentGroupId || 'default';
+    
+    const rewardsData = {
+        base_rewards: {
+            attack: {
+                exp: parseInt(document.getElementById('attackExp').value) || 20,
+                points: parseInt(document.getElementById('attackPoints').value) || 10
+            },
+            user_eval_12: {
+                exp: parseInt(document.getElementById('userEvalExp').value) || 30,
+                points: parseInt(document.getElementById('userEvalPoints').value) || 25
+            },
+            merchant_eval: {
+                exp: parseInt(document.getElementById('merchantEvalExp').value) || 25,
+                points: parseInt(document.getElementById('merchantEvalPoints').value) || 20
+            },
+            text_eval: {
+                exp: parseInt(document.getElementById('textEvalExp').value) || 15,
+                points: parseInt(document.getElementById('textEvalPoints').value) || 15
+            }
+        },
+        special_rewards: {
+            perfect_score: {
+                exp: parseInt(document.getElementById('perfectScoreExp').value) || 50,
+                points: parseInt(document.getElementById('perfectScorePoints').value) || 100
+            },
+            level_up_bonus: {
+                points: parseInt(document.getElementById('levelUpPoints').value) || 50
+            }
+        },
+        multipliers: {
+            exp_multiplier: parseFloat(document.getElementById('expMultiplier').value) || 1.0,
+            points_multiplier: parseFloat(document.getElementById('pointsMultiplier').value) || 1.0,
+            weekend_bonus: parseFloat(document.getElementById('weekendBonus').value) || 1.2
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/level/rewards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: groupId,
+                rewards: rewardsData
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('奖励配置保存成功');
+            // 自动刷新相关数据
+            await loadRewardsConfig();
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存奖励配置失败:', error);
+        showError('保存失败');
+    }
 }
 
 // 保存播报配置
 async function saveBroadcastConfig() {
-    showError('播报配置保存功能暂未实现');
+    const groupId = currentGroupId || 'default';
+    
+    const broadcastData = {
+        enabled: document.getElementById('enableLevelUp').checked,
+        level_up: document.getElementById('enableLevelUp').checked,
+        badge_unlock: document.getElementById('enableBadgeUnlock').checked,
+        points_milestone: document.getElementById('enableMilestone').checked,
+        perfect_score: document.getElementById('enablePerfectScore').checked,
+        templates: {
+            level_up: document.getElementById('levelUpTemplate').value,
+            badge_unlock: document.getElementById('badgeUnlockTemplate').value
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/level/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: groupId,
+                broadcast: broadcastData
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('播报配置保存成功');
+            // 自动刷新相关数据
+            await loadBroadcastConfig();
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存播报配置失败:', error);
+        showError('保存失败');
+    }
 }
 
 // 插入变量

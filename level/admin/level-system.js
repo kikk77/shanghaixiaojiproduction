@@ -1918,7 +1918,228 @@ async function testBroadcast() {
 
 // 数据管理
 async function loadDataManagement() {
-    showError('数据管理功能暂未实现');
+    try {
+        // 加载数据库统计信息
+        const response = await fetch('/api/level/database/stats');
+        const result = await response.json();
+        
+        if (result.success) {
+            const stats = result.data;
+            
+            // 更新数据库信息显示
+            document.getElementById('dbSize').textContent = stats.dbSize || '计算中...';
+            document.getElementById('lastUpdate').textContent = stats.lastUpdate || '未知';
+            
+            // 显示详细统计信息
+            await loadDetailedStats();
+            
+            showSuccess('数据管理页面加载完成');
+        } else {
+            showError('加载数据库统计失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('加载数据管理失败:', error);
+        showError('加载数据管理失败');
+    }
+}
+
+// 加载详细统计信息
+async function loadDetailedStats() {
+    try {
+        const [usersResponse, badgesResponse, configResponse] = await Promise.all([
+            fetch('/api/level/stats/users'),
+            fetch('/api/level/stats/badges'),
+            fetch('/api/level/stats/config')
+        ]);
+        
+        const [usersResult, badgesResult, configResult] = await Promise.all([
+            usersResponse.json(),
+            badgesResponse.json(),
+            configResponse.json()
+        ]);
+        
+        // 更新详细统计信息显示
+        updateDetailedStatsDisplay({
+            users: usersResult.success ? usersResult.data : null,
+            badges: badgesResult.success ? badgesResult.data : null,
+            config: configResult.success ? configResult.data : null
+        });
+        
+    } catch (error) {
+        console.error('加载详细统计失败:', error);
+    }
+}
+
+// 更新详细统计信息显示
+function updateDetailedStatsDisplay(stats) {
+    const container = document.getElementById('detailedStatsContainer');
+    if (!container) return;
+    
+    let html = '<div class="detailed-stats">';
+    
+    if (stats.users) {
+        html += `
+            <div class="stat-section">
+                <h4>👥 用户统计</h4>
+                <p>总用户数: ${stats.users.total}</p>
+                <p>活跃用户: ${stats.users.active}</p>
+                <p>最高等级: ${stats.users.maxLevel}</p>
+                <p>总经验值: ${stats.users.totalExp}</p>
+            </div>
+        `;
+    }
+    
+    if (stats.badges) {
+        html += `
+            <div class="stat-section">
+                <h4>🏆 勋章统计</h4>
+                <p>勋章种类: ${stats.badges.types}</p>
+                <p>已发放: ${stats.badges.awarded}</p>
+                <p>发放率: ${stats.badges.awardRate}%</p>
+            </div>
+        `;
+    }
+    
+    if (stats.config) {
+        html += `
+            <div class="stat-section">
+                <h4>⚙️ 配置统计</h4>
+                <p>群组数量: ${stats.config.groups}</p>
+                <p>等级配置: ${stats.config.levels}</p>
+                <p>播报规则: ${stats.config.broadcasts}</p>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 数据清理功能
+async function cleanupData() {
+    if (!confirm('确定要清理无效数据吗？此操作将：\n1. 删除无效的用户记录\n2. 清理过期的临时数据\n3. 优化数据库结构\n\n此操作不可撤销！')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/database/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('数据清理完成：' + result.message);
+            // 重新加载数据管理页面
+            await loadDataManagement();
+        } else {
+            showError('数据清理失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('数据清理失败:', error);
+        showError('数据清理失败');
+    }
+}
+
+// 数据库优化
+async function optimizeDatabase() {
+    if (!confirm('确定要优化数据库吗？此操作将：\n1. 重建索引\n2. 清理碎片\n3. 优化查询性能\n\n此操作可能需要几分钟时间。')) {
+        return;
+    }
+    
+    try {
+        showSuccess('正在优化数据库，请稍候...');
+        
+        const response = await fetch('/api/level/database/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('数据库优化完成：' + result.message);
+            // 重新加载数据管理页面
+            await loadDataManagement();
+        } else {
+            showError('数据库优化失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('数据库优化失败:', error);
+        showError('数据库优化失败');
+    }
+}
+
+// 创建数据库备份
+async function createBackup() {
+    try {
+        showSuccess('正在创建备份，请稍候...');
+        
+        const response = await fetch('/api/level/database/backup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('备份创建成功：' + result.backupPath);
+            // 如果返回了下载链接，提供下载
+            if (result.downloadUrl) {
+                const link = document.createElement('a');
+                link.href = result.downloadUrl;
+                link.download = result.filename;
+                link.click();
+            }
+        } else {
+            showError('备份创建失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('创建备份失败:', error);
+        showError('创建备份失败');
+    }
+}
+
+// 恢复数据库备份
+async function restoreBackup() {
+    const fileInput = document.getElementById('backupFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showError('请选择要恢复的备份文件');
+        return;
+    }
+    
+    if (!confirm('确定要恢复此备份吗？此操作将：\n1. 覆盖当前所有数据\n2. 无法撤销\n\n请确保您已经创建了当前数据的备份！')) {
+        return;
+    }
+    
+    try {
+        showSuccess('正在恢复备份，请稍候...');
+        
+        const formData = new FormData();
+        formData.append('backup', file);
+        
+        const response = await fetch('/api/level/database/restore', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('备份恢复成功！页面将在3秒后刷新...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            showError('备份恢复失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('恢复备份失败:', error);
+        showError('恢复备份失败');
+    }
 }
 
 // 显示创建群组模态框
@@ -2063,3 +2284,10 @@ window.openLevelConfigEditor = openLevelConfigEditor;
 window.openPointsConfigEditor = openPointsConfigEditor;
 window.openBroadcastConfigEditor = openBroadcastConfigEditor;
 window.openBadgeConfigEditor = openBadgeConfigEditor;
+
+// 导出数据管理功能
+window.loadDataManagement = loadDataManagement;
+window.cleanupData = cleanupData;
+window.optimizeDatabase = optimizeDatabase;
+window.createBackup = createBackup;
+window.restoreBackup = restoreBackup;

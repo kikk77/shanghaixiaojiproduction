@@ -3522,6 +3522,214 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
         }
         
+        // 数据库统计信息API
+        if (endpoint === 'database') {
+            const subEndpoint = pathParts[4]; // stats, cleanup, optimize, backup, restore
+            
+            if (subEndpoint === 'stats' && method === 'GET') {
+                const fs = require('fs');
+                const path = require('path');
+                
+                const dbPath = path.join(__dirname, '../level_system.db');
+                let dbSize = '未知';
+                let lastUpdate = '未知';
+                
+                if (fs.existsSync(dbPath)) {
+                    const stats = fs.statSync(dbPath);
+                    dbSize = (stats.size / 1024 / 1024).toFixed(2) + ' MB';
+                    lastUpdate = stats.mtime.toLocaleString('zh-CN');
+                }
+                
+                return {
+                    success: true,
+                    data: {
+                        dbSize,
+                        lastUpdate,
+                        dbPath: dbPath
+                    }
+                };
+            }
+            
+            if (subEndpoint === 'cleanup' && method === 'POST') {
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                try {
+                    let cleanupCount = 0;
+                    
+                    // 清理无效的用户记录（没有有效数据的用户）
+                    const invalidUsers = db.prepare(`
+                        DELETE FROM user_levels 
+                        WHERE total_exp = 0 AND available_points = 0 AND user_eval_count = 0
+                    `).run();
+                    cleanupCount += invalidUsers.changes;
+                    
+                    // 清理过期的日志记录（保留最近3个月）
+                    const threeMonthsAgo = Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60);
+                    const oldLogs = db.prepare(`
+                        DELETE FROM points_log WHERE timestamp < ?
+                    `).run(threeMonthsAgo);
+                    cleanupCount += oldLogs.changes;
+                    
+                    // 清理孤立的勋章记录（用户已不存在）
+                    const orphanBadges = db.prepare(`
+                        DELETE FROM user_badges 
+                        WHERE user_id NOT IN (SELECT user_id FROM user_levels WHERE group_id = user_badges.group_id)
+                    `).run();
+                    cleanupCount += orphanBadges.changes;
+                    
+                    return {
+                        success: true,
+                        message: `数据清理完成，共清理 ${cleanupCount} 条无效记录`,
+                        details: {
+                            invalidUsers: invalidUsers.changes,
+                            oldLogs: oldLogs.changes,
+                            orphanBadges: orphanBadges.changes
+                        }
+                    };
+                } catch (error) {
+                    return { success: false, error: '数据清理失败: ' + error.message };
+                }
+            }
+            
+            if (subEndpoint === 'optimize' && method === 'POST') {
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                try {
+                    // 执行数据库优化操作
+                    db.prepare('VACUUM').run();
+                    db.prepare('ANALYZE').run();
+                    db.prepare('REINDEX').run();
+                    
+                    return {
+                        success: true,
+                        message: '数据库优化完成，已重建索引并清理碎片',
+                        details: {
+                            vacuum: true,
+                            analyze: true,
+                            reindex: true
+                        }
+                    };
+                } catch (error) {
+                    return { success: false, error: '数据库优化失败: ' + error.message };
+                }
+            }
+            
+            if (subEndpoint === 'backup' && method === 'POST') {
+                const fs = require('fs');
+                const path = require('path');
+                
+                try {
+                    const dbPath = path.join(__dirname, '../level_system.db');
+                    const backupDir = path.join(__dirname, '../backups');
+                    
+                    // 确保备份目录存在
+                    if (!fs.existsSync(backupDir)) {
+                        fs.mkdirSync(backupDir, { recursive: true });
+                    }
+                    
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const backupFilename = `level_system_backup_${timestamp}.db`;
+                    const backupPath = path.join(backupDir, backupFilename);
+                    
+                    // 复制数据库文件
+                    fs.copyFileSync(dbPath, backupPath);
+                    
+                    return {
+                        success: true,
+                        message: '备份创建成功',
+                        backupPath: backupPath,
+                        filename: backupFilename
+                    };
+                } catch (error) {
+                    return { success: false, error: '创建备份失败: ' + error.message };
+                }
+            }
+            
+            if (subEndpoint === 'restore' && method === 'POST') {
+                // 数据库恢复需要文件上传处理，这里先返回不支持的消息
+                return { success: false, error: '数据库恢复功能需要通过文件上传实现' };
+            }
+        }
+        
+        // 详细统计信息API
+        if (endpoint === 'stats') {
+            const statsType = pathParts[4]; // users, badges, config
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            if (statsType === 'users' && method === 'GET') {
+                try {
+                    const userStats = db.prepare(`
+                        SELECT 
+                            COUNT(*) as total,
+                            COUNT(CASE WHEN total_exp > 0 THEN 1 END) as active,
+                            MAX(level) as maxLevel,
+                            SUM(total_exp) as totalExp
+                        FROM user_levels
+                    `).get();
+                    
+                    return {
+                        success: true,
+                        data: userStats || { total: 0, active: 0, maxLevel: 0, totalExp: 0 }
+                    };
+                } catch (error) {
+                    return { success: false, error: '获取用户统计失败: ' + error.message };
+                }
+            }
+            
+            if (statsType === 'badges' && method === 'GET') {
+                try {
+                    const badgeStats = db.prepare(`
+                        SELECT 
+                            COUNT(DISTINCT badge_id) as types,
+                            COUNT(*) as awarded,
+                            CAST(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM user_levels WHERE total_exp > 0) AS INTEGER) as awardRate
+                        FROM user_badges
+                    `).get();
+                    
+                    return {
+                        success: true,
+                        data: badgeStats || { types: 0, awarded: 0, awardRate: 0 }
+                    };
+                } catch (error) {
+                    return { success: false, error: '获取勋章统计失败: ' + error.message };
+                }
+            }
+            
+            if (statsType === 'config' && method === 'GET') {
+                try {
+                    const configStats = db.prepare(`
+                        SELECT COUNT(*) as groups FROM group_configs
+                    `).get();
+                    
+                    const levelStats = db.prepare(`
+                        SELECT COUNT(*) as levels FROM (
+                            SELECT DISTINCT level FROM user_levels WHERE level > 0
+                        )
+                    `).get();
+                    
+                    return {
+                        success: true,
+                        data: {
+                            groups: configStats.groups || 0,
+                            levels: levelStats.levels || 0,
+                            broadcasts: 1 // 假设每个群组有一个播报配置
+                        }
+                    };
+                } catch (error) {
+                    return { success: false, error: '获取配置统计失败: ' + error.message };
+                }
+            }
+        }
+        
         // 404 - 未找到的API端点
         return { success: false, error: 'API端点不存在', status: 404 };
         

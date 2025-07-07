@@ -561,21 +561,28 @@
                     <p><strong>最后更新：</strong><span id="lastUpdate">-</span></p>
                 </div>
                 
-                <h3>数据导出</h3>
+                <!-- 详细统计信息 -->
+                <div id="detailedStatsContainer">
+                    <div class="loading-text">正在加载详细统计信息...</div>
+                </div>
+                
+                <h3>📤 数据导出</h3>
                 <div class="form-grid">
                     <button class="btn btn-primary" onclick="exportAllData()">📤 导出完整数据</button>
                     <button class="btn btn-primary" onclick="exportUserData()">👥 导出用户数据</button>
                     <button class="btn btn-primary" onclick="exportConfig()">⚙️ 导出配置</button>
                 </div>
                 
-                <h3>数据导入</h3>
+                <h3>📥 数据导入</h3>
                 <div class="warning-box">
                     ⚠️ 导入数据会覆盖现有数据，请谨慎操作！
                 </div>
-                <input type="file" id="importFile" accept=".json">
-                <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                <div class="form-grid">
+                    <input type="file" id="importFile" accept=".json">
+                    <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                </div>
                 
-                <h3>群组迁移</h3>
+                <h3>🔄 群组迁移</h3>
                 <div class="form-grid">
                     <div class="form-group">
                         <label>源群组：</label>
@@ -589,6 +596,25 @@
                     </div>
                 </div>
                 <button class="btn btn-warning" onclick="migrateGroup()">🔄 迁移群组</button>
+                
+                <h3>🛠️ 数据库维护</h3>
+                <div class="form-grid">
+                    <button class="btn btn-info" onclick="cleanupData()">🧹 清理无效数据</button>
+                    <button class="btn btn-success" onclick="optimizeDatabase()">⚡ 优化数据库</button>
+                </div>
+                
+                <h3>💾 数据库备份</h3>
+                <div class="form-grid">
+                    <button class="btn btn-primary" onclick="createBackup()">💾 创建备份</button>
+                    <div class="form-group">
+                        <input type="file" id="backupFile" accept=".db,.sqlite,.sqlite3">
+                        <button class="btn btn-danger" onclick="restoreBackup()">🔄 恢复备份</button>
+                    </div>
+                </div>
+                
+                <div class="warning-box">
+                    ⚠️ 数据库维护操作可能需要较长时间，请耐心等待。建议在维护前创建备份。
+                </div>
             </div>
         </div>
     </div>

@@ -31,7 +31,7 @@ name = "telegram-bot-data"
 [env]
 NODE_ENV = "production" 
 PORT = "3000"
-LEVEL_SYSTEM_ENABLED = "false"  # 默认关闭，需要时在Railway Variables中设置为true
+LEVEL_SYSTEM_ENABLED = "true"  # 启用等级系统
 
 [[ports]]
 port = 3000

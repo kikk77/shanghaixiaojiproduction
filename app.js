@@ -80,6 +80,22 @@ async function startFullApplication() {
             console.warn('⚠️ 播报功能迁移检查失败:', error.message);
         }
         
+        // 初始化等级系统
+        if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+            console.log(`🏆 初始化等级系统...`);
+            try {
+                const LevelSystemInitializer = require('./level/scripts/init-level-system');
+                const initializer = new LevelSystemInitializer();
+                await initializer.initialize();
+                console.log('✅ 等级系统初始化完成');
+            } catch (error) {
+                console.error('❌ 等级系统初始化失败:', error.message);
+                // 等级系统初始化失败不影响主系统运行
+            }
+        } else {
+            console.log('🏆 等级系统未启用');
+        }
+        
         // 不关闭HTTP服务器，而是扩展其功能
         // 将HTTP服务器的处理函数替换为完整的API处理器
         const { handleHttpRequest } = require('./services/httpService');

@@ -3,6 +3,9 @@
  * 基于版本A设计：独立初始化，不影响现有系统
  */
 
+const path = require('path');
+const fs = require('fs');
+
 class LevelSystemInitializer {
     constructor() {
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
@@ -14,103 +17,181 @@ class LevelSystemInitializer {
             return;
         }
         
-        console.log('🏆 初始化等级系统...');
+        console.log('🏆 开始初始化等级系统...');
         
         try {
             const levelDbManager = require('../config/levelDatabase');
             const levelDb = levelDbManager.getInstance();
             
             if (!levelDb.enabled) {
-                console.log('❌ 等级系统数据库未启用');
+                console.log('🏆 等级系统数据库未启用');
                 return;
             }
             
-            // 检查是否有群组配置，如果没有则创建默认配置
-            await this.ensureGroupConfig(levelDb);
-            
-            // 初始化默认勋章
+            await this.createTables(levelDb);
+            await this.createDefaultGroupConfig(levelDb);
             await this.initializeDefaultBadges(levelDb);
-            
-            // 插入系统元信息
-            await this.insertSystemMeta(levelDb);
             
             console.log('✅ 等级系统初始化完成');
         } catch (error) {
             console.error('❌ 等级系统初始化失败:', error);
-            // 不影响主系统启动（版本A要求）
         }
     }
     
-    async ensureGroupConfig(levelDb) {
+    async createTables(levelDb) {
         const db = levelDb.getDatabase();
         if (!db) return;
         
-        // 检查是否已有群组配置
-        const existingConfigs = db.prepare(`
-            SELECT COUNT(*) as count FROM group_configs 
-            WHERE status = 'active'
-        `).get();
+        // 1. 等级系统元信息表
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS level_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                description TEXT,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        `);
         
-        if (existingConfigs.count > 0) {
-            console.log(`✅ 已有 ${existingConfigs.count} 个群组配置，跳过默认配置创建`);
-            return;
-        }
+        // 2. 用户等级数据表（简化：以用户ID为主键）
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS user_levels (
+                user_id INTEGER PRIMARY KEY,
+                level INTEGER DEFAULT 1,
+                total_exp INTEGER DEFAULT 0,
+                available_points INTEGER DEFAULT 0,
+                total_points_earned INTEGER DEFAULT 0,
+                total_points_spent INTEGER DEFAULT 0,
+                attack_count INTEGER DEFAULT 0,
+                user_eval_count INTEGER DEFAULT 0,
+                merchant_eval_count INTEGER DEFAULT 0,
+                text_eval_count INTEGER DEFAULT 0,
+                badges TEXT DEFAULT '[]',
+                display_name TEXT,
+                last_milestone_points INTEGER DEFAULT 0,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        `);
         
-        console.log('🏆 没有找到群组配置，创建默认配置以确保系统正常工作');
+        // 3. 积分变更日志表（保留group_id用于记录来源）
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS points_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                source_group_id TEXT, -- 记录积分来源群组，可为空
+                action_type TEXT NOT NULL,
+                exp_change INTEGER DEFAULT 0,
+                points_change INTEGER DEFAULT 0,
+                exp_after INTEGER NOT NULL,
+                points_after INTEGER NOT NULL,
+                description TEXT,
+                related_eval_id INTEGER,
+                admin_id INTEGER,
+                timestamp INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        `);
         
-        // 只有在没有任何群组配置时才创建默认配置
-        const defaultConfig = {
-            group_id: 'default',
-            group_name: '默认配置',
-            level_config: JSON.stringify({
-                levels: [
-                    { level: 1, name: "新手勇士 🟢", required_evals: 0, required_exp: 0 },
-                    { level: 2, name: "初级勇士 🔵", required_evals: 3, required_exp: 50 },
-                    { level: 3, name: "中级勇士 🟣", required_evals: 8, required_exp: 150 },
-                    { level: 4, name: "高级勇士 🟠", required_evals: 15, required_exp: 300 },
-                    { level: 5, name: "专家勇士 🔴", required_evals: 25, required_exp: 500 },
-                    { level: 6, name: "大师勇士 🟡", required_evals: 40, required_exp: 750 },
-                    { level: 7, name: "传说勇士 ⚪", required_evals: 60, required_exp: 1050 },
-                    { level: 8, name: "史诗勇士 🟤", required_evals: 85, required_exp: 1400 },
-                    { level: 9, name: "神话勇士 ⚫", required_evals: 120, required_exp: 1800 },
-                    { level: 10, name: "至尊勇士 🌟", required_evals: 160, required_exp: 2250 }
-                ],
-                max_level: 10,
-                customizable: true,
-                version: "1.0"
-            }),
-            points_config: JSON.stringify({
-                base_rewards: {
-                    attack: { exp: 20, points: 10, desc: "完成出击" },
-                    user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
-                    merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
-                    text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
-                    level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" },
-                    evaluate_merchant: { exp: 30, points: 25, desc: "评价商家" },
-                    evaluate_user: { exp: 25, points: 20, desc: "评价用户" },
-                    be_evaluated: { exp: 15, points: 10, desc: "被评价" },
-                    manual_grant: { exp: 0, points: 0, desc: "手动奖励" }
-                },
-                special_rewards: {
-                    perfect_score: { exp: 50, points: 100, desc: "获得满分评价" },
-                    first_evaluation: { exp: 10, points: 20, desc: "首次评价" },
-                    daily_active: { exp: 5, points: 5, desc: "每日活跃" }
-                },
-                milestones: [100, 500, 1000, 2000, 5000, 10000]
-            }),
-            broadcast_config: JSON.stringify({
-                enabled: true,
-                level_up: true,
-                badge_unlock: true,
-                points_milestone: false,
-                auto_pin: true,
-                auto_delete_time: 0
-            }),
-            broadcast_enabled: 1,
-            status: 'active'
-        };
+        // 4. 群组配置表（保留，用于播报设置和奖励规则）
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS group_configs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id TEXT NOT NULL UNIQUE,
+                group_name TEXT,
+                level_config TEXT,
+                points_config TEXT,
+                broadcast_config TEXT,
+                broadcast_enabled INTEGER DEFAULT 1,
+                status TEXT DEFAULT 'active',
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        `);
+        
+        // 5. 勋章定义表（保留group_id用于不同群组的勋章配置）
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS badge_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                badge_id TEXT NOT NULL,
+                group_id TEXT NOT NULL DEFAULT 'global',
+                badge_name TEXT NOT NULL,
+                badge_emoji TEXT DEFAULT '🏆',
+                badge_desc TEXT,
+                unlock_conditions TEXT,
+                badge_type TEXT DEFAULT 'auto',
+                rarity TEXT DEFAULT 'common',
+                status TEXT DEFAULT 'active',
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                UNIQUE(badge_id, group_id)
+            )
+        `);
+        
+        // 6. 勋章获得记录表（简化：不依赖群组）
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                badge_id TEXT NOT NULL,
+                source_group_id TEXT, -- 记录勋章来源群组，可为空
+                awarded_by TEXT DEFAULT 'system',
+                awarded_reason TEXT,
+                awarded_at INTEGER DEFAULT (strftime('%s', 'now')),
+                UNIQUE(user_id, badge_id)
+            )
+        `);
+        
+        // 创建索引
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_user_levels_level ON user_levels(level DESC)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_user_levels_points ON user_levels(available_points DESC)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_points_log_user_time ON points_log(user_id, timestamp DESC)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_group_configs_group_id ON group_configs(group_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_badge_definitions_group ON badge_definitions(group_id, status)`);
+        
+        console.log('✅ 数据库表创建完成');
+    }
+    
+    async createDefaultGroupConfig(levelDb) {
+        const db = levelDb.getDatabase();
+        if (!db) return;
         
         try {
+            // 创建全局配置
+            const globalConfig = {
+                group_id: 'global',
+                group_name: '全局配置',
+                level_config: JSON.stringify({
+                    levels: [
+                        { level: 1, name: "新手勇士 🟢", required_evals: 0, required_exp: 0 },
+                        { level: 2, name: "初级勇士 🔵", required_evals: 3, required_exp: 50 },
+                        { level: 3, name: "中级勇士 🟣", required_evals: 8, required_exp: 150 },
+                        { level: 4, name: "高级勇士 🟠", required_evals: 15, required_exp: 300 },
+                        { level: 5, name: "专家勇士 🔴", required_evals: 25, required_exp: 500 },
+                        { level: 6, name: "大师勇士 🟡", required_evals: 40, required_exp: 750 },
+                        { level: 7, name: "传说勇士 ⚪", required_evals: 60, required_exp: 1050 },
+                        { level: 8, name: "史诗勇士 🟤", required_evals: 85, required_exp: 1400 },
+                        { level: 9, name: "神话勇士 ⚫", required_evals: 120, required_exp: 1800 },
+                        { level: 10, name: "至尊勇士 🌟", required_evals: 160, required_exp: 2250 }
+                    ]
+                }),
+                points_config: JSON.stringify({
+                    base_rewards: {
+                        attack: { exp: 20, points: 10, desc: "完成出击" },
+                        user_eval: { exp: 30, points: 25, desc: "完成用户评价" },
+                        merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
+                        text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
+                        level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" }
+                    }
+                }),
+                broadcast_config: JSON.stringify({
+                    level_up: true,
+                    badge_unlock: true,
+                    points_milestone: false
+                }),
+                broadcast_enabled: 0, // 全局配置不播报
+                status: 'active'
+            };
+            
             const stmt = db.prepare(`
                 INSERT OR REPLACE INTO group_configs 
                 (group_id, group_name, level_config, points_config, broadcast_config, broadcast_enabled, status)
@@ -118,19 +199,39 @@ class LevelSystemInitializer {
             `);
             
             stmt.run(
-                defaultConfig.group_id, 
-                defaultConfig.group_name, 
-                defaultConfig.level_config, 
-                defaultConfig.points_config,
-                defaultConfig.broadcast_config,
-                defaultConfig.broadcast_enabled,
-                defaultConfig.status
+                globalConfig.group_id,
+                globalConfig.group_name,
+                globalConfig.level_config,
+                globalConfig.points_config,
+                globalConfig.broadcast_config,
+                globalConfig.broadcast_enabled,
+                globalConfig.status
             );
             
-            console.log('✅ 默认群组配置创建成功');
-        } catch (err) {
-            console.error('创建默认群组配置失败:', err);
-            throw err;
+            // 如果有环境变量指定的群组，也创建配置
+            const envGroupId = process.env.GROUP_CHAT_ID;
+            if (envGroupId && envGroupId !== 'global') {
+                const envGroupConfig = {
+                    ...globalConfig,
+                    group_id: envGroupId,
+                    group_name: '主群组',
+                    broadcast_enabled: 1 // 主群组启用播报
+                };
+                
+                stmt.run(
+                    envGroupConfig.group_id,
+                    envGroupConfig.group_name,
+                    envGroupConfig.level_config,
+                    envGroupConfig.points_config,
+                    envGroupConfig.broadcast_config,
+                    envGroupConfig.broadcast_enabled,
+                    envGroupConfig.status
+                );
+            }
+            
+            console.log('✅ 默认群组配置创建完成');
+        } catch (error) {
+            console.error('创建默认群组配置失败:', error);
         }
     }
     
@@ -138,161 +239,96 @@ class LevelSystemInitializer {
         const db = levelDb.getDatabase();
         if (!db) return;
         
-        const defaultBadges = [
-            {
-                badge_id: "first_blood",
-                badge_name: "首次出击",
-                badge_emoji: "🥇",
-                badge_desc: "完成第一次出击",
-                badge_type: "auto",
-                rarity: "common",
-                unlock_conditions: JSON.stringify({
-                    type: "stat_based",
-                    field: "attack_count",
-                    operator: ">=",
-                    target: 1
-                })
-            },
-            {
-                badge_id: "evaluation_novice",
-                badge_name: "评价新手",
-                badge_emoji: "📝",
-                badge_desc: "完成10次用户评价",
-                badge_type: "auto",
-                rarity: "common",
-                unlock_conditions: JSON.stringify({
-                    type: "stat_based",
-                    field: "user_eval_count",
-                    operator: ">=",
-                    target: 10
-                })
-            },
-            {
-                badge_id: "experience_hunter",
-                badge_name: "经验猎手",
-                badge_emoji: "⭐",
-                badge_desc: "累计经验值达到1000",
-                badge_type: "auto",
-                rarity: "rare",
-                unlock_conditions: JSON.stringify({
-                    type: "stat_based",
-                    field: "total_exp",
-                    operator: ">=",
-                    target: 1000
-                })
-            },
-            {
-                badge_id: "points_collector",
-                badge_name: "积分收集家",
-                badge_emoji: "💰",
-                badge_desc: "累计获得积分1000",
-                badge_type: "auto",
-                rarity: "rare",
-                unlock_conditions: JSON.stringify({
-                    type: "stat_based",
-                    field: "total_points_earned",
-                    operator: ">=",
-                    target: 1000
-                })
-            },
-            {
-                badge_id: "level_master",
-                badge_name: "等级大师",
-                badge_emoji: "🌟",
-                badge_desc: "达到5级",
-                badge_type: "auto",
-                rarity: "epic",
-                unlock_conditions: JSON.stringify({
-                    type: "stat_based",
-                    field: "level",
-                    operator: ">=",
-                    target: 5
-                })
-            },
-            {
-                badge_id: "perfect_score",
-                badge_name: "完美评价",
-                badge_emoji: "💯",
-                badge_desc: "获得满分评价",
-                badge_type: "auto",
-                rarity: "epic",
-                unlock_conditions: JSON.stringify({
-                    type: "evaluation_streak",
-                    evaluation_type: "merchant_eval",
-                    score: 10,
-                    count: 1,
-                    consecutive: false
-                })
-            },
-            {
-                badge_id: "admin_choice",
-                badge_name: "管理员之选",
-                badge_emoji: "🎖️",
-                badge_desc: "管理员特别授予的荣誉勋章",
-                badge_type: "manual",
-                rarity: "legendary",
-                unlock_conditions: JSON.stringify({
-                    type: "admin_only",
-                    desc: "仅管理员可授予"
-                })
-            }
-        ];
-        
-        // 不再依赖环境变量，勋章将通过管理员面板手动创建
-        console.log('🏆 勋章系统初始化完成，请通过管理员面板手动添加勋章配置');
-        return;
-        
-        // 批量插入勋章（使用better-sqlite3的事务）
-        const insertStmt = db.prepare(`
-            INSERT OR IGNORE INTO badge_definitions 
-            (group_id, badge_id, badge_name, badge_emoji, badge_desc, 
-             badge_type, rarity, unlock_conditions, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-        `);
-        
-        const insertMany = db.transaction((badges) => {
-            for (const badge of badges) {
-                insertStmt.run(
-                    groupId, badge.badge_id, badge.badge_name, badge.badge_emoji,
-                    badge.badge_desc, badge.badge_type, badge.rarity, badge.unlock_conditions
+        try {
+            const defaultBadges = [
+                {
+                    badge_id: "first_attack",
+                    group_id: "global",
+                    badge_name: "初次出击",
+                    badge_emoji: "⚡",
+                    badge_desc: "完成第一次出击",
+                    unlock_conditions: JSON.stringify({
+                        type: "stat_based",
+                        field: "attack_count",
+                        target: 1
+                    }),
+                    rarity: "common"
+                },
+                {
+                    badge_id: "evaluation_novice",
+                    group_id: "global",
+                    badge_name: "评价新手",
+                    badge_emoji: "📝",
+                    badge_desc: "完成10次用户评价",
+                    unlock_conditions: JSON.stringify({
+                        type: "stat_based",
+                        field: "user_eval_count",
+                        target: 10
+                    }),
+                    rarity: "common"
+                },
+                {
+                    badge_id: "experience_hunter",
+                    group_id: "global",
+                    badge_name: "经验猎手",
+                    badge_emoji: "⭐",
+                    badge_desc: "累计经验值达到1000",
+                    unlock_conditions: JSON.stringify({
+                        type: "stat_based",
+                        field: "total_exp",
+                        target: 1000
+                    }),
+                    rarity: "rare"
+                },
+                {
+                    badge_id: "points_collector",
+                    group_id: "global",
+                    badge_name: "积分收集家",
+                    badge_emoji: "💰",
+                    badge_desc: "累计获得积分1000",
+                    unlock_conditions: JSON.stringify({
+                        type: "stat_based",
+                        field: "total_points_earned",
+                        target: 1000
+                    }),
+                    rarity: "rare"
+                },
+                {
+                    badge_id: "level_master",
+                    group_id: "global",
+                    badge_name: "等级大师",
+                    badge_emoji: "🌟",
+                    badge_desc: "达到5级",
+                    unlock_conditions: JSON.stringify({
+                        type: "stat_based",
+                        field: "level",
+                        target: 5
+                    }),
+                    rarity: "epic"
+                }
+            ];
+            
+            const stmt = db.prepare(`
+                INSERT OR IGNORE INTO badge_definitions 
+                (badge_id, group_id, badge_name, badge_emoji, badge_desc, unlock_conditions, rarity, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+            `);
+            
+            for (const badge of defaultBadges) {
+                stmt.run(
+                    badge.badge_id,
+                    badge.group_id,
+                    badge.badge_name,
+                    badge.badge_emoji,
+                    badge.badge_desc,
+                    badge.unlock_conditions,
+                    badge.rarity
                 );
             }
-        });
-        
-        try {
-            insertMany(defaultBadges);
+            
             console.log('✅ 默认勋章初始化完成');
         } catch (error) {
-            console.error('❌ 勋章初始化失败:', error);
-        }
-    }
-    
-    async insertSystemMeta(levelDb) {
-        const db = levelDb.getDatabase();
-        if (!db) return;
-        
-        const metaData = [
-            { key: 'system_version', value: '1.0.0', description: '等级系统版本' },
-            { key: 'initialized_at', value: new Date().toISOString(), description: '初始化时间' },
-            { key: 'database_version', value: '1', description: '数据库架构版本' }
-        ];
-        
-        const insertStmt = db.prepare(`
-            INSERT OR REPLACE INTO level_meta (key, value, description)
-            VALUES (?, ?, ?)
-        `);
-        
-        const insertMany = db.transaction((metas) => {
-            for (const meta of metas) {
-                insertStmt.run(meta.key, meta.value, meta.description);
-            }
-        });
-        
-        try {
-            insertMany(metaData);
-            console.log('✅ 系统元信息插入完成');
-        } catch (error) {
-            console.error('❌ 元信息插入失败:', error);
+            console.error('初始化默认勋章失败:', error);
         }
     }
 }
@@ -301,9 +337,10 @@ class LevelSystemInitializer {
 if (require.main === module) {
     const initializer = new LevelSystemInitializer();
     initializer.initialize().then(() => {
+        console.log('初始化脚本执行完成');
         process.exit(0);
     }).catch(error => {
-        console.error('初始化失败:', error);
+        console.error('初始化脚本执行失败:', error);
         process.exit(1);
     });
 }

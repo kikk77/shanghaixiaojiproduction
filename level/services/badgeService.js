@@ -1,274 +1,181 @@
 /**
- * 勋章系统服务
- * 基于版本A设计：独立管理勋章解锁和分配
+ * 勋章系统服务 - 简化版本：以用户为核心
+ * 
+ * 设计原则：
+ * 1. 用户勋章不依赖群组，以用户ID为核心
+ * 2. 勋章定义可以有群组范围，但用户获得勋章时不强制群组
+ * 3. 简化勋章检查和解锁逻辑
  */
 
 class BadgeService {
     constructor() {
-        // 使用独立数据库管理器
-        const levelDbManager = require('../config/levelDatabase');
-        this.levelDb = levelDbManager.getInstance();
-        
-        // 获取等级服务实例
-        this.levelService = null; // 延迟加载避免循环依赖
-        
-        // 检查是否启用
+        this.levelDb = require('../config/levelDatabase');
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
-    }
-    
-    /**
-     * 延迟加载等级服务
-     */
-    getLevelService() {
-        if (!this.levelService) {
-            this.levelService = require('./levelService').getInstance();
+        
+        if (!this.enabled) {
+            console.log('🏆 勋章系统已禁用');
         }
-        return this.levelService;
     }
     
     /**
-     * 检查并解锁勋章
+     * 检查并解锁勋章 - 简化版本：不需要群组ID
      */
-    async checkAndUnlockBadges(userId, groupId, userProfile) {
-        if (!this.enabled || !this.levelDb.enabled) return;
+    async checkAndUnlockBadges(userId, userProfile) {
+        if (!this.enabled) return;
+        
+        const db = this.levelDb.getDatabase();
+        if (!db) return;
         
         try {
-            // 获取所有可用勋章定义
-            const availableBadges = await this.getAvailableBadges(groupId);
+            // 获取所有可用的勋章定义（包括全局和群组勋章）
+            const badgeDefinitions = db.prepare(`
+                SELECT * FROM badge_definitions 
+                WHERE status = 'active' 
+                AND badge_type = 'auto'
+                ORDER BY group_id, rarity DESC
+            `).all();
             
-            // 获取用户已有勋章
-            const userBadges = await this.getUserBadges(userId, groupId);
-            const unlockedBadgeIds = new Set(userBadges.map(b => b.badge_id));
+            if (badgeDefinitions.length === 0) {
+                console.log('没有找到可用的勋章定义');
+                return;
+            }
             
-            // 检查每个勋章的解锁条件
-            const newlyUnlocked = [];
+            // 获取用户已有的勋章
+            const userBadges = db.prepare(`
+                SELECT badge_id FROM user_badges 
+                WHERE user_id = ?
+            `).all(userId);
             
-            for (const badge of availableBadges) {
-                if (unlockedBadgeIds.has(badge.badge_id)) continue;
+            const existingBadgeIds = new Set(userBadges.map(b => b.badge_id));
+            
+            // 检查每个勋章是否满足解锁条件
+            for (const badgeDef of badgeDefinitions) {
+                // 跳过已解锁的勋章
+                if (existingBadgeIds.has(badgeDef.badge_id)) {
+                    continue;
+                }
                 
-                const conditions = JSON.parse(badge.unlock_conditions);
-                const isUnlocked = await this.checkUnlockConditions(userProfile, conditions);
+                // 检查解锁条件
+                const shouldUnlock = await this.checkUnlockCondition(badgeDef, userProfile);
                 
-                if (isUnlocked) {
-                    await this.unlockBadge(userId, groupId, badge);
-                    newlyUnlocked.push(badge);
+                if (shouldUnlock) {
+                    await this.unlockBadge(userId, badgeDef.badge_id, 'system', '自动解锁');
+                    console.log(`🏅 用户 ${userId} 解锁勋章: ${badgeDef.badge_name}`);
                 }
             }
-            
-            // 如果有新解锁的勋章，发送通知
-            if (newlyUnlocked.length > 0) {
-                await this.notifyBadgeUnlock(userId, groupId, newlyUnlocked);
-            }
-            
-            return newlyUnlocked;
             
         } catch (error) {
             console.error('检查勋章解锁失败:', error);
-            return [];
         }
     }
     
     /**
-     * 获取群组可用勋章
+     * 检查勋章解锁条件
      */
-    async getAvailableBadges(groupId) {
-        const db = this.levelDb.getDatabase();
-        if (!db) return [];
-        
+    async checkUnlockCondition(badgeDef, userProfile) {
         try {
-            const stmt = db.prepare(`
-                SELECT * FROM badge_definitions 
-                WHERE (group_id = ? OR group_id = 'default') 
-                AND status = 'active'
-                ORDER BY rarity ASC, badge_id ASC
-            `);
-            return stmt.all(groupId);
-        } catch (error) {
-            console.error('获取勋章定义失败:', error);
-            return [];
-        }
-    }
-    
-    /**
-     * 获取用户勋章
-     */
-    async getUserBadges(userId, groupId = null) {
-        const db = this.levelDb.getDatabase();
-        if (!db) return [];
-        
-        try {
-            let stmt;
-            if (groupId) {
-                stmt = db.prepare(`
-                    SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
-                    FROM user_badges ub
-                    JOIN badge_definitions bd ON ub.badge_id = bd.badge_id 
-                        AND (bd.group_id = ub.group_id OR bd.group_id = 'default')
-                    WHERE ub.user_id = ? AND ub.group_id = ?
-                    ORDER BY ub.unlocked_at DESC
-                `);
-                return stmt.all(userId, groupId);
-            } else {
-                // 不指定群组时，获取用户的所有勋章
-                stmt = db.prepare(`
-                    SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
-                    FROM user_badges ub
-                    JOIN badge_definitions bd ON ub.badge_id = bd.badge_id 
-                        AND (bd.group_id = ub.group_id OR bd.group_id = 'default')
-                    WHERE ub.user_id = ?
-                    ORDER BY ub.unlocked_at DESC
-                `);
-                return stmt.all(userId);
-            }
-        } catch (error) {
-            console.error('获取用户勋章失败:', error);
-            return [];
-        }
-    }
-    
-    /**
-     * 检查解锁条件
-     */
-    async checkUnlockConditions(userProfile, conditions) {
-        try {
-            // 等级条件
-            if (conditions.level && userProfile.level < conditions.level) {
-                return false;
-            }
+            const conditions = JSON.parse(badgeDef.unlock_conditions);
             
-            // 经验值条件
-            if (conditions.exp && userProfile.total_exp < conditions.exp) {
-                return false;
-            }
-            
-            // 评价次数条件
-            if (conditions.evaluations && userProfile.user_eval_count < conditions.evaluations) {
-                return false;
-            }
-            
-            // 被评价次数条件
-            if (conditions.be_evaluated && userProfile.merchant_eval_count < conditions.be_evaluated) {
-                return false;
-            }
-            
-            // 积分条件
-            if (conditions.points_earned && userProfile.total_points_earned < conditions.points_earned) {
-                return false;
-            }
-            
-            // 特定行为次数条件
-            if (conditions.actions) {
-                for (const [action, count] of Object.entries(conditions.actions)) {
-                    const fieldName = `${action}_count`;
-                    if (userProfile[fieldName] < count) {
-                        return false;
-                    }
-                }
-            }
-            
-            // 连续活跃天数（需要额外计算）
-            if (conditions.consecutive_days) {
-                const consecutiveDays = await this.calculateConsecutiveDays(
-                    userProfile.user_id, 
-                    userProfile.group_id
-                );
-                if (consecutiveDays < conditions.consecutive_days) {
+            switch (conditions.type) {
+                case 'stat_based':
+                    return this.checkStatCondition(conditions, userProfile);
+                case 'evaluation_streak':
+                    return this.checkEvaluationStreak(conditions, userProfile);
+                case 'admin_only':
+                    return false; // 管理员专用勋章不能自动解锁
+                default:
+                    console.log(`未知的勋章条件类型: ${conditions.type}`);
                     return false;
-                }
             }
-            
-            // 所有条件都满足
-            return true;
-            
         } catch (error) {
-            console.error('检查解锁条件失败:', error);
+            console.error('检查勋章条件失败:', error);
             return false;
         }
     }
     
     /**
-     * 计算连续活跃天数
+     * 检查统计数据条件
      */
-    async calculateConsecutiveDays(userId, groupId) {
-        const db = this.levelDb.getDatabase();
-        if (!db) return 0;
+    checkStatCondition(conditions, userProfile) {
+        const field = conditions.field;
+        const target = conditions.target;
         
-        try {
-            // 获取最近30天的活动记录
-            const stmt = db.prepare(`
-                SELECT DISTINCT DATE(timestamp, 'unixepoch') as active_date
-                FROM points_log
-                WHERE user_id = ? AND group_id = ?
-                AND timestamp > ?
-                ORDER BY active_date DESC
-            `);
-            
-            const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-            const activeDates = stmt.all(userId, groupId, thirtyDaysAgo);
-            
-            if (activeDates.length === 0) return 0;
-            
-            // 计算连续天数
-            let consecutiveDays = 1;
-            const today = new Date().toISOString().split('T')[0];
-            
-            // 如果今天没有活动，连续天数为0
-            if (activeDates[0].active_date !== today) {
-                return 0;
-            }
-            
-            // 从今天开始往前检查
-            for (let i = 1; i < activeDates.length; i++) {
-                const currentDate = new Date(activeDates[i-1].active_date);
-                const prevDate = new Date(activeDates[i].active_date);
-                const diffDays = Math.floor((currentDate - prevDate) / (1000 * 60 * 60 * 24));
-                
-                if (diffDays === 1) {
-                    consecutiveDays++;
-                } else {
-                    break;
-                }
-            }
-            
-            return consecutiveDays;
-            
-        } catch (error) {
-            console.error('计算连续天数失败:', error);
-            return 0;
+        if (!userProfile.hasOwnProperty(field)) {
+            console.log(`用户档案中没有字段: ${field}`);
+            return false;
         }
+        
+        const currentValue = userProfile[field];
+        return currentValue >= target;
+    }
+    
+    /**
+     * 检查评价连击条件（暂时简化实现）
+     */
+    checkEvaluationStreak(conditions, userProfile) {
+        // 简化实现：基于总评价次数
+        const evaluationType = conditions.evaluation_type;
+        const requiredCount = conditions.count;
+        
+        let currentCount = 0;
+        if (evaluationType === 'merchant_eval') {
+            currentCount = userProfile.merchant_eval_count || 0;
+        } else if (evaluationType === 'user_eval') {
+            currentCount = userProfile.user_eval_count || 0;
+        }
+        
+        return currentCount >= requiredCount;
     }
     
     /**
      * 解锁勋章
      */
-    async unlockBadge(userId, groupId, badge) {
+    async unlockBadge(userId, badgeId, awardedBy = 'system', reason = '自动解锁') {
         const db = this.levelDb.getDatabase();
         if (!db) return false;
         
         try {
-            const stmt = db.prepare(`
+            // 检查是否已经解锁
+            const existing = db.prepare(`
+                SELECT id FROM user_badges 
+                WHERE user_id = ? AND badge_id = ?
+            `).get(userId, badgeId);
+            
+            if (existing) {
+                console.log(`用户 ${userId} 已拥有勋章 ${badgeId}`);
+                return false;
+            }
+            
+            // 获取勋章定义
+            const badgeDef = db.prepare(`
+                SELECT * FROM badge_definitions 
+                WHERE badge_id = ? AND status = 'active'
+                LIMIT 1
+            `).get(badgeId);
+            
+            if (!badgeDef) {
+                console.error(`勋章定义不存在: ${badgeId}`);
+                return false;
+            }
+            
+            // 插入用户勋章记录
+            const insertStmt = db.prepare(`
                 INSERT INTO user_badges 
-                (user_id, group_id, badge_id, unlocked_at)
+                (user_id, badge_id, awarded_by, awarded_reason)
                 VALUES (?, ?, ?, ?)
             `);
             
-            stmt.run(userId, groupId, badge.badge_id, Date.now() / 1000);
+            insertStmt.run(userId, badgeId, awardedBy, reason);
             
-            // 记录成就日志
-            const logStmt = db.prepare(`
-                INSERT INTO achievement_log
-                (user_id, group_id, achievement_type, achievement_id, 
-                 achievement_name, achievement_desc)
-                VALUES (?, ?, 'badge', ?, ?, ?)
-            `);
+            // 更新用户档案中的勋章列表
+            await this.updateUserBadgeList(userId);
             
-            logStmt.run(
-                userId, groupId, badge.badge_id,
-                `${badge.badge_emoji} ${badge.badge_name}`,
-                badge.badge_desc
-            );
+            // 播报勋章解锁
+            await this.broadcastBadgeUnlock(userId, badgeDef);
             
+            console.log(`✅ 用户 ${userId} 成功解锁勋章: ${badgeDef.badge_name}`);
             return true;
+            
         } catch (error) {
             console.error('解锁勋章失败:', error);
             return false;
@@ -276,31 +183,74 @@ class BadgeService {
     }
     
     /**
-     * 通知勋章解锁
+     * 更新用户档案中的勋章列表
      */
-    async notifyBadgeUnlock(userId, groupId, badges) {
+    async updateUserBadgeList(userId) {
+        const db = this.levelDb.getDatabase();
+        if (!db) return;
+        
         try {
-            const levelService = this.getLevelService();
+            // 获取用户的所有勋章
+            const userBadges = db.prepare(`
+                SELECT ub.badge_id, bd.badge_name, bd.badge_emoji, bd.rarity
+                FROM user_badges ub
+                JOIN badge_definitions bd ON ub.badge_id = bd.badge_id
+                WHERE ub.user_id = ?
+                ORDER BY ub.awarded_at DESC
+            `).all(userId);
+            
+            // 更新用户档案
+            const badgeList = userBadges.map(b => ({
+                id: b.badge_id,
+                name: b.badge_name,
+                emoji: b.badge_emoji,
+                rarity: b.rarity
+            }));
+            
+            const updateStmt = db.prepare(`
+                UPDATE user_levels 
+                SET badges = ?, updated_at = ?
+                WHERE user_id = ?
+            `);
+            
+            updateStmt.run(
+                JSON.stringify(badgeList),
+                Date.now() / 1000,
+                userId
+            );
+            
+        } catch (error) {
+            console.error('更新用户勋章列表失败:', error);
+        }
+    }
+    
+    /**
+     * 播报勋章解锁
+     */
+    async broadcastBadgeUnlock(userId, badgeDef) {
+        if (!this.enabled) return;
+        
+        try {
+            const botService = require('../../services/botService');
+            
+            // 获取用户信息
+            const levelService = require('./levelService').getInstance();
             const userInfo = await levelService.getUserDisplayInfo(userId);
-            const botService = levelService.botService;
             
-            // 构建通知消息
-            let message = `🎊 恭喜解锁新勋章！🎊\n\n`;
-            message += `🧑‍🚀 ${userInfo.displayName}\n\n`;
-            
-            for (const badge of badges) {
-                message += `${badge.badge_emoji} **${badge.badge_name}**\n`;
-                message += `📝 ${badge.badge_desc}\n`;
-                message += `💎 稀有度：${this.getRarityDisplay(badge.rarity)}\n\n`;
-            }
-            
-            message += `继续努力，收集更多勋章！🏅`;
+            // 构建解锁消息
+            const rarityDisplay = this.getRarityDisplay(badgeDef.rarity);
+            const message = `🏅 勋章解锁！\n\n` +
+                `🧑‍🚀 ${userInfo.displayName}\n` +
+                `${badgeDef.badge_emoji} ${badgeDef.badge_name}\n` +
+                `${rarityDisplay}\n` +
+                `📝 ${badgeDef.badge_desc}\n\n` +
+                `恭喜解锁新成就！🎉`;
             
             // 获取播报目标群组
-            const targetGroups = await levelService.getBroadcastTargetGroups();
+            const targetGroups = await this.getBroadcastTargetGroups();
             
             if (targetGroups.length === 0) {
-                console.log('没有配置播报群组，跳过勋章解锁播报');
+                console.log('没有配置播报群组，跳过勋章播报');
                 return;
             }
             
@@ -317,52 +267,56 @@ class BadgeService {
                     console.error(`向群组 ${targetGroupId} 播报勋章解锁失败:`, error);
                 }
             }
-            
         } catch (error) {
-            console.error('通知勋章解锁失败:', error);
+            console.error('勋章解锁播报失败:', error);
         }
     }
     
     /**
-     * 获取稀有度显示
+     * 获取播报目标群组
      */
-    getRarityDisplay(rarity) {
-        const rarityMap = {
-            'common': '⚪ 普通',
-            'rare': '🔵 稀有',
-            'epic': '🟣 史诗',
-            'legendary': '🟡 传说',
-            'mythic': '🔴 神话'
-        };
-        return rarityMap[rarity] || '⚪ 普通';
+    async getBroadcastTargetGroups() {
+        const db = this.levelDb.getDatabase();
+        if (!db) return [];
+        
+        try {
+            const stmt = db.prepare(`
+                SELECT group_id FROM group_configs 
+                WHERE status = 'active' 
+                AND broadcast_enabled = 1
+                AND group_id != 'global'
+            `);
+            const groups = stmt.all();
+            return groups.map(g => g.group_id);
+        } catch (error) {
+            console.error('获取播报目标群组失败:', error);
+            return [];
+        }
     }
     
     /**
      * 获取用户勋章墙
      */
-    async getUserBadgeWall(userId, groupId = null) {
+    async getUserBadgeWall(userId) {
+        const db = this.levelDb.getDatabase();
+        if (!db) return null;
+        
         try {
-            // 获取用户所有勋章
-            const userBadges = await this.getUserBadges(userId, groupId);
+            // 获取用户已解锁的勋章
+            const userBadges = db.prepare(`
+                SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
+                FROM user_badges ub
+                JOIN badge_definitions bd ON ub.badge_id = bd.badge_id
+                WHERE ub.user_id = ?
+                ORDER BY ub.awarded_at DESC
+            `).all(userId);
             
-            // 如果没有指定群组，使用用户的第一个群组或默认群组
-            let actualGroupId = groupId;
-            if (!actualGroupId && userBadges.length > 0) {
-                actualGroupId = userBadges[0].group_id;
-            }
-            if (!actualGroupId) {
-                actualGroupId = 'default';
-            }
-            
-            // 获取所有可用勋章
-            const allBadges = await this.getAvailableBadges(actualGroupId);
-            
-            // 统计信息
-            const stats = {
-                total: allBadges.length,
-                unlocked: userBadges.length,
-                percentage: allBadges.length > 0 ? Math.round((userBadges.length / allBadges.length) * 100) : 0
-            };
+            // 获取所有可用的勋章定义
+            const allBadges = db.prepare(`
+                SELECT * FROM badge_definitions 
+                WHERE status = 'active'
+                ORDER BY rarity DESC, badge_name ASC
+            `).all();
             
             // 按稀有度分组
             const badgesByRarity = {
@@ -373,103 +327,111 @@ class BadgeService {
                 common: []
             };
             
-            // 标记已解锁的勋章
-            const unlockedIds = new Set(userBadges.map(b => b.badge_id));
+            const unlockedBadgeIds = new Set(userBadges.map(b => b.badge_id));
             
             for (const badge of allBadges) {
-                const badgeInfo = {
-                    ...badge,
-                    unlocked: unlockedIds.has(badge.badge_id),
-                    unlocked_at: userBadges.find(b => b.badge_id === badge.badge_id)?.unlocked_at
-                };
-                
-                if (badgesByRarity[badge.rarity]) {
-                    badgesByRarity[badge.rarity].push(badgeInfo);
+                const rarity = badge.rarity || 'common';
+                if (!badgesByRarity[rarity]) {
+                    badgesByRarity[rarity] = [];
                 }
+                
+                badgesByRarity[rarity].push({
+                    ...badge,
+                    unlocked: unlockedBadgeIds.has(badge.badge_id)
+                });
             }
             
+            // 计算统计信息
+            const stats = {
+                total: allBadges.length,
+                unlocked: userBadges.length,
+                percentage: allBadges.length > 0 ? Math.round((userBadges.length / allBadges.length) * 100) : 0
+            };
+            
             return {
-                stats,
+                userBadges: userBadges,
                 badges: badgesByRarity,
-                userBadges
+                stats: stats
             };
             
         } catch (error) {
-            console.error('获取勋章墙失败:', error);
+            console.error('获取用户勋章墙失败:', error);
             return null;
         }
     }
     
     /**
-     * 手动授予勋章（管理员功能）
+     * 获取稀有度显示
      */
-    async grantBadge(userId, groupId, badgeId, grantedBy) {
+    getRarityDisplay(rarity) {
+        const rarityMap = {
+            'common': '🟢 普通',
+            'rare': '🔵 稀有',
+            'epic': '🟣 史诗',
+            'legendary': '🟡 传说',
+            'mythic': '🔴 神话'
+        };
+        return rarityMap[rarity] || '⚪ 未知';
+    }
+    
+    /**
+     * 管理员手动授予勋章
+     */
+    async adminGrantBadge(userId, badgeId, adminId, reason = '管理员授予') {
+        return await this.unlockBadge(userId, badgeId, `admin:${adminId}`, reason);
+    }
+    
+    /**
+     * 获取勋章定义列表
+     */
+    async getBadgeDefinitions(groupId = 'global') {
         const db = this.levelDb.getDatabase();
-        if (!db) return false;
+        if (!db) return [];
         
         try {
-            // 检查勋章是否存在
-            const checkStmt = db.prepare(`
+            const stmt = db.prepare(`
                 SELECT * FROM badge_definitions 
-                WHERE badge_id = ? 
-                AND (group_id = ? OR group_id = 'default')
-                AND status = 'active'
+                WHERE group_id = ? AND status = 'active'
+                ORDER BY rarity DESC, badge_name ASC
             `);
-            const badge = checkStmt.get(badgeId, groupId);
-            
-            if (!badge) {
-                throw new Error('勋章不存在');
-            }
-            
-            // 检查是否已拥有
-            const hasStmt = db.prepare(`
-                SELECT * FROM user_badges 
-                WHERE user_id = ? AND group_id = ? AND badge_id = ?
-            `);
-            const existing = hasStmt.get(userId, groupId, badgeId);
-            
-            if (existing) {
-                throw new Error('用户已拥有该勋章');
-            }
-            
-            // 授予勋章
-            await this.unlockBadge(userId, groupId, badge);
-            
-            // 记录管理员操作
-            console.log(`管理员 ${grantedBy} 授予用户 ${userId} 勋章 ${badgeId}`);
-            
-            return true;
-            
+            return stmt.all(groupId);
         } catch (error) {
-            console.error('授予勋章失败:', error);
-            return false;
+            console.error('获取勋章定义失败:', error);
+            return [];
         }
     }
     
     /**
-     * 撤销勋章（管理员功能）
+     * 创建勋章定义
      */
-    async revokeBadge(userId, groupId, badgeId, revokedBy) {
+    async createBadgeDefinition(badgeData) {
         const db = this.levelDb.getDatabase();
         if (!db) return false;
         
         try {
             const stmt = db.prepare(`
-                DELETE FROM user_badges 
-                WHERE user_id = ? AND group_id = ? AND badge_id = ?
+                INSERT INTO badge_definitions 
+                (badge_id, group_id, badge_name, badge_emoji, badge_desc, 
+                 unlock_conditions, badge_type, rarity, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
             `);
             
-            const result = stmt.run(userId, groupId, badgeId);
+            stmt.run(
+                badgeData.badge_id,
+                badgeData.group_id || 'global',
+                badgeData.badge_name,
+                badgeData.badge_emoji || '🏆',
+                badgeData.badge_desc,
+                JSON.stringify(badgeData.unlock_conditions),
+                badgeData.badge_type || 'auto',
+                badgeData.rarity || 'common'
+            );
             
-            if (result.changes > 0) {
-                console.log(`管理员 ${revokedBy} 撤销用户 ${userId} 勋章 ${badgeId}`);
-                return true;
-            }
-            
-            return false;
+            console.log(`✅ 创建勋章定义成功: ${badgeData.badge_name}`);
+            return true;
             
         } catch (error) {
-            console.error('撤销勋章失败:', error);
+            console.error('创建勋章定义失败:', error);
             return false;
         }
     }

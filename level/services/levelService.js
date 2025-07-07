@@ -1,93 +1,106 @@
 /**
- * 等级系统核心服务
- * 基于版本A设计：复用现有接口，独立数据库操作
+ * 等级系统服务 - 简化版本：以用户为核心
+ * 
+ * 设计原则：
+ * 1. 用户档案以user_id为主键，不依赖群组
+ * 2. 群组配置保留，用于播报设置和奖励规则
+ * 3. 用户查询等级不需要指定群组
  */
 
 class LevelService {
     constructor() {
-        // 使用独立数据库管理器
-        const levelDbManager = require('../config/levelDatabase');
-        this.levelDb = levelDbManager.getInstance();
-        
-        // 复用现有的Bot服务和数据库操作（不修改）
+        this.levelDb = require('../config/levelDatabase');
         this.botService = require('../../services/botService');
         this.dbOperations = require('../../models/dbOperations');
-        
-        // 检查是否启用
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
-    }
-    
-    /**
-     * 处理评价完成后的奖励
-     */
-    async processEvaluationReward(userId, groupId, evaluationId, actionType) {
-        if (!this.enabled || !this.levelDb.enabled) return;
         
-        try {
-            // 获取或创建用户档案
-            let userProfile = await this.getUserProfile(userId, groupId);
-            if (!userProfile) {
-                userProfile = await this.createUserProfile(userId, groupId);
-            }
-            
-            // 获取群组配置（使用用户档案中的群组ID）
-            const actualGroupId = groupId || userProfile.group_id;
-            const groupConfig = await this.getGroupConfig(actualGroupId);
-            const rewardConfig = JSON.parse(groupConfig.points_config);
-            
-            // 计算奖励
-            const reward = this.calculateReward(actionType, rewardConfig);
-            if (!reward) return;
-            
-            // 更新用户数据
-            const updatedProfile = await this.updateUserRewards(
-                userId, 
-                actualGroupId, 
-                reward.exp, 
-                reward.points, 
-                actionType,
-                reward.desc
-            );
-            
-            // 检查升级
-            const levelUpResult = await this.checkLevelUp(userProfile, updatedProfile, groupConfig);
-            if (levelUpResult.leveledUp) {
-                await this.handleLevelUp(userId, actualGroupId, levelUpResult);
-            }
-            
-            // 检查勋章解锁
-            await this.checkBadgeUnlock(userId, actualGroupId, updatedProfile);
-            
-        } catch (error) {
-            console.error('处理等级奖励失败:', error);
+        if (!this.enabled) {
+            console.log('🏆 等级系统已禁用');
         }
     }
     
     /**
-     * 获取用户档案
+     * 处理评价奖励 - 核心方法
      */
-    async getUserProfile(userId, groupId = null) {
+    async processEvaluationReward(userId, sourceGroupId, evaluationId, actionType) {
+        if (!this.enabled) return;
+        
+        const db = this.levelDb.getDatabase();
+        if (!db) return;
+        
+        try {
+            console.log(`🏆 处理用户 ${userId} 的评价奖励，动作类型: ${actionType}`);
+            
+            // 获取或创建用户档案
+            let userProfile = await this.getUserProfile(userId);
+            if (!userProfile) {
+                userProfile = await this.createUserProfile(userId);
+                if (!userProfile) {
+                    console.error('创建用户档案失败');
+                    return;
+                }
+            }
+            
+            // 获取奖励配置（使用全局配置或指定群组配置）
+            const rewardConfig = await this.getRewardConfig(sourceGroupId);
+            if (!rewardConfig) {
+                console.error('获取奖励配置失败');
+                return;
+            }
+            
+            // 计算奖励
+            const reward = this.calculateReward(actionType, rewardConfig);
+            if (!reward) {
+                console.log(`未找到动作类型 ${actionType} 的奖励配置`);
+                return;
+            }
+            
+            console.log(`计算奖励: ${reward.desc}, 经验值+${reward.exp}, 积分+${reward.points}`);
+            
+            // 记录升级前的等级
+            const oldProfile = { ...userProfile };
+            
+            // 更新用户奖励
+            const updatedProfile = await this.updateUserRewards(
+                userId, 
+                sourceGroupId,
+                reward.exp, 
+                reward.points, 
+                actionType, 
+                reward.desc
+            );
+            
+            if (!updatedProfile) {
+                console.error('更新用户奖励失败');
+                return;
+            }
+            
+            // 检查升级
+            const levelUpResult = await this.checkLevelUp(oldProfile, updatedProfile);
+            if (levelUpResult.leveledUp) {
+                await this.handleLevelUp(userId, sourceGroupId, levelUpResult);
+            }
+            
+            // 异步检查勋章解锁
+            setImmediate(() => {
+                this.checkBadgeUnlock(userId, updatedProfile);
+            });
+            
+        } catch (error) {
+            console.error('处理评价奖励失败:', error);
+        }
+    }
+    
+    /**
+     * 获取用户档案 - 简化版本：不需要群组ID
+     */
+    async getUserProfile(userId) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
         try {
-            let stmt, result;
-            if (groupId) {
-                stmt = db.prepare(`
-                    SELECT * FROM user_levels 
-                    WHERE user_id = ? AND group_id = ?
-                `);
-                result = stmt.get(userId, groupId);
-            } else {
-                // 不指定群组时，获取用户的主档案（取第一个）
-                stmt = db.prepare(`
-                    SELECT * FROM user_levels 
-                    WHERE user_id = ? 
-                    ORDER BY created_at ASC 
-                    LIMIT 1
-                `);
-                result = stmt.get(userId);
-            }
+            const stmt = db.prepare('SELECT * FROM user_levels WHERE user_id = ?');
+            const result = stmt.get(userId);
             return result;
         } catch (error) {
             console.error('获取用户档案失败:', error);
@@ -96,9 +109,9 @@ class LevelService {
     }
     
     /**
-     * 创建新用户档案
+     * 创建新用户档案 - 简化版本：不需要群组ID
      */
-    async createUserProfile(userId, groupId = null) {
+    async createUserProfile(userId) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
@@ -106,58 +119,19 @@ class LevelService {
             // 获取用户显示名称（复用现有接口）
             const userInfo = await this.getUserDisplayInfo(userId);
             
-            let actualGroupId = groupId;
-            
-            // 如果没有指定群组，智能选择一个已有的群组配置
-            if (!actualGroupId) {
-                actualGroupId = await this.selectBestGroupConfig();
-            }
-            
             const stmt = db.prepare(`
                 INSERT INTO user_levels 
-                (user_id, group_id, display_name)
-                VALUES (?, ?, ?)
+                (user_id, display_name)
+                VALUES (?, ?)
             `);
             
-            stmt.run(userId, actualGroupId, userInfo.displayName);
+            stmt.run(userId, userInfo.displayName);
             
-            return await this.getUserProfile(userId, actualGroupId);
+            console.log(`✅ 创建用户档案: ${userId} (${userInfo.displayName})`);
+            return await this.getUserProfile(userId);
         } catch (error) {
             console.error('创建用户档案失败:', error);
             return null;
-        }
-    }
-    
-    /**
-     * 智能选择最佳的群组配置
-     */
-    async selectBestGroupConfig() {
-        const db = this.levelDb.getDatabase();
-        if (!db) return 'default';
-        
-        try {
-            // 优先选择非默认的活跃群组配置
-            const stmt = db.prepare(`
-                SELECT group_id FROM group_configs 
-                WHERE status = 'active' 
-                AND group_id != 'default'
-                ORDER BY created_at ASC 
-                LIMIT 1
-            `);
-            
-            const result = stmt.get();
-            if (result) {
-                console.log(`智能选择群组配置: ${result.group_id}`);
-                return result.group_id;
-            }
-            
-            // 如果没有其他群组，才使用默认配置
-            console.log('没有找到其他群组配置，使用默认配置');
-            return 'default';
-            
-        } catch (error) {
-            console.error('选择群组配置失败:', error);
-            return 'default';
         }
     }
     
@@ -199,49 +173,44 @@ class LevelService {
     }
     
     /**
-     * 获取群组配置
+     * 获取奖励配置 - 优先使用指定群组，回退到全局配置
      */
-    async getGroupConfig(groupId) {
+    async getRewardConfig(sourceGroupId = null) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
         try {
-            const stmt = db.prepare(`
-                SELECT * FROM group_configs 
-                WHERE group_id = ? AND status = 'active'
-            `);
+            let config = null;
             
-            let config = stmt.get(groupId);
-            
-            // 如果指定的群组配置不存在，尝试获取其他可用配置
-            if (!config && groupId !== 'default') {
-                console.log(`群组配置 ${groupId} 不存在，尝试获取其他配置`);
-                const bestGroupId = await this.selectBestGroupConfig();
-                if (bestGroupId !== groupId) {
-                    config = stmt.get(bestGroupId);
+            // 如果指定了源群组，先尝试获取该群组的配置
+            if (sourceGroupId) {
+                const stmt = db.prepare(`
+                    SELECT points_config FROM group_configs 
+                    WHERE group_id = ? AND status = 'active'
+                `);
+                const result = stmt.get(sourceGroupId);
+                if (result) {
+                    config = JSON.parse(result.points_config);
                 }
             }
             
-            // 最后才回退到默认配置
-            return config || await this.getDefaultGroupConfig();
+            // 如果没有找到群组配置，使用全局配置
+            if (!config) {
+                const globalStmt = db.prepare(`
+                    SELECT points_config FROM group_configs 
+                    WHERE group_id = 'global' AND status = 'active'
+                `);
+                const globalResult = globalStmt.get();
+                if (globalResult) {
+                    config = JSON.parse(globalResult.points_config);
+                }
+            }
+            
+            return config;
         } catch (error) {
-            console.error('获取群组配置失败:', error);
-            return await this.getDefaultGroupConfig();
+            console.error('获取奖励配置失败:', error);
+            return null;
         }
-    }
-    
-    /**
-     * 获取默认群组配置
-     */
-    async getDefaultGroupConfig() {
-        const db = this.levelDb.getDatabase();
-        if (!db) return null;
-        
-        const stmt = db.prepare(`
-            SELECT * FROM group_configs 
-            WHERE group_id = 'default'
-        `);
-        return stmt.get();
     }
     
     /**
@@ -266,7 +235,7 @@ class LevelService {
     /**
      * 更新用户奖励
      */
-    async updateUserRewards(userId, groupId, expChange, pointsChange, actionType, description) {
+    async updateUserRewards(userId, sourceGroupId, expChange, pointsChange, actionType, description) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
@@ -280,7 +249,7 @@ class LevelService {
                     total_points_earned = total_points_earned + ?,
                     ${actionType}_count = ${actionType}_count + 1,
                     updated_at = ?
-                WHERE user_id = ? AND group_id = ?
+                WHERE user_id = ?
             `);
             
             updateStmt.run(
@@ -288,27 +257,23 @@ class LevelService {
                 pointsChange, 
                 pointsChange > 0 ? pointsChange : 0,
                 Date.now() / 1000,
-                userId, 
-                groupId
+                userId
             );
             
             // 获取更新后的数据
-            const getStmt = db.prepare(`
-                SELECT * FROM user_levels 
-                WHERE user_id = ? AND group_id = ?
-            `);
-            const updatedProfile = getStmt.get(userId, groupId);
+            const getStmt = db.prepare('SELECT * FROM user_levels WHERE user_id = ?');
+            const updatedProfile = getStmt.get(userId);
             
             // 记录积分历史
             const logStmt = db.prepare(`
                 INSERT INTO points_log 
-                (user_id, group_id, action_type, exp_change, points_change, 
+                (user_id, source_group_id, action_type, exp_change, points_change, 
                  exp_after, points_after, description)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `);
             
             logStmt.run(
-                userId, groupId, actionType, expChange, pointsChange,
+                userId, sourceGroupId, actionType, expChange, pointsChange,
                 updatedProfile.total_exp, updatedProfile.available_points,
                 description
             );
@@ -327,10 +292,11 @@ class LevelService {
     /**
      * 检查升级
      */
-    async checkLevelUp(oldProfile, newProfile, groupConfig) {
-        const levelConfig = JSON.parse(groupConfig.level_config);
-        const levels = levelConfig.levels;
+    async checkLevelUp(oldProfile, newProfile) {
+        const levelConfig = await this.getLevelConfig();
+        if (!levelConfig) return { leveledUp: false };
         
+        const levels = levelConfig.levels;
         const oldLevel = oldProfile.level;
         let newLevel = oldLevel;
         
@@ -356,9 +322,34 @@ class LevelService {
     }
     
     /**
+     * 获取等级配置 - 使用全局配置
+     */
+    async getLevelConfig() {
+        const db = this.levelDb.getDatabase();
+        if (!db) return null;
+        
+        try {
+            const stmt = db.prepare(`
+                SELECT level_config FROM group_configs 
+                WHERE group_id = 'global' AND status = 'active'
+            `);
+            const result = stmt.get();
+            
+            if (result) {
+                return JSON.parse(result.level_config);
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('获取等级配置失败:', error);
+            return null;
+        }
+    }
+    
+    /**
      * 处理升级
      */
-    async handleLevelUp(userId, groupId, levelUpResult) {
+    async handleLevelUp(userId, sourceGroupId, levelUpResult) {
         const db = this.levelDb.getDatabase();
         if (!db) return;
         
@@ -367,20 +358,19 @@ class LevelService {
             const updateStmt = db.prepare(`
                 UPDATE user_levels 
                 SET level = ?, updated_at = ?
-                WHERE user_id = ? AND group_id = ?
+                WHERE user_id = ?
             `);
-            updateStmt.run(levelUpResult.newLevel, Date.now() / 1000, userId, groupId);
+            updateStmt.run(levelUpResult.newLevel, Date.now() / 1000, userId);
             
-            // 获取群组配置中的升级奖励
-            const groupConfig = await this.getGroupConfig(groupId);
-            const rewardConfig = JSON.parse(groupConfig.points_config);
-            const levelUpBonus = rewardConfig.base_rewards?.level_up_bonus;
+            // 获取升级奖励配置
+            const rewardConfig = await this.getRewardConfig(sourceGroupId);
+            const levelUpBonus = rewardConfig?.base_rewards?.level_up_bonus;
             
             if (levelUpBonus && levelUpBonus.points > 0) {
                 // 给予升级奖励积分
                 await this.updateUserRewards(
                     userId, 
-                    groupId, 
+                    sourceGroupId,
                     0, 
                     levelUpBonus.points, 
                     'level_up_bonus',
@@ -389,7 +379,7 @@ class LevelService {
             }
             
             // 播报升级消息
-            await this.broadcastLevelUp(userId, groupId, levelUpResult);
+            await this.broadcastLevelUp(userId, sourceGroupId, levelUpResult);
             
         } catch (error) {
             console.error('处理升级失败:', error);
@@ -399,7 +389,7 @@ class LevelService {
     /**
      * 播报升级消息（复用现有Bot服务）
      */
-    async broadcastLevelUp(userId, groupId, levelUpResult) {
+    async broadcastLevelUp(userId, sourceGroupId, levelUpResult) {
         if (!this.enabled) return;
         
         try {
@@ -467,7 +457,7 @@ class LevelService {
                 SELECT group_id FROM group_configs 
                 WHERE status = 'active' 
                 AND broadcast_enabled = 1
-                AND group_id != 'default'
+                AND group_id != 'global'
             `);
             const groups = stmt.all();
             return groups.map(g => g.group_id);
@@ -480,29 +470,29 @@ class LevelService {
     /**
      * 检查勋章解锁
      */
-    async checkBadgeUnlock(userId, groupId, userProfile) {
+    async checkBadgeUnlock(userId, userProfile) {
         try {
             const badgeService = require('./badgeService').getInstance();
-            await badgeService.checkAndUnlockBadges(userId, groupId, userProfile);
+            await badgeService.checkAndUnlockBadges(userId, userProfile);
         } catch (error) {
             console.error('检查勋章解锁失败:', error);
         }
     }
     
-
-    
     /**
-     * 获取用户等级信息（供Bot命令使用）
+     * 获取用户等级信息（供Bot命令使用）- 简化版本
      */
-    async getUserLevelInfo(userId, groupId = null) {
-        const userProfile = await this.getUserProfile(userId, groupId);
+    async getUserLevelInfo(userId) {
+        const userProfile = await this.getUserProfile(userId);
         if (!userProfile) {
             return null;
         }
         
-        const actualGroupId = groupId || userProfile.group_id;
-        const groupConfig = await this.getGroupConfig(actualGroupId);
-        const levelConfig = JSON.parse(groupConfig.level_config);
+        const levelConfig = await this.getLevelConfig();
+        if (!levelConfig) {
+            return null;
+        }
+        
         const currentLevel = levelConfig.levels.find(l => l.level === userProfile.level);
         const nextLevel = levelConfig.levels.find(l => l.level === userProfile.level + 1);
         
@@ -515,32 +505,20 @@ class LevelService {
     }
     
     /**
-     * 获取用户积分历史
+     * 获取用户积分历史 - 简化版本
      */
-    async getUserPointsHistory(userId, groupId = null, limit = 10) {
+    async getUserPointsHistory(userId, limit = 10) {
         const db = this.levelDb.getDatabase();
         if (!db) return [];
         
         try {
-            let stmt;
-            if (groupId) {
-                stmt = db.prepare(`
-                    SELECT * FROM points_log 
-                    WHERE user_id = ? AND group_id = ?
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                `);
-                return stmt.all(userId, groupId, limit);
-            } else {
-                // 不指定群组时，获取用户的所有积分历史
-                stmt = db.prepare(`
-                    SELECT * FROM points_log 
-                    WHERE user_id = ?
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                `);
-                return stmt.all(userId, limit);
-            }
+            const stmt = db.prepare(`
+                SELECT * FROM points_log 
+                WHERE user_id = ?
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            `);
+            return stmt.all(userId, limit);
         } catch (error) {
             console.error('获取积分历史失败:', error);
             return [];
@@ -550,7 +528,7 @@ class LevelService {
     /**
      * 设置自定义显示名称
      */
-    async setCustomDisplayName(userId, groupId, displayName) {
+    async setCustomDisplayName(userId, displayName) {
         const db = this.levelDb.getDatabase();
         if (!db) return false;
         
@@ -558,14 +536,52 @@ class LevelService {
             const stmt = db.prepare(`
                 UPDATE user_levels 
                 SET display_name = ?, updated_at = ?
-                WHERE user_id = ? AND group_id = ?
+                WHERE user_id = ?
             `);
-            stmt.run(displayName, Date.now() / 1000, userId, groupId);
+            stmt.run(displayName, Date.now() / 1000, userId);
             
             return true;
         } catch (error) {
             console.error('设置显示名称失败:', error);
             return false;
+        }
+    }
+    
+    /**
+     * 获取排行榜 - 简化版本
+     */
+    async getRankings(type = 'level', limit = 10) {
+        const db = this.levelDb.getDatabase();
+        if (!db) return [];
+        
+        try {
+            let orderBy = '';
+            switch (type) {
+                case 'level':
+                    orderBy = 'level DESC, total_exp DESC';
+                    break;
+                case 'points':
+                    orderBy = 'available_points DESC, total_points_earned DESC';
+                    break;
+                case 'exp':
+                    orderBy = 'total_exp DESC, level DESC';
+                    break;
+                default:
+                    orderBy = 'level DESC, total_exp DESC';
+            }
+            
+            const stmt = db.prepare(`
+                SELECT user_id, level, total_exp, available_points, total_points_earned, display_name
+                FROM user_levels 
+                WHERE level > 0
+                ORDER BY ${orderBy}
+                LIMIT ?
+            `);
+            
+            return stmt.all(limit);
+        } catch (error) {
+            console.error('获取排行榜失败:', error);
+            return [];
         }
     }
 }

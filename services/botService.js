@@ -4815,22 +4815,26 @@ async function handleLevelCommand(userId, chatId, username) {
             return;
         }
         
-        const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
+        const levelService = require('../level/services/levelService').getInstance();
         
-        // 获取用户等级信息（系统会智能选择群组配置）
-        const levelInfo = await levelServiceHook.getUserLevelInfo(userId);
+        // 获取用户等级信息（简化版本：不需要群组参数）
+        const levelInfo = await levelService.getUserLevelInfo(userId);
         
         if (!levelInfo || !levelInfo.profile) {
             // 用户还没有等级数据，创建初始档案
             bot.sendMessage(chatId, '🎮 正在初始化您的等级档案...');
             
-            // 触发一个初始化事件（系统会智能选择群组配置）
-            await levelServiceHook.grantReward(userId, null, 0, 0, '系统初始化');
+            // 创建用户档案
+            const userProfile = await levelService.createUserProfile(userId);
+            if (!userProfile) {
+                bot.sendMessage(chatId, '❌ 初始化失败，请联系管理员');
+                return;
+            }
             
-            // 重新获取
-            const newLevelInfo = await levelServiceHook.getUserLevelInfo(userId);
+            // 重新获取等级信息
+            const newLevelInfo = await levelService.getUserLevelInfo(userId);
             if (!newLevelInfo) {
-                bot.sendMessage(chatId, '❌ 初始化失败，请联系管理员检查群组配置');
+                bot.sendMessage(chatId, '❌ 获取等级信息失败，请稍后重试');
                 return;
             }
             
@@ -4898,7 +4902,7 @@ async function handleBadgesCommand(userId, chatId) {
         if (badgeWall.userBadges.length > 0) {
             message += `✨ **已解锁勋章**\n`;
             for (const badge of badgeWall.userBadges) {
-                const unlockDate = new Date(badge.unlocked_at * 1000).toLocaleDateString('zh-CN');
+                const unlockDate = new Date(badge.awarded_at * 1000).toLocaleDateString('zh-CN');
                 message += `${badge.badge_emoji} ${badge.badge_name} - ${unlockDate}\n`;
             }
             message += `\n`;
@@ -4947,7 +4951,7 @@ async function handlePointsCommand(userId, chatId) {
         
         const levelService = require('../level/services/levelService').getInstance();
         
-        const history = await levelService.getUserPointsHistory(userId, null, 10);
+        const history = await levelService.getUserPointsHistory(userId, 10);
         
         if (history.length === 0) {
             bot.sendMessage(chatId, '📊 您还没有积分记录');

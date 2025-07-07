@@ -2475,18 +2475,24 @@ async function handleLevelApiRequest(pathname, method, data) {
         if (endpoint === 'users' && method === 'GET') {
             if (id) {
                 // 获取单个用户等级信息
-                const groupId = data.groupId;
-                if (!groupId) {
-                    return { success: false, error: '请提供groupId参数' };
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
                 }
                 
-                const levelInfo = await levelServiceHook.getUserLevelInfo(id, groupId);
+                const userInfo = db.prepare(`
+                    SELECT user_id, display_name, username, level, total_exp, available_points, 
+                           total_points_earned, total_points_spent, attack_count, user_eval_count, 
+                           merchant_eval_count, text_eval_count, badges, created_at, updated_at
+                    FROM user_levels 
+                    WHERE user_id = ?
+                `).get(id);
                 
-                if (!levelInfo) {
+                if (!userInfo) {
                     return { success: false, error: '用户等级信息不存在' };
                 }
                 
-                return { success: true, data: levelInfo };
+                return { success: true, data: userInfo };
             } else {
                 // 获取用户列表
                 const db = levelDbManager.getDatabase();
@@ -2599,7 +2605,7 @@ async function handleLevelApiRequest(pathname, method, data) {
         }
         
         // 用户数据调整API（管理员功能）
-        if (endpoint === 'users' && id && pathParts[4] === 'adjust' && method === 'POST') {
+        if (endpoint === 'users' && id && pathParts[5] === 'adjust' && method === 'POST') {
             const { type, amount, reason } = data;
             
             if (!type || !amount || !reason) {
@@ -2634,12 +2640,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         WHERE user_id = ?
                     `).run(newPoints, newTotalEarned, now, id);
                     
-                    // 记录日志
-                    db.prepare(`
-                        INSERT INTO points_log 
-                        (user_id, action_type, points_change, points_after, description, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    `).run(id, 'admin_adjust', amount, newPoints, `管理员调整: ${reason}`, now);
+                    // 记录日志（暂时禁用）
+                    console.log(`📝 积分调整记录: 用户${id}, 变化${amount}, 结果${newPoints}`);
                     
                 } else if (type === 'exp') {
                     // 调整经验值
@@ -2651,12 +2653,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         WHERE user_id = ?
                     `).run(newExp, now, id);
                     
-                    // 记录日志
-                    db.prepare(`
-                        INSERT INTO points_log 
-                        (user_id, action_type, exp_change, exp_after, description, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    `).run(id, 'admin_adjust', amount, newExp, `管理员调整: ${reason}`, now);
+                    // 记录日志（暂时禁用）
+                    console.log(`📝 经验调整记录: 用户${id}, 变化${amount}, 结果${newExp}`);
                     
                 } else if (type === 'level') {
                     // 调整等级
@@ -2668,12 +2666,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         WHERE user_id = ?
                     `).run(newLevel, now, id);
                     
-                    // 记录日志
-                    db.prepare(`
-                        INSERT INTO points_log 
-                        (user_id, action_type, description, timestamp)
-                        VALUES (?, ?, ?, ?)
-                    `).run(id, 'admin_adjust', `管理员调整等级: ${currentUser.level} → ${newLevel}, 原因: ${reason}`, now);
+                    // 记录日志（暂时禁用）
+                    console.log(`📝 等级调整记录: 用户${id}, ${currentUser.level} → ${newLevel}`);
                     
                 } else {
                     return { success: false, error: '不支持的调整类型' };

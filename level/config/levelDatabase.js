@@ -13,32 +13,11 @@ class LevelDatabaseManager {
         const isProduction = nodeEnv === 'production';
         const isStaging = nodeEnv === 'staging';
         
-        // 数据目录路径（与现有系统一致）
-        let dataDir;
-        if (isProduction || isStaging) {
-            const volumeDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data';
-            const localDataDir = path.join(__dirname, '..', '..', 'data');
-            
-            try {
-                if (fs.existsSync(volumeDataDir)) {
-                    fs.accessSync(volumeDataDir, fs.constants.W_OK);
-                    dataDir = volumeDataDir;
-                    console.log(`🏆 使用Railway Volume路径: ${dataDir}`);
-                } else {
-                    throw new Error('Volume目录不存在');
-                }
-            } catch (error) {
-                dataDir = localDataDir;
-                console.log(`🏆 使用本地数据路径: ${dataDir}`);
-            }
-        } else {
-            dataDir = path.join(__dirname, '..', '..', 'data');
-        }
+        // 使用统一的环境助手获取数据目录
+        const envHelper = require('../../utils/environmentHelper');
+        const dataDir = envHelper.getDataDirectory();
         
-        // 确保数据目录存在
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
+        // 数据目录由environmentHelper确保存在，这里不需要重复检查
         
         // 独立的等级系统数据库文件
         const dbFileName = isProduction ? 'level_system.db' : 'level_system_dev.db';

@@ -43,23 +43,32 @@ class EnvironmentHelper {
     // 获取统一的数据目录路径
     getDataDirectory() {
         if (this.isProduction || this.isStaging) {
+            // 生产环境：强制使用Railway Volume，不允许回退
             const volumeDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data';
-            const localDataDir = path.join(process.cwd(), 'data');
             
-            try {
-                if (fs.existsSync(volumeDataDir)) {
-                    fs.accessSync(volumeDataDir, fs.constants.W_OK);
-                    return volumeDataDir;
-                } else {
-                    console.warn(`Railway Volume目录不存在: ${volumeDataDir}`);
-                }
-            } catch (error) {
-                console.warn(`Railway Volume目录不可写: ${error.message}`);
+            // 确保目录存在
+            if (!fs.existsSync(volumeDataDir)) {
+                fs.mkdirSync(volumeDataDir, { recursive: true });
+                console.log(`📁 创建Railway Volume目录: ${volumeDataDir}`);
             }
             
-            return localDataDir;
+            // 验证目录可写
+            try {
+                fs.accessSync(volumeDataDir, fs.constants.W_OK);
+                console.log(`✅ 使用Railway Volume: ${volumeDataDir}`);
+                return volumeDataDir;
+            } catch (error) {
+                console.error(`❌ Railway Volume目录不可写: ${volumeDataDir}`);
+                throw new Error(`生产环境必须使用Railway Volume，但目录不可写: ${error.message}`);
+            }
         } else {
-            return path.join(process.cwd(), 'data');
+            // 开发环境：使用本地data目录
+            const localDataDir = path.join(process.cwd(), 'data');
+            if (!fs.existsSync(localDataDir)) {
+                fs.mkdirSync(localDataDir, { recursive: true });
+                console.log(`📁 创建本地数据目录: ${localDataDir}`);
+            }
+            return localDataDir;
         }
     }
     

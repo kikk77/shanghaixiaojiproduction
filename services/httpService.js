@@ -3165,6 +3165,363 @@ async function handleLevelApiRequest(pathname, method, data) {
         
 
         
+        // 数据导出API
+        if (endpoint === 'export' && method === 'GET') {
+            const exportType = pathParts[4]; // all, users, config
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            
+            try {
+                let exportData = {};
+                
+                switch (exportType) {
+                    case 'all':
+                        // 导出完整数据
+                        exportData = {
+                            version: "1.0",
+                            timestamp: Date.now(),
+                            data_type: "complete",
+                            group_id: groupId,
+                            users: db.prepare(`
+                                SELECT * FROM user_levels WHERE group_id = ?
+                            `).all(groupId),
+                            group_config: db.prepare(`
+                                SELECT * FROM group_configs WHERE group_id = ?
+                            `).get(groupId),
+                            badges: db.prepare(`
+                                SELECT * FROM badge_definitions WHERE group_id = ? OR group_id = 'default'
+                            `).all(groupId),
+                            user_badges: db.prepare(`
+                                SELECT * FROM user_badges WHERE group_id = ?
+                            `).all(groupId),
+                            points_log: db.prepare(`
+                                SELECT * FROM points_log WHERE group_id = ? ORDER BY timestamp DESC LIMIT 1000
+                            `).all(groupId)
+                        };
+                        break;
+                        
+                    case 'users':
+                        // 仅导出用户数据
+                        exportData = {
+                            version: "1.0",
+                            timestamp: Date.now(),
+                            data_type: "users_only",
+                            group_id: groupId,
+                            users: db.prepare(`
+                                SELECT * FROM user_levels WHERE group_id = ?
+                            `).all(groupId),
+                            user_badges: db.prepare(`
+                                SELECT * FROM user_badges WHERE group_id = ?
+                            `).all(groupId),
+                            points_log: db.prepare(`
+                                SELECT * FROM points_log WHERE group_id = ? ORDER BY timestamp DESC LIMIT 1000
+                            `).all(groupId)
+                        };
+                        break;
+                        
+                    case 'config':
+                        // 仅导出配置数据
+                        exportData = {
+                            version: "1.0",
+                            timestamp: Date.now(),
+                            data_type: "config_only",
+                            group_id: groupId,
+                            group_config: db.prepare(`
+                                SELECT * FROM group_configs WHERE group_id = ?
+                            `).get(groupId),
+                            badges: db.prepare(`
+                                SELECT * FROM badge_definitions WHERE group_id = ? OR group_id = 'default'
+                            `).all(groupId)
+                        };
+                        break;
+                        
+                    default:
+                        return { success: false, error: '不支持的导出类型' };
+                }
+                
+                console.log(`🏆 [API] 导出数据: ${exportType}, 群组: ${groupId}`);
+                return { success: true, data: exportData };
+                
+            } catch (error) {
+                console.error('导出数据失败:', error);
+                return { success: false, error: '导出数据失败: ' + error.message };
+            }
+        }
+        
+        // 数据导入API
+        if (endpoint === 'import' && method === 'POST') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            try {
+                const importData = data.importData || data;
+                
+                if (!importData.version || !importData.data_type) {
+                    return { success: false, error: '导入数据格式不正确' };
+                }
+                
+                console.log(`🏆 [API] 导入数据: ${importData.data_type}, 群组: ${importData.group_id}`);
+                
+                // 开始事务
+                db.prepare('BEGIN TRANSACTION').run();
+                
+                try {
+                    let importedCount = 0;
+                    
+                    // 导入群组配置
+                    if (importData.group_config) {
+                        const config = importData.group_config;
+                        db.prepare(`
+                            INSERT OR REPLACE INTO group_configs 
+                            (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        `).run(
+                            config.group_id,
+                            config.group_name,
+                            config.level_config,
+                            config.points_config,
+                            config.broadcast_config,
+                            config.created_at,
+                            config.updated_at
+                        );
+                        importedCount++;
+                    }
+                    
+                    // 导入用户数据
+                    if (importData.users && Array.isArray(importData.users)) {
+                        const userStmt = db.prepare(`
+                            INSERT OR REPLACE INTO user_levels 
+                            (user_id, group_id, level, total_exp, available_points, total_points_earned, 
+                             total_points_spent, attack_count, user_eval_count, merchant_eval_count, 
+                             text_eval_count, badges, display_name, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `);
+                        
+                        for (const user of importData.users) {
+                            userStmt.run(
+                                user.user_id, user.group_id, user.level, user.total_exp,
+                                user.available_points, user.total_points_earned, user.total_points_spent,
+                                user.attack_count, user.user_eval_count, user.merchant_eval_count,
+                                user.text_eval_count, user.badges, user.display_name,
+                                user.created_at, user.updated_at
+                            );
+                            importedCount++;
+                        }
+                    }
+                    
+                    // 导入勋章定义
+                    if (importData.badges && Array.isArray(importData.badges)) {
+                        const badgeStmt = db.prepare(`
+                            INSERT OR REPLACE INTO badge_definitions 
+                            (badge_id, group_id, badge_name, badge_emoji, badge_desc, 
+                             unlock_conditions, badge_type, rarity, status, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `);
+                        
+                        for (const badge of importData.badges) {
+                            badgeStmt.run(
+                                badge.badge_id, badge.group_id, badge.badge_name,
+                                badge.badge_emoji, badge.badge_desc, badge.unlock_conditions,
+                                badge.badge_type, badge.rarity, badge.status, badge.created_at
+                            );
+                            importedCount++;
+                        }
+                    }
+                    
+                    // 导入用户勋章记录
+                    if (importData.user_badges && Array.isArray(importData.user_badges)) {
+                        const userBadgeStmt = db.prepare(`
+                            INSERT OR REPLACE INTO user_badges 
+                            (user_id, group_id, badge_id, awarded_by, awarded_reason, awarded_at)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        `);
+                        
+                        for (const userBadge of importData.user_badges) {
+                            userBadgeStmt.run(
+                                userBadge.user_id, userBadge.group_id, userBadge.badge_id,
+                                userBadge.awarded_by, userBadge.awarded_reason, userBadge.awarded_at
+                            );
+                            importedCount++;
+                        }
+                    }
+                    
+                    // 导入积分历史（可选）
+                    if (importData.points_log && Array.isArray(importData.points_log)) {
+                        const logStmt = db.prepare(`
+                            INSERT OR REPLACE INTO points_log 
+                            (user_id, group_id, action_type, exp_change, points_change, 
+                             exp_after, points_after, description, related_eval_id, admin_id, timestamp)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `);
+                        
+                        for (const log of importData.points_log) {
+                            logStmt.run(
+                                log.user_id, log.group_id, log.action_type,
+                                log.exp_change, log.points_change, log.exp_after, log.points_after,
+                                log.description, log.related_eval_id, log.admin_id, log.timestamp
+                            );
+                            importedCount++;
+                        }
+                    }
+                    
+                    // 提交事务
+                    db.prepare('COMMIT').run();
+                    
+                    return { 
+                        success: true, 
+                        message: `数据导入成功，共导入 ${importedCount} 条记录`,
+                        importedCount: importedCount
+                    };
+                    
+                } catch (error) {
+                    // 回滚事务
+                    db.prepare('ROLLBACK').run();
+                    throw error;
+                }
+                
+            } catch (error) {
+                console.error('导入数据失败:', error);
+                return { success: false, error: '导入数据失败: ' + error.message };
+            }
+        }
+        
+        // 群组迁移API
+        if (endpoint === 'migrate' && method === 'POST') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const { sourceGroupId, targetGroupId, targetGroupName } = data;
+            
+            if (!sourceGroupId || !targetGroupId) {
+                return { success: false, error: '源群组ID和目标群组ID不能为空' };
+            }
+            
+            try {
+                console.log(`🏆 [API] 群组迁移: ${sourceGroupId} -> ${targetGroupId}`);
+                
+                // 开始事务
+                db.prepare('BEGIN TRANSACTION').run();
+                
+                try {
+                    let migratedCount = 0;
+                    
+                    // 1. 复制群组配置
+                    const sourceConfig = db.prepare(`
+                        SELECT * FROM group_configs WHERE group_id = ?
+                    `).get(sourceGroupId);
+                    
+                    if (sourceConfig) {
+                        db.prepare(`
+                            INSERT OR REPLACE INTO group_configs 
+                            (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        `).run(
+                            targetGroupId,
+                            targetGroupName || targetGroupId,
+                            sourceConfig.level_config,
+                            sourceConfig.points_config,
+                            sourceConfig.broadcast_config,
+                            Date.now() / 1000,
+                            Date.now() / 1000
+                        );
+                        migratedCount++;
+                    }
+                    
+                    // 2. 复制用户数据
+                    const sourceUsers = db.prepare(`
+                        SELECT * FROM user_levels WHERE group_id = ?
+                    `).all(sourceGroupId);
+                    
+                    const userStmt = db.prepare(`
+                        INSERT OR REPLACE INTO user_levels 
+                        (user_id, group_id, level, total_exp, available_points, total_points_earned, 
+                         total_points_spent, attack_count, user_eval_count, merchant_eval_count, 
+                         text_eval_count, badges, display_name, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `);
+                    
+                    for (const user of sourceUsers) {
+                        userStmt.run(
+                            user.user_id, targetGroupId, user.level, user.total_exp,
+                            user.available_points, user.total_points_earned, user.total_points_spent,
+                            user.attack_count, user.user_eval_count, user.merchant_eval_count,
+                            user.text_eval_count, user.badges, user.display_name,
+                            user.created_at, Date.now() / 1000
+                        );
+                        migratedCount++;
+                    }
+                    
+                    // 3. 复制勋章定义（仅群组特定的勋章）
+                    const sourceBadges = db.prepare(`
+                        SELECT * FROM badge_definitions WHERE group_id = ?
+                    `).all(sourceGroupId);
+                    
+                    const badgeStmt = db.prepare(`
+                        INSERT OR REPLACE INTO badge_definitions 
+                        (badge_id, group_id, badge_name, badge_emoji, badge_desc, 
+                         unlock_conditions, badge_type, rarity, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `);
+                    
+                    for (const badge of sourceBadges) {
+                        badgeStmt.run(
+                            badge.badge_id, targetGroupId, badge.badge_name,
+                            badge.badge_emoji, badge.badge_desc, badge.unlock_conditions,
+                            badge.badge_type, badge.rarity, badge.status, Date.now() / 1000
+                        );
+                        migratedCount++;
+                    }
+                    
+                    // 4. 复制用户勋章记录
+                    const sourceUserBadges = db.prepare(`
+                        SELECT * FROM user_badges WHERE group_id = ?
+                    `).all(sourceGroupId);
+                    
+                    const userBadgeStmt = db.prepare(`
+                        INSERT OR REPLACE INTO user_badges 
+                        (user_id, group_id, badge_id, awarded_by, awarded_reason, awarded_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `);
+                    
+                    for (const userBadge of sourceUserBadges) {
+                        userBadgeStmt.run(
+                            userBadge.user_id, targetGroupId, userBadge.badge_id,
+                            userBadge.awarded_by, userBadge.awarded_reason, userBadge.awarded_at
+                        );
+                        migratedCount++;
+                    }
+                    
+                    // 提交事务
+                    db.prepare('COMMIT').run();
+                    
+                    return { 
+                        success: true, 
+                        message: `群组迁移成功，共迁移 ${migratedCount} 条记录`,
+                        migratedCount: migratedCount,
+                        sourceGroupId: sourceGroupId,
+                        targetGroupId: targetGroupId
+                    };
+                    
+                } catch (error) {
+                    // 回滚事务
+                    db.prepare('ROLLBACK').run();
+                    throw error;
+                }
+                
+            } catch (error) {
+                console.error('群组迁移失败:', error);
+                return { success: false, error: '群组迁移失败: ' + error.message };
+            }
+        }
+        
         // 404 - 未找到的API端点
         return { success: false, error: 'API端点不存在', status: 404 };
         

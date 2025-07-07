@@ -365,6 +365,9 @@ async function loadInitialData() {
         if (result.success) {
             const groups = result.data;
             
+            // 清空本地缓存的群组配置
+            groupConfigs = {};
+            
             // 更新群组选择器
             const selectors = ['levelGroupSelect', 'sourceGroup'];
             selectors.forEach(id => {
@@ -1382,6 +1385,14 @@ async function loadGroups() {
         const result = await response.json();
         
         if (result.success) {
+            // 清空本地缓存的群组配置
+            groupConfigs = {};
+            
+            // 更新群组配置缓存
+            result.data.forEach(group => {
+                groupConfigs[group.group_id] = group;
+            });
+            
             const tbody = document.getElementById('groupsTableBody');
             if (result.data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无群组</td></tr>';

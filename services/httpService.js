@@ -2515,22 +2515,26 @@ async function handleLevelApiRequest(pathname, method, data) {
                 if (search) {
                     // 搜索用户（简化版：不按群组区分）
                     users = db.prepare(`
-                        SELECT * FROM user_levels 
-                        WHERE user_id LIKE ? OR display_name LIKE ?
+                        SELECT user_id, display_name, username, level, total_exp, available_points, 
+                               total_points_earned, user_eval_count, merchant_eval_count, created_at, updated_at
+                        FROM user_levels 
+                        WHERE user_id LIKE ? OR display_name LIKE ? OR username LIKE ?
                         ORDER BY level DESC, total_exp DESC
                         LIMIT ? OFFSET ?
-                    `).all(`%${search}%`, `%${search}%`, limit, offset);
+                    `).all(`%${search}%`, `%${search}%`, `%${search}%`, limit, offset);
                     
                     const searchTotal = db.prepare(`
                         SELECT COUNT(*) as count FROM user_levels 
-                        WHERE user_id LIKE ? OR display_name LIKE ?
-                    `).get(`%${search}%`, `%${search}%`);
+                        WHERE user_id LIKE ? OR display_name LIKE ? OR username LIKE ?
+                    `).get(`%${search}%`, `%${search}%`, `%${search}%`);
                     
                     total = searchTotal;
                 } else {
                     // 获取所有用户（简化版：不按群组区分）
                     users = db.prepare(`
-                        SELECT * FROM user_levels 
+                        SELECT user_id, display_name, username, level, total_exp, available_points, 
+                               total_points_earned, user_eval_count, merchant_eval_count, created_at, updated_at
+                        FROM user_levels 
                         ORDER BY level DESC, total_exp DESC
                         LIMIT ? OFFSET ?
                     `).all(limit, offset);
@@ -2592,6 +2596,95 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             return { success: true, message: '用户等级信息更新成功' };
+        }
+        
+        // 用户数据调整API（管理员功能）
+        if (endpoint === 'users' && id && pathParts[4] === 'adjust' && method === 'POST') {
+            const { type, amount, reason } = data;
+            
+            if (!type || !amount || !reason) {
+                return { success: false, error: '请提供调整类型、数值和原因' };
+            }
+            
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            try {
+                // 获取当前用户数据
+                const currentUser = db.prepare(`
+                    SELECT * FROM user_levels WHERE user_id = ?
+                `).get(id);
+                
+                if (!currentUser) {
+                    return { success: false, error: '用户不存在' };
+                }
+                
+                const now = Math.floor(Date.now() / 1000);
+                
+                if (type === 'points') {
+                    // 调整积分
+                    const newPoints = Math.max(0, currentUser.available_points + amount);
+                    const newTotalEarned = Math.max(currentUser.total_points_earned, currentUser.total_points_earned + Math.max(0, amount));
+                    
+                    db.prepare(`
+                        UPDATE user_levels 
+                        SET available_points = ?, total_points_earned = ?, updated_at = ?
+                        WHERE user_id = ?
+                    `).run(newPoints, newTotalEarned, now, id);
+                    
+                    // 记录日志
+                    db.prepare(`
+                        INSERT INTO points_log 
+                        (user_id, action_type, points_change, points_after, description, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).run(id, 'admin_adjust', amount, newPoints, `管理员调整: ${reason}`, now);
+                    
+                } else if (type === 'exp') {
+                    // 调整经验值
+                    const newExp = Math.max(0, currentUser.total_exp + amount);
+                    
+                    db.prepare(`
+                        UPDATE user_levels 
+                        SET total_exp = ?, updated_at = ?
+                        WHERE user_id = ?
+                    `).run(newExp, now, id);
+                    
+                    // 记录日志
+                    db.prepare(`
+                        INSERT INTO points_log 
+                        (user_id, action_type, exp_change, exp_after, description, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).run(id, 'admin_adjust', amount, newExp, `管理员调整: ${reason}`, now);
+                    
+                } else if (type === 'level') {
+                    // 调整等级
+                    const newLevel = Math.max(1, currentUser.level + amount);
+                    
+                    db.prepare(`
+                        UPDATE user_levels 
+                        SET level = ?, updated_at = ?
+                        WHERE user_id = ?
+                    `).run(newLevel, now, id);
+                    
+                    // 记录日志
+                    db.prepare(`
+                        INSERT INTO points_log 
+                        (user_id, action_type, description, timestamp)
+                        VALUES (?, ?, ?, ?)
+                    `).run(id, 'admin_adjust', `管理员调整等级: ${currentUser.level} → ${newLevel}, 原因: ${reason}`, now);
+                    
+                } else {
+                    return { success: false, error: '不支持的调整类型' };
+                }
+                
+                return { success: true, message: '用户数据调整成功' };
+                
+            } catch (error) {
+                console.error('调整用户数据失败:', error);
+                return { success: false, error: '调整失败: ' + error.message };
+            }
         }
         
         // 勋章管理API
@@ -3028,7 +3121,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                 `).all(),
                 
                 topUsers: db.prepare(`
-                    SELECT user_id, display_name, level, total_exp, user_eval_count
+                    SELECT user_id, display_name, username, level, total_exp, available_points, user_eval_count
                     FROM user_levels
                     ORDER BY level DESC, total_exp DESC
                     LIMIT 10

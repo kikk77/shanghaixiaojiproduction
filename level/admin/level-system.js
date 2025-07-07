@@ -932,7 +932,7 @@ function updateRanking(topUsers) {
     const tbody = document.getElementById('userRankingBody');
     
     if (topUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">暂无数据</td></tr>';
         return;
     }
     
@@ -940,13 +940,35 @@ function updateRanking(topUsers) {
         const rank = index + 1;
         const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
         
+        // 获取用户名称和@用户名
+        const displayName = user.display_name || '未设置';
+        const username = user.username ? `@${user.username}` : '未设置用户名';
+        
         return `
             <tr>
                 <td>${medal}</td>
-                <td>${user.display_name}</td>
+                <td style="font-family: monospace; color: #666;">${user.user_id}</td>
+                <td><strong>${displayName}</strong></td>
+                <td style="color: #0088cc;">${username}</td>
                 <td><span class="level-badge level-${user.level}">Lv.${user.level}</span></td>
                 <td>${user.total_exp}</td>
-                <td>${user.user_eval_count}</td>
+                <td>${user.available_points}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-sm btn-primary" onclick="viewUserDetails('${user.user_id}')" title="查看详情">
+                            👤 详情
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="adjustUserPoints('${user.user_id}')" title="调整积分">
+                            💎 积分
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="adjustUserExp('${user.user_id}')" title="调整经验">
+                            ⚡ 经验
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="adjustUserLevel('${user.user_id}')" title="调整等级">
+                            ⭐ 等级
+                        </button>
+                    </div>
+                </td>
             </tr>
         `;
     }).join('');
@@ -1036,6 +1058,13 @@ window.migrateData = migrateData;
   window.adjustUserData = adjustUserData;
   window.awardBadge = awardBadge;
   window.loadGroups = loadGroups;
+  
+  // 导出新的用户管理函数
+  window.viewUserDetails = viewUserDetails;
+  window.adjustUserPoints = adjustUserPoints;
+  window.adjustUserExp = adjustUserExp;
+  window.adjustUserLevel = adjustUserLevel;
+  window.confirmUserAdjustment = confirmUserAdjustment;
 
 // ==================== 缺失的配置管理函数 ====================
 
@@ -2395,3 +2424,185 @@ window.cleanupData = cleanupData;
 window.optimizeDatabase = optimizeDatabase;
 window.createBackup = createBackup;
 window.restoreBackup = restoreBackup;
+
+// ==================== 新的用户管理函数 ====================
+
+// 查看用户详情
+async function viewUserDetails(userId) {
+    try {
+        const response = await fetch(`/api/level/users/${userId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const userInfo = result.data;
+            const profile = userInfo.profile;
+            const currentLevel = userInfo.currentLevel;
+            const nextLevel = userInfo.nextLevel;
+            
+            // 构建详情信息
+            let detailsHtml = `
+                <div class="user-details">
+                    <h3>👤 用户详情</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <strong>用户ID:</strong> ${profile.user_id}
+                        </div>
+                        <div class="detail-item">
+                            <strong>用户名称:</strong> ${profile.display_name || '未设置'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>@用户名:</strong> ${profile.username ? '@' + profile.username : '未设置用户名'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>当前等级:</strong> Lv.${profile.level} ${currentLevel ? currentLevel.name : '未知'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>总经验值:</strong> ${profile.total_exp}
+                        </div>
+                        <div class="detail-item">
+                            <strong>可用积分:</strong> ${profile.available_points}
+                        </div>
+                        <div class="detail-item">
+                            <strong>用户评价次数:</strong> ${profile.user_eval_count}
+                        </div>
+                        <div class="detail-item">
+                            <strong>商家评价次数:</strong> ${profile.merchant_eval_count}
+                        </div>
+                        <div class="detail-item">
+                            <strong>创建时间:</strong> ${new Date(profile.created_at * 1000).toLocaleString('zh-CN')}
+                        </div>
+                        <div class="detail-item">
+                            <strong>最后更新:</strong> ${new Date(profile.updated_at * 1000).toLocaleString('zh-CN')}
+                        </div>
+                    </div>
+                    
+                    ${nextLevel ? `
+                        <div class="progress-info">
+                            <h4>📊 升级进度</h4>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${Math.min(100, (profile.total_exp / nextLevel.required_exp) * 100)}%"></div>
+                            </div>
+                            <div class="progress-text">
+                                下一级: Lv.${nextLevel.level} ${nextLevel.name} 
+                                (${profile.total_exp}/${nextLevel.required_exp})
+                            </div>
+                        </div>
+                    ` : '<div class="max-level">🎉 已达到最高等级！</div>'}
+                </div>
+            `;
+            
+            // 显示在模态框中
+            document.getElementById('userDetailsContent').innerHTML = detailsHtml;
+            document.getElementById('userDetailsModal').style.display = 'block';
+            
+        } else {
+            showError('获取用户详情失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('获取用户详情失败:', error);
+        showError('获取用户详情失败');
+    }
+}
+
+// 调整用户积分
+function adjustUserPoints(userId) {
+    const user = allUsers.find(u => u.user_id === userId);
+    if (!user) return;
+    
+    document.getElementById('adjustUserId').value = userId;
+    document.getElementById('adjustUserName').textContent = user.display_name || '未设置';
+    document.getElementById('adjustType').value = 'points';
+    document.getElementById('adjustAmount').value = '';
+    document.getElementById('adjustReason').value = '';
+    
+    // 更新模态框标题和说明
+    document.getElementById('adjustModalTitle').textContent = '💎 调整用户积分';
+    document.getElementById('adjustModalDesc').textContent = `当前积分: ${user.available_points}`;
+    
+    document.getElementById('userAdjustModal').style.display = 'block';
+}
+
+// 调整用户经验值
+function adjustUserExp(userId) {
+    const user = allUsers.find(u => u.user_id === userId);
+    if (!user) return;
+    
+    document.getElementById('adjustUserId').value = userId;
+    document.getElementById('adjustUserName').textContent = user.display_name || '未设置';
+    document.getElementById('adjustType').value = 'exp';
+    document.getElementById('adjustAmount').value = '';
+    document.getElementById('adjustReason').value = '';
+    
+    // 更新模态框标题和说明
+    document.getElementById('adjustModalTitle').textContent = '⚡ 调整用户经验值';
+    document.getElementById('adjustModalDesc').textContent = `当前经验值: ${user.total_exp}`;
+    
+    document.getElementById('userAdjustModal').style.display = 'block';
+}
+
+// 调整用户等级
+function adjustUserLevel(userId) {
+    const user = allUsers.find(u => u.user_id === userId);
+    if (!user) return;
+    
+    document.getElementById('adjustUserId').value = userId;
+    document.getElementById('adjustUserName').textContent = user.display_name || '未设置';
+    document.getElementById('adjustType').value = 'level';
+    document.getElementById('adjustAmount').value = '';
+    document.getElementById('adjustReason').value = '';
+    
+    // 更新模态框标题和说明
+    document.getElementById('adjustModalTitle').textContent = '⭐ 调整用户等级';
+    document.getElementById('adjustModalDesc').textContent = `当前等级: Lv.${user.level}`;
+    
+    document.getElementById('userAdjustModal').style.display = 'block';
+}
+
+// 确认用户数据调整
+async function confirmUserAdjustment() {
+    const userId = document.getElementById('adjustUserId').value;
+    const adjustType = document.getElementById('adjustType').value;
+    const amount = parseInt(document.getElementById('adjustAmount').value);
+    const reason = document.getElementById('adjustReason').value.trim();
+    
+    if (isNaN(amount) || amount === 0) {
+        showError('请输入有效的调整数值');
+        return;
+    }
+    
+    if (!reason) {
+        showError('请输入调整原因');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/level/users/${userId}/adjust`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: adjustType,
+                amount: amount,
+                reason: reason
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess(`用户${adjustType === 'points' ? '积分' : adjustType === 'exp' ? '经验值' : '等级'}调整成功`);
+            closeModal('userAdjustModal');
+            
+            // 刷新数据
+            await Promise.all([
+                loadUsers(currentPage),
+                loadStats(),
+                loadInitialData()
+            ]);
+        } else {
+            showError('调整失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('调整用户数据失败:', error);
+        showError('调整失败');
+    }
+}

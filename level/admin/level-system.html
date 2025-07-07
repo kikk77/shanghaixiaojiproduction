@@ -353,7 +353,9 @@
                     <thead>
                         <tr>
                             <th>排名</th>
-                            <th>用户</th>
+                            <th>用户ID</th>
+                            <th>用户名称</th>
+                            <th>@用户名</th>
                             <th>等级</th>
                             <th>经验值</th>
                             <th>积分</th>
@@ -361,7 +363,7 @@
                         </tr>
                     </thead>
                     <tbody id="userRankingBody">
-                        <tr><td colspan="6" style="text-align: center;">加载中...</td></tr>
+                        <tr><td colspan="8" style="text-align: center;">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -893,6 +895,50 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="closeModal('editGroupConfigModal')">取消</button>
                 <button class="btn btn-success" onclick="saveGroupConfig()">💾 保存配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户详情模态框 -->
+    <div id="userDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="modal-close" onclick="closeModal('userDetailsModal')">&times;</span>
+            <div id="userDetailsContent">
+                <!-- 用户详情内容将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户数据调整模态框 -->
+    <div id="userAdjustModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="modal-close" onclick="closeModal('userAdjustModal')">&times;</span>
+            <h2 id="adjustModalTitle">调整用户数据</h2>
+            
+            <div class="info-box">
+                <strong>用户:</strong> <span id="adjustUserName"></span><br>
+                <span id="adjustModalDesc"></span>
+            </div>
+            
+            <input type="hidden" id="adjustUserId">
+            <input type="hidden" id="adjustType">
+            
+            <div class="form-group">
+                <label>调整数值:</label>
+                <input type="number" id="adjustAmount" placeholder="正数增加，负数减少" step="1">
+                <small style="display: block; color: #666; margin-top: 5px;">
+                    输入正数增加，负数减少。例如：+100 或 -50
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label>调整原因:</label>
+                <textarea id="adjustReason" placeholder="请输入调整原因，此信息将记录在系统日志中" rows="3"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('userAdjustModal')">取消</button>
+                <button class="btn btn-warning" onclick="confirmUserAdjustment()">确认调整</button>
             </div>
         </div>
     </div>

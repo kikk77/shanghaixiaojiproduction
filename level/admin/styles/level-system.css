@@ -978,4 +978,128 @@ h2 {
 
 .mb-20 {
     margin-bottom: 20px;
+}
+
+/* 用户详情模态框样式 */
+.user-details {
+    padding: 20px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.detail-item {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid #2196F3;
+}
+
+.detail-item strong {
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.progress-info {
+    margin-top: 25px;
+    padding: 20px;
+    background: #f0f8ff;
+    border-radius: 8px;
+    border: 1px solid #e3f2fd;
+}
+
+.progress-info h4 {
+    margin: 0 0 15px 0;
+    color: #1976d2;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50, #2196f3);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.max-level {
+    text-align: center;
+    padding: 20px;
+    background: #fff3e0;
+    border-radius: 8px;
+    color: #f57c00;
+    font-weight: bold;
+    font-size: 16px;
+    margin-top: 20px;
+}
+
+/* 操作按钮样式增强 */
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.action-buttons .btn {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* 表格中的用户名样式 */
+.user-table td strong {
+    color: #333;
+    font-weight: 600;
+}
+
+.user-table td[style*="color: #0088cc"] {
+    font-style: italic;
+}
+
+.user-table td[style*="font-family: monospace"] {
+    font-size: 13px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 3px;
+    }
+    
+    .action-buttons .btn {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+    
+    .user-table th:nth-child(2),
+    .user-table td:nth-child(2) {
+        display: none; /* 隐藏用户ID列 */
+    }
 } 

@@ -122,13 +122,13 @@ class LevelService {
             
             const stmt = db.prepare(`
                 INSERT INTO user_levels 
-                (user_id, display_name)
-                VALUES (?, ?)
+                (user_id, display_name, username)
+                VALUES (?, ?, ?)
             `);
             
-            stmt.run(userId, userInfo.displayName);
+            stmt.run(userId, userInfo.displayName, userInfo.username);
             
-            console.log(`✅ 创建用户档案: ${userId} (${userInfo.displayName})`);
+            console.log(`✅ 创建用户档案: ${userId} (${userInfo.displayName}, @${userInfo.username || '无'})`);
             return await this.getUserProfile(userId);
         } catch (error) {
             console.error('创建用户档案失败:', error);

@@ -68,11 +68,22 @@ class LevelSystemInitializer {
                 text_eval_count INTEGER DEFAULT 0,
                 badges TEXT DEFAULT '[]',
                 display_name TEXT,
+                username TEXT,
                 last_milestone_points INTEGER DEFAULT 0,
                 created_at INTEGER DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))
             )
         `);
+        
+        // 检查并添加username字段（兼容性升级）
+        try {
+            db.exec(`ALTER TABLE user_levels ADD COLUMN username TEXT`);
+        } catch (error) {
+            // 字段已存在，忽略错误
+            if (!error.message.includes('duplicate column name')) {
+                console.warn('添加username字段时出现错误:', error.message);
+            }
+        }
         
         // 3. 积分变更日志表（保留group_id用于记录来源）
         db.exec(`

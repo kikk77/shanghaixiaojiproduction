@@ -161,20 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('visibilitychange', function() {
         if (!document.hidden) {
             console.log('🔄 页面重新获得焦点，自动刷新数据');
-            // 延迟一点时间再刷新，避免频繁切换
-            setTimeout(() => {
-                loadStats();
-                // 根据当前活跃标签页刷新对应数据
-                const activeTab = document.querySelector('.tab.active');
-                if (activeTab) {
-                    const tabName = activeTab.textContent.includes('用户') ? 'users' :
-                                   activeTab.textContent.includes('群组') ? 'groups' :
-                                   activeTab.textContent.includes('勋章') ? 'badges' : null;
-                    if (tabName === 'users') loadUsers();
-                    else if (tabName === 'groups') loadGroups();
-                    else if (tabName === 'badges') loadBadges();
-                }
-            }, 1000);
+            refreshAllData();
         }
     });
     
@@ -345,7 +332,7 @@ function switchTab(tabName) {
     switch(tabName) {
         case 'users':
             loadUsers();
-            loadStats(); // 同时刷新统计数据
+            loadStats();
             break;
         case 'levels':
             loadLevelConfig();
@@ -1671,11 +1658,6 @@ async function refreshAllData() {
     console.log('🔄 开始刷新所有数据...');
     
     try {
-        // 清除前端缓存
-        groupConfigs = {};
-        allUsers = [];
-        allBadges = [];
-        
         // 重新加载所有数据
         await Promise.all([
             loadStats(),

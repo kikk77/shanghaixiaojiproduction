@@ -72,14 +72,6 @@ class BadgeService {
      * 获取群组可用勋章
      */
     async getAvailableBadges(groupId) {
-        const cacheKey = `badges_${groupId}`;
-        
-        // 检查缓存
-        const cached = this.badgeCache.get(cacheKey);
-        if (cached && cached.expiry > Date.now()) {
-            return cached.data;
-        }
-        
         const db = this.levelDb.getDatabase();
         if (!db) return [];
         
@@ -90,15 +82,7 @@ class BadgeService {
                 AND status = 'active'
                 ORDER BY rarity ASC, badge_id ASC
             `);
-            const badges = stmt.all(groupId);
-            
-            // 缓存结果
-            this.badgeCache.set(cacheKey, {
-                data: badges,
-                expiry: Date.now() + this.CACHE_TTL
-            });
-            
-            return badges;
+            return stmt.all(groupId);
         } catch (error) {
             console.error('获取勋章定义失败:', error);
             return [];

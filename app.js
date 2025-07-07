@@ -92,6 +92,19 @@ async function startFullApplication() {
                 const LevelSystemInitializer = require('./level/scripts/init-level-system');
                 const initializer = new LevelSystemInitializer();
                 await initializer.initialize();
+                
+                // 3. 更新用户数据（生产环境）
+                if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+                    console.log(`🔄 更新生产环境用户数据...`);
+                    try {
+                        require('./scripts/update-production-user-data');
+                        await new Promise(resolve => setTimeout(resolve, 3000)); // 等待更新完成
+                        console.log('✅ 用户数据更新完成');
+                    } catch (error) {
+                        console.warn('⚠️ 用户数据更新失败:', error.message);
+                    }
+                }
+                
                 console.log('✅ 等级系统启动完成');
             } catch (error) {
                 console.error('❌ 等级系统启动失败:', error.message);

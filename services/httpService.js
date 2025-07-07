@@ -2966,7 +2966,11 @@ async function handleLevelApiRequest(pathname, method, data) {
                 return { success: false, error: '数据库不可用' };
             }
             
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
+            
             const config = db.prepare(`
                 SELECT level_config FROM group_configs WHERE group_id = ?
             `).get(groupId);
@@ -2985,13 +2989,15 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             const { groupId, levelConfig } = data;
-            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
             
             try {
                 // 检查群组配置是否存在
                 const exists = db.prepare(`
                     SELECT 1 FROM group_configs WHERE group_id = ?
-                `).get(targetGroupId);
+                `).get(groupId);
                 
                 if (exists) {
                     // 更新现有配置
@@ -3002,7 +3008,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                     `).run(
                         JSON.stringify(levelConfig),
                         Date.now() / 1000,
-                        targetGroupId
+                        groupId
                     );
                 } else {
                     // 创建新配置
@@ -3011,8 +3017,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     `).run(
-                        targetGroupId,
-                        targetGroupId,
+                        groupId,
+                        groupId,
                         JSON.stringify(levelConfig),
                         JSON.stringify(getDefaultPointsConfig()),
                         JSON.stringify(getDefaultBroadcastConfig()),
@@ -3034,7 +3040,11 @@ async function handleLevelApiRequest(pathname, method, data) {
                 return { success: false, error: '数据库不可用' };
             }
             
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
+            
             const config = db.prepare(`
                 SELECT points_config FROM group_configs WHERE group_id = ?
             `).get(groupId);
@@ -3053,13 +3063,15 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             const { groupId, rewards } = data;
-            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
             
             try {
                 // 检查群组配置是否存在
                 const exists = db.prepare(`
                     SELECT 1 FROM group_configs WHERE group_id = ?
-                `).get(targetGroupId);
+                `).get(groupId);
                 
                 if (exists) {
                     // 更新现有配置
@@ -3070,7 +3082,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                     `).run(
                         JSON.stringify(rewards),
                         Date.now() / 1000,
-                        targetGroupId
+                        groupId
                     );
                 } else {
                     // 创建新配置
@@ -3079,8 +3091,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     `).run(
-                        targetGroupId,
-                        targetGroupId,
+                        groupId,
+                        groupId,
                         JSON.stringify(getDefaultLevelConfig()),
                         JSON.stringify(rewards),
                         JSON.stringify(getDefaultBroadcastConfig()),
@@ -3102,7 +3114,11 @@ async function handleLevelApiRequest(pathname, method, data) {
                 return { success: false, error: '数据库不可用' };
             }
             
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
+            
             const config = db.prepare(`
                 SELECT broadcast_config FROM group_configs WHERE group_id = ?
             `).get(groupId);
@@ -3121,13 +3137,15 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             const { groupId, broadcast } = data;
-            const targetGroupId = groupId || process.env.GROUP_CHAT_ID;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
             
             try {
                 // 检查群组配置是否存在
                 const exists = db.prepare(`
                     SELECT 1 FROM group_configs WHERE group_id = ?
-                `).get(targetGroupId);
+                `).get(groupId);
                 
                 if (exists) {
                     // 更新现有配置
@@ -3138,7 +3156,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                     `).run(
                         JSON.stringify(broadcast),
                         Date.now() / 1000,
-                        targetGroupId
+                        groupId
                     );
                 } else {
                     // 创建新配置
@@ -3147,8 +3165,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                         (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     `).run(
-                        targetGroupId,
-                        targetGroupId,
+                        groupId,
+                        groupId,
                         JSON.stringify(getDefaultLevelConfig()),
                         JSON.stringify(getDefaultPointsConfig()),
                         JSON.stringify(broadcast),
@@ -3173,7 +3191,10 @@ async function handleLevelApiRequest(pathname, method, data) {
                 return { success: false, error: '数据库不可用' };
             }
             
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
+            if (!groupId) {
+                return { success: false, error: '群组ID不能为空，请先选择群组' };
+            }
             
             try {
                 let exportData = {};

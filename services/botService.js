@@ -3689,6 +3689,55 @@ async function handleBroadcastChoice(userId, data, query) {
 }
 
 // 处理实名播报
+// 获取用户的播报目标群组列表
+async function getBroadcastTargetGroups(userId) {
+    try {
+        // 获取等级系统数据库管理器
+        const levelDbManager = require('../level/config/levelDatabase');
+        const db = levelDbManager.getDatabase();
+        
+        if (!db) {
+            console.error('❌ 等级系统数据库不可用');
+            return [];
+        }
+        
+        // 查询所有群组配置，获取启用播报的群组
+        const groupConfigs = db.prepare(`
+            SELECT group_id, broadcast_config 
+            FROM group_configs 
+            WHERE broadcast_config IS NOT NULL
+        `).all();
+        
+        const targetGroups = [];
+        
+        for (const config of groupConfigs) {
+            try {
+                const broadcastConfig = JSON.parse(config.broadcast_config);
+                
+                // 检查播报是否启用
+                if (broadcastConfig && broadcastConfig.enabled) {
+                    targetGroups.push(config.group_id);
+                }
+            } catch (parseError) {
+                console.error(`解析群组 ${config.group_id} 播报配置失败:`, parseError);
+            }
+        }
+        
+        console.log(`📢 用户 ${userId} 的播报目标群组:`, targetGroups);
+        return targetGroups;
+        
+    } catch (error) {
+        console.error('获取播报目标群组失败:', error);
+        // 如果获取失败，尝试使用环境变量作为fallback
+        const fallbackGroupId = process.env.GROUP_CHAT_ID;
+        if (fallbackGroupId) {
+            console.log(`📢 使用fallback群组: ${fallbackGroupId}`);
+            return [fallbackGroupId];
+        }
+        return [];
+    }
+}
+
 async function handleRealBroadcast(userId, evaluationId, query) {
     try {
         console.log(`=== 开始实名播报调试 ===`);
@@ -3740,52 +3789,79 @@ async function handleRealBroadcast(userId, evaluationId, query) {
 🐤 小鸡出征！咯咯哒咯咯哒～`;
         console.log(`播报消息内容:`, broadcastMessage);
 
-        // 发送到群组播报
-        const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
-        if (!GROUP_CHAT_ID) {
-            console.error('❌ GROUP_CHAT_ID 环境变量未设置');
-            await sendMessageWithoutDelete(userId, '❌ 播报失败：群组配置未设置，请联系管理员。', {}, 'broadcast_error');
+        // 发送到群组播报 - 根据用户所在群组进行播报
+        const targetGroups = await getBroadcastTargetGroups(userId);
+        if (!targetGroups || targetGroups.length === 0) {
+            console.error('❌ 未找到用户所在的播报群组');
+            await sendMessageWithoutDelete(userId, '❌ 播报失败：未找到可播报的群组，请联系管理员。', {}, 'broadcast_error');
             return;
         }
-        console.log(`目标群组ID: ${GROUP_CHAT_ID}`);
         
-        try {
-            console.log(`正在发送消息到群组...`);
-            const sentMessage = await bot.sendMessage(GROUP_CHAT_ID, broadcastMessage);
-            console.log(`消息发送成功, message_id: ${sentMessage.message_id}`);
-            
-            // 置顶播报消息
+        console.log(`目标群组列表: ${targetGroups.join(', ')}`);
+        
+        let broadcastSuccess = false;
+        let successGroups = [];
+        let errorGroups = [];
+        
+        // 向所有目标群组发送播报
+        for (const groupId of targetGroups) {
             try {
-                console.log(`正在置顶消息...`);
-                await bot.pinChatMessage(GROUP_CHAT_ID, sentMessage.message_id);
-                console.log(`播报消息已置顶: ${sentMessage.message_id}`);
-            } catch (pinError) {
-                console.log(`置顶消息失败: ${pinError.message}`);
-                // 置顶失败不影响播报成功
+                console.log(`正在发送消息到群组 ${groupId}...`);
+                const sentMessage = await bot.sendMessage(groupId, broadcastMessage);
+                console.log(`消息发送成功到群组 ${groupId}, message_id: ${sentMessage.message_id}`);
+                
+                // 置顶播报消息
+                try {
+                    console.log(`正在置顶消息...`);
+                    await bot.pinChatMessage(groupId, sentMessage.message_id);
+                    console.log(`播报消息已置顶: ${sentMessage.message_id}`);
+                } catch (pinError) {
+                    console.log(`置顶消息失败: ${pinError.message}`);
+                    // 置顶失败不影响播报成功
+                }
+                
+                successGroups.push(groupId);
+                broadcastSuccess = true;
+                
+            } catch (groupError) {
+                console.error(`群组 ${groupId} 播报失败:`, groupError);
+                console.error('错误详情:', {
+                    message: groupError.message,
+                    code: groupError.code,
+                    response: groupError.response?.body
+                });
+                
+                errorGroups.push({
+                    groupId: groupId,
+                    error: groupError.message
+                });
             }
-            
-            // 给用户发送播报成功确认
-            await sendMessageWithoutDelete(userId, '✅ 实名播报成功！您的出击记录已在群内公布。', {}, 'broadcast_success');
+        }
+        
+        // 根据播报结果给用户发送反馈
+        if (broadcastSuccess) {
+            let successMessage = '✅ 实名播报成功！您的出击记录已在群内公布。';
+            if (successGroups.length > 1) {
+                successMessage += `\n成功播报到 ${successGroups.length} 个群组。`;
+            }
+            if (errorGroups.length > 0) {
+                successMessage += `\n⚠️ ${errorGroups.length} 个群组播报失败。`;
+            }
+            await sendMessageWithoutDelete(userId, successMessage, {}, 'broadcast_success');
             console.log(`=== 实名播报成功 ===`);
-            
-        } catch (groupError) {
-            console.error('群组播报失败:', groupError);
-            console.error('错误详情:', {
-                message: groupError.message,
-                code: groupError.code,
-                response: groupError.response?.body
-            });
-            
-            // 检查具体错误类型并给出更详细的错误信息
+        } else {
+            // 所有群组都播报失败
             let errorMessage = '❌ 播报失败，请联系管理员。';
-            if (groupError.message.includes('chat not found')) {
-                errorMessage = '❌ 播报失败：群组未找到，请检查群组ID配置。';
-            } else if (groupError.message.includes('not enough rights')) {
-                errorMessage = '❌ 播报失败：机器人没有发送消息权限，请联系群组管理员。';
-            } else if (groupError.message.includes('bot was blocked')) {
-                errorMessage = '❌ 播报失败：机器人被群组封禁，请联系群组管理员。';
+            if (errorGroups.length > 0) {
+                const firstError = errorGroups[0].error;
+                if (firstError.includes('chat not found')) {
+                    errorMessage = '❌ 播报失败：群组未找到，请检查群组ID配置。';
+                } else if (firstError.includes('not enough rights')) {
+                    errorMessage = '❌ 播报失败：机器人没有发送消息权限，请联系群组管理员。';
+                } else if (firstError.includes('bot was blocked')) {
+                    errorMessage = '❌ 播报失败：机器人被群组封禁，请联系群组管理员。';
+                }
             }
-            
             await sendMessageWithoutDelete(userId, errorMessage, {}, 'broadcast_error');
         }
         
@@ -3837,52 +3913,79 @@ async function handleAnonymousBroadcast(userId, evaluationId, query) {
 🐤 小鸡出征！咯咯哒咯咯哒～`;
         console.log(`播报消息内容:`, broadcastMessage);
 
-        // 发送到群组播报
-        const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
-        if (!GROUP_CHAT_ID) {
-            console.error('❌ GROUP_CHAT_ID 环境变量未设置');
-            await sendMessageWithoutDelete(userId, '❌ 播报失败：群组配置未设置，请联系管理员。', {}, 'broadcast_error');
+        // 发送到群组播报 - 根据用户所在群组进行播报
+        const targetGroups = await getBroadcastTargetGroups(userId);
+        if (!targetGroups || targetGroups.length === 0) {
+            console.error('❌ 未找到用户所在的播报群组');
+            await sendMessageWithoutDelete(userId, '❌ 播报失败：未找到可播报的群组，请联系管理员。', {}, 'broadcast_error');
             return;
         }
-        console.log(`目标群组ID: ${GROUP_CHAT_ID}`);
         
-        try {
-            console.log(`正在发送消息到群组...`);
-            const sentMessage = await bot.sendMessage(GROUP_CHAT_ID, broadcastMessage);
-            console.log(`消息发送成功, message_id: ${sentMessage.message_id}`);
-            
-            // 置顶播报消息
+        console.log(`目标群组列表: ${targetGroups.join(', ')}`);
+        
+        let broadcastSuccess = false;
+        let successGroups = [];
+        let errorGroups = [];
+        
+        // 向所有目标群组发送播报
+        for (const groupId of targetGroups) {
             try {
-                console.log(`正在置顶消息...`);
-                await bot.pinChatMessage(GROUP_CHAT_ID, sentMessage.message_id);
-                console.log(`播报消息已置顶: ${sentMessage.message_id}`);
-            } catch (pinError) {
-                console.log(`置顶消息失败: ${pinError.message}`);
-                // 置顶失败不影响播报成功
+                console.log(`正在发送消息到群组 ${groupId}...`);
+                const sentMessage = await bot.sendMessage(groupId, broadcastMessage);
+                console.log(`消息发送成功到群组 ${groupId}, message_id: ${sentMessage.message_id}`);
+                
+                // 置顶播报消息
+                try {
+                    console.log(`正在置顶消息...`);
+                    await bot.pinChatMessage(groupId, sentMessage.message_id);
+                    console.log(`播报消息已置顶: ${sentMessage.message_id}`);
+                } catch (pinError) {
+                    console.log(`置顶消息失败: ${pinError.message}`);
+                    // 置顶失败不影响播报成功
+                }
+                
+                successGroups.push(groupId);
+                broadcastSuccess = true;
+                
+            } catch (groupError) {
+                console.error(`群组 ${groupId} 播报失败:`, groupError);
+                console.error('错误详情:', {
+                    message: groupError.message,
+                    code: groupError.code,
+                    response: groupError.response?.body
+                });
+                
+                errorGroups.push({
+                    groupId: groupId,
+                    error: groupError.message
+                });
             }
-            
-            // 给用户发送播报成功确认
-            await sendMessageWithoutDelete(userId, '✅ 匿名播报成功！您的出击记录已在群内公布。', {}, 'broadcast_success');
+        }
+        
+        // 根据播报结果给用户发送反馈
+        if (broadcastSuccess) {
+            let successMessage = '✅ 匿名播报成功！您的出击记录已在群内公布。';
+            if (successGroups.length > 1) {
+                successMessage += `\n成功播报到 ${successGroups.length} 个群组。`;
+            }
+            if (errorGroups.length > 0) {
+                successMessage += `\n⚠️ ${errorGroups.length} 个群组播报失败。`;
+            }
+            await sendMessageWithoutDelete(userId, successMessage, {}, 'broadcast_success');
             console.log(`=== 匿名播报成功 ===`);
-            
-        } catch (groupError) {
-            console.error('群组播报失败:', groupError);
-            console.error('错误详情:', {
-                message: groupError.message,
-                code: groupError.code,
-                response: groupError.response?.body
-            });
-            
-            // 检查具体错误类型并给出更详细的错误信息
+        } else {
+            // 所有群组都播报失败
             let errorMessage = '❌ 播报失败，请联系管理员。';
-            if (groupError.message.includes('chat not found')) {
-                errorMessage = '❌ 播报失败：群组未找到，请检查群组ID配置。';
-            } else if (groupError.message.includes('not enough rights')) {
-                errorMessage = '❌ 播报失败：机器人没有发送消息权限，请联系群组管理员。';
-            } else if (groupError.message.includes('bot was blocked')) {
-                errorMessage = '❌ 播报失败：机器人被群组封禁，请联系群组管理员。';
+            if (errorGroups.length > 0) {
+                const firstError = errorGroups[0].error;
+                if (firstError.includes('chat not found')) {
+                    errorMessage = '❌ 播报失败：群组未找到，请检查群组ID配置。';
+                } else if (firstError.includes('not enough rights')) {
+                    errorMessage = '❌ 播报失败：机器人没有发送消息权限，请联系群组管理员。';
+                } else if (firstError.includes('bot was blocked')) {
+                    errorMessage = '❌ 播报失败：机器人被群组封禁，请联系群组管理员。';
+                }
             }
-            
             await sendMessageWithoutDelete(userId, errorMessage, {}, 'broadcast_error');
         }
         

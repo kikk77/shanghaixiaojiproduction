@@ -73,4 +73,29 @@ async function main() {
 }
 
 // 执行主函数
-main().catch(console.error); 
+main().catch(console.error);
+
+async function pushToGithub() {
+  try {
+    console.log('开始强制推送到finalversion仓库...');
+    
+    // 确保我们在正确的分支上
+    execSync('git checkout main', { stdio: 'inherit' });
+    
+    // 添加所有更改
+    execSync('git add .', { stdio: 'inherit' });
+    
+    // 提交更改
+    execSync('git commit -m "force push: 强制推送所有更改"', { stdio: 'inherit' });
+    
+    // 强制推送到finalversion仓库
+    execSync('git push finalversion main --force', { stdio: 'inherit' });
+    
+    console.log('✅ 成功推送到finalversion仓库！');
+  } catch (error) {
+    console.error('❌ 推送过程中发生错误：', error.message);
+    process.exit(1);
+  }
+}
+
+pushToGithub(); 

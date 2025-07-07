@@ -2835,33 +2835,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                         console.log(`   - 用户勋章删除: ${deleteBadgesResult.changes} 条`);
                         console.log(`   - 勋章定义删除: ${deleteBadgeDefsResult.changes} 条`);
                         
-                        // 🔥 关键修复：清理所有相关缓存
-                        try {
-                            const levelService = require('../level/services/levelService').getInstance();
-                            const badgeService = require('../level/services/badgeService').getInstance();
-                            
-                            // 清理LevelService缓存中所有相关群组的数据
-                            for (const [cacheKey, cacheValue] of levelService.cache.entries()) {
-                                if (cacheKey.includes(`_${id}`)) {
-                                    levelService.cache.delete(cacheKey);
-                                    console.log(`🗑️ 清理LevelService缓存: ${cacheKey}`);
-                                }
-                            }
-                            
-                            // 清理BadgeService缓存
-                            if (badgeService.badgeCache) {
-                                for (const [cacheKey, cacheValue] of badgeService.badgeCache.entries()) {
-                                    if (cacheKey.includes(`_${id}`)) {
-                                        badgeService.badgeCache.delete(cacheKey);
-                                        console.log(`🗑️ 清理BadgeService缓存: ${cacheKey}`);
-                                    }
-                                }
-                            }
-                            
-                            console.log('✅ 所有相关缓存已清理');
-                        } catch (cacheError) {
-                            console.error('⚠️ 清理缓存时出错（不影响删除操作）:', cacheError);
-                        }
+
                         
                         return { 
                             success: true, 
@@ -3189,42 +3163,7 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
         }
         
-        // 🔥 新增：缓存清理API
-        if (endpoint === 'cache' && pathParts[4] === 'clear' && method === 'POST') {
-            try {
-                console.log('🧹 开始清理等级系统所有缓存...');
-                
-                const levelService = require('../level/services/levelService').getInstance();
-                const badgeService = require('../level/services/badgeService').getInstance();
-                
-                let clearedCount = 0;
-                
-                // 清理LevelService缓存
-                if (levelService.cache) {
-                    clearedCount += levelService.cache.size;
-                    levelService.cache.clear();
-                    console.log('✅ LevelService缓存已清理');
-                }
-                
-                // 清理BadgeService缓存
-                if (badgeService.badgeCache) {
-                    clearedCount += badgeService.badgeCache.size;
-                    badgeService.badgeCache.clear();
-                    console.log('✅ BadgeService缓存已清理');
-                }
-                
-                console.log(`🧹 缓存清理完成，共清理 ${clearedCount} 个缓存项`);
-                
-                return { 
-                    success: true, 
-                    message: '缓存清理成功',
-                    clearedCount: clearedCount
-                };
-            } catch (error) {
-                console.error('缓存清理失败:', error);
-                return { success: false, error: '缓存清理失败: ' + error.message };
-            }
-        }
+
         
         // 404 - 未找到的API端点
         return { success: false, error: 'API端点不存在', status: 404 };

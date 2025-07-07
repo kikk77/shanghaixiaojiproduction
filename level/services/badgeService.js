@@ -14,10 +14,6 @@ class BadgeService {
         
         // 检查是否启用
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
-        
-        // 缓存配置
-        this.badgeCache = new Map();
-        this.CACHE_TTL = 10 * 60 * 1000; // 10分钟
     }
     
     /**

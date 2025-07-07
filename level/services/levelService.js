@@ -15,10 +15,6 @@ class LevelService {
         
         // 检查是否启用
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
-        
-        // 缓存配置
-        this.cache = new Map();
-        this.CACHE_TTL = 5 * 60 * 1000; // 5分钟
     }
     
     /**
@@ -61,9 +57,6 @@ class LevelService {
             // 检查勋章解锁
             await this.checkBadgeUnlock(userId, groupId, updatedProfile);
             
-            // 清除缓存
-            this.clearUserCache(userId, groupId);
-            
         } catch (error) {
             console.error('处理等级奖励失败:', error);
         }
@@ -73,14 +66,6 @@ class LevelService {
      * 获取用户档案
      */
     async getUserProfile(userId, groupId) {
-        const cacheKey = `profile_${userId}_${groupId}`;
-        
-        // 检查缓存
-        const cached = this.cache.get(cacheKey);
-        if (cached && cached.expiry > Date.now()) {
-            return cached.data;
-        }
-        
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
@@ -89,17 +74,7 @@ class LevelService {
                 SELECT * FROM user_levels 
                 WHERE user_id = ? AND group_id = ?
             `);
-            const profile = stmt.get(userId, groupId);
-            
-            // 缓存结果
-            if (profile) {
-                this.cache.set(cacheKey, {
-                    data: profile,
-                    expiry: Date.now() + this.CACHE_TTL
-                });
-            }
-            
-            return profile;
+            return stmt.get(userId, groupId);
         } catch (error) {
             console.error('获取用户档案失败:', error);
             return null;
@@ -409,13 +384,7 @@ class LevelService {
         }
     }
     
-    /**
-     * 清除用户缓存
-     */
-    clearUserCache(userId, groupId) {
-        const cacheKey = `profile_${userId}_${groupId}`;
-        this.cache.delete(cacheKey);
-    }
+
     
     /**
      * 获取用户等级信息（供Bot命令使用）
@@ -474,9 +443,6 @@ class LevelService {
                 WHERE user_id = ? AND group_id = ?
             `);
             stmt.run(displayName, Date.now() / 1000, userId, groupId);
-            
-            // 清除缓存
-            this.clearUserCache(userId, groupId);
             
             return true;
         } catch (error) {

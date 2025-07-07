@@ -1671,23 +1671,10 @@ async function refreshAllData() {
     console.log('🔄 开始刷新所有数据...');
     
     try {
-        // 🔥 关键修复：先清理服务器端缓存
-        try {
-            const cacheResponse = await fetch('/api/level/cache/clear', { method: 'POST' });
-            if (cacheResponse.ok) {
-                console.log('✅ 服务器缓存已清理');
-            }
-        } catch (cacheError) {
-            console.warn('⚠️ 清理服务器缓存失败（继续刷新数据）:', cacheError);
-        }
-        
         // 清除前端缓存
         groupConfigs = {};
         allUsers = [];
         allBadges = [];
-        
-        // 强制等待一下，确保缓存清理完成
-        await new Promise(resolve => setTimeout(resolve, 100));
         
         // 重新加载所有数据
         await Promise.all([

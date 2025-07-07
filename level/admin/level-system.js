@@ -971,7 +971,8 @@ window.migrateData = migrateData;
 
 // 删除等级行（需要密码验证）
 async function removeLevelRowWithPassword(index, adminPassword) {
-    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const groupId = document.getElementById('levelGroupSelect').value;
+    if (!groupId) return;
     const config = groupConfigs[groupId];
     
     if (!config) return;
@@ -1006,7 +1007,12 @@ async function resetLevelConfigWithPassword(adminPassword) {
         { level: 5, name: "专家勇士 🔴", required_exp: 500, required_evals: 25 }
     ];
     
-    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const groupId = document.getElementById('levelGroupSelect').value;
+    if (!groupId) {
+        showError('请先选择一个群组');
+        return;
+    }
+    
     groupConfigs[groupId] = {
         group_id: groupId,
         level_config: JSON.stringify({ levels: defaultLevels })
@@ -1089,7 +1095,11 @@ async function loadLevelConfig() {
 
 // 加载群组等级配置
 async function loadGroupLevelConfig() {
-    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const groupId = document.getElementById('levelGroupSelect').value;
+    if (!groupId) {
+        renderLevelConfig([]);
+        return;
+    }
     
     try {
         const response = await fetch(`/api/level/groups/${groupId}`);
@@ -1113,7 +1123,11 @@ async function loadGroupLevelConfig() {
 
 // 加载奖励配置
 async function loadRewardsConfig() {
-    const groupId = currentGroupId || 'default';
+    const groupId = currentGroupId;
+    if (!groupId) {
+        showError('请先选择一个群组');
+        return;
+    }
     
     try {
         const response = await fetch(`/api/level/rewards?groupId=${groupId}`);
@@ -1154,7 +1168,11 @@ async function loadRewardsConfig() {
 
 // 加载播报配置
 async function loadBroadcastConfig() {
-    const groupId = currentGroupId || 'default';
+    const groupId = currentGroupId;
+    if (!groupId) {
+        showError('请先选择一个群组');
+        return;
+    }
     
     try {
         const response = await fetch(`/api/level/broadcast?groupId=${groupId}`);
@@ -1175,7 +1193,8 @@ async function loadBroadcastConfig() {
 
 // 更新等级字段
 function updateLevelField(index, field, value) {
-    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const groupId = document.getElementById('levelGroupSelect').value;
+    if (!groupId) return;
     const config = groupConfigs[groupId];
     
     if (!config) return;
@@ -1220,7 +1239,11 @@ function addLevelRow() {
 
 // 保存等级配置
 async function saveLevelConfig() {
-    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const groupId = document.getElementById('levelGroupSelect').value;
+    if (!groupId) {
+        showError('请先选择一个群组');
+        return;
+    }
     const config = groupConfigs[groupId];
     
     if (!config) {
@@ -1618,7 +1641,11 @@ async function saveRewardsConfig() {
 
 // 保存播报配置
 async function saveBroadcastConfig() {
-    const groupId = currentGroupId || 'default';
+    const groupId = currentGroupId;
+    if (!groupId) {
+        showError('请先选择一个群组');
+        return;
+    }
     
     const broadcastData = {
         enabled: document.getElementById('enableLevelUp').checked,

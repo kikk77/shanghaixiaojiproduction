@@ -2866,6 +2866,13 @@ async function handleLevelApiRequest(pathname, method, data) {
                     SELECT COUNT(*) as count FROM user_badges WHERE group_id = ?
                 `).get(groupId).count,
                 
+                avgLevel: (() => {
+                    const result = db.prepare(`
+                        SELECT AVG(level) as avg FROM user_levels WHERE group_id = ?
+                    `).get(groupId);
+                    return result.avg ? parseFloat(result.avg).toFixed(1) : 0;
+                })(),
+                
                 levelDistribution: db.prepare(`
                     SELECT level, COUNT(*) as count 
                     FROM user_levels 

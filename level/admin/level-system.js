@@ -194,15 +194,17 @@ async function loadStats() {
             
             // 更新统计卡片
             document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
-            document.getElementById('activeUsers').textContent = stats.activeUsers || 0;
+            document.getElementById('totalPoints').textContent = stats.totalBadgesUnlocked || 0;
+            document.getElementById('avgLevel').textContent = stats.avgLevel || '-';
             document.getElementById('totalBadges').textContent = stats.totalBadges || 0;
-            document.getElementById('totalBadgesUnlocked').textContent = stats.totalBadgesUnlocked || 0;
             
             // 绘制等级分布图表
             drawLevelChart(stats.levelDistribution || []);
             
             // 更新排行榜
             updateRanking(stats.topUsers || []);
+            
+            console.log('✅ 统计数据加载成功:', stats);
         }
     } catch (error) {
         console.error('加载统计数据失败:', error);
@@ -791,7 +793,7 @@ function renderConfig(configs) {
 
 // 更新排行榜
 function updateRanking(topUsers) {
-    const tbody = document.getElementById('rankingTableBody');
+    const tbody = document.getElementById('userRankingBody');
     
     if (topUsers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无数据</td></tr>';
@@ -1203,6 +1205,283 @@ function renderLevelConfig(levels) {
     `).join('');
 }
 
-// 其他所有缺失的函数...
-// 为了简洁，这里只展示关键的修复
+// ==================== 其他缺失的函数实现 ====================
+
+// 切换等级系统状态
+async function toggleLevelSystem() {
+    showError('系统状态切换功能暂未实现');
+}
+
+// 搜索用户
+async function searchUser() {
+    const keyword = document.getElementById('userSearchInput').value.trim();
+    if (!keyword) {
+        showError('请输入搜索关键词');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/level/users?search=${encodeURIComponent(keyword)}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const searchResult = document.getElementById('userSearchResult');
+            if (result.data.users.length === 0) {
+                searchResult.innerHTML = '<div style="text-align: center; padding: 20px;">未找到匹配的用户</div>';
+            } else {
+                searchResult.innerHTML = `
+                    <table class="config-table">
+                        <thead>
+                            <tr><th>用户ID</th><th>显示名称</th><th>等级</th><th>经验值</th><th>积分</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            ${result.data.users.map(user => `
+                                <tr>
+                                    <td>${user.user_id}</td>
+                                    <td>${user.display_name}</td>
+                                    <td>Lv.${user.level}</td>
+                                    <td>${user.total_exp}</td>
+                                    <td>${user.available_points}</td>
+                                    <td>
+                                        <button class="btn btn-primary" onclick="editUser('${user.user_id}')">编辑</button>
+                                        <button class="btn btn-success" onclick="viewUserBadges('${user.user_id}')">勋章</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+            searchResult.style.display = 'block';
+        } else {
+            showError(result.error || '搜索失败');
+        }
+    } catch (error) {
+        console.error('搜索用户失败:', error);
+        showError('搜索失败');
+    }
+}
+
+// 创建新群组
+function createNewGroup() {
+    document.getElementById('createGroupModal').style.display = 'block';
+}
+
+// 创建群组
+async function createGroup() {
+    const groupId = document.getElementById('newGroupId').value.trim();
+    const groupName = document.getElementById('newGroupName').value.trim();
+    
+    if (!groupId || !groupName) {
+        showError('请填写完整的群组信息');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: groupId,
+                groupName: groupName
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('群组创建成功');
+            closeModal('createGroupModal');
+            loadGroups();
+        } else {
+            showError(result.error || '创建失败');
+        }
+    } catch (error) {
+        console.error('创建群组失败:', error);
+        showError('创建失败');
+    }
+}
+
+// 加载群组列表
+async function loadGroups() {
+    try {
+        const response = await fetch('/api/level/groups');
+        const result = await response.json();
+        
+        if (result.success) {
+            const tbody = document.getElementById('groupsTableBody');
+            if (result.data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无群组</td></tr>';
+            } else {
+                tbody.innerHTML = result.data.map(group => `
+                    <tr>
+                        <td>${group.group_id}</td>
+                        <td>${group.group_name || '-'}</td>
+                        <td>-</td>
+                        <td>活跃</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editGroupConfig('${group.group_id}')">配置</button>
+                            <button class="btn btn-danger" onclick="deleteGroup('${group.group_id}')">删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('加载群组失败:', error);
+        showError('加载群组失败');
+    }
+}
+
+// 编辑群组配置
+function editGroupConfig(groupId) {
+    showError('群组配置编辑功能暂未实现');
+}
+
+// 数据导出功能
+async function exportAllData() {
+    try {
+        const response = await fetch('/api/level/export/all');
+        const result = await response.json();
+        
+        if (result.success) {
+            downloadJSON(result.data, 'level_system_full_export.json');
+            showSuccess('数据导出成功');
+        } else {
+            showError(result.error || '导出失败');
+        }
+    } catch (error) {
+        console.error('导出数据失败:', error);
+        showError('导出失败');
+    }
+}
+
+async function exportUserData() {
+    try {
+        const response = await fetch('/api/level/export/users');
+        const result = await response.json();
+        
+        if (result.success) {
+            downloadJSON(result.data, 'level_system_users_export.json');
+            showSuccess('用户数据导出成功');
+        } else {
+            showError(result.error || '导出失败');
+        }
+    } catch (error) {
+        console.error('导出用户数据失败:', error);
+        showError('导出失败');
+    }
+}
+
+async function exportConfig() {
+    try {
+        const response = await fetch('/api/level/export/config');
+        const result = await response.json();
+        
+        if (result.success) {
+            downloadJSON(result.data, 'level_system_config_export.json');
+            showSuccess('配置数据导出成功');
+        } else {
+            showError(result.error || '导出失败');
+        }
+    } catch (error) {
+        console.error('导出配置失败:', error);
+        showError('导出失败');
+    }
+}
+
+// 数据导入
+async function importData() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showError('请选择要导入的文件');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/level/import', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('数据导入成功');
+            loadStats();
+            loadUsers();
+        } else {
+            showError(result.error || '导入失败');
+        }
+    } catch (error) {
+        console.error('导入数据失败:', error);
+        showError('导入失败');
+    }
+}
+
+// 调整用户数据
+async function adjustUserData() {
+    showError('用户数据调整功能暂未实现');
+}
+
+// 授予勋章
+async function awardBadge() {
+    showError('勋章授予功能暂未实现');
+}
+
+// 保存奖励配置
+async function saveRewardsConfig() {
+    showError('奖励配置保存功能暂未实现');
+}
+
+// 保存播报配置
+async function saveBroadcastConfig() {
+    showError('播报配置保存功能暂未实现');
+}
+
+// 插入变量
+function insertVariable(templateId, variable) {
+    const textarea = document.getElementById(templateId);
+    const cursorPos = textarea.selectionStart;
+    const textBefore = textarea.value.substring(0, cursorPos);
+    const textAfter = textarea.value.substring(cursorPos);
+    textarea.value = textBefore + variable + textAfter;
+    textarea.focus();
+    textarea.setSelectionRange(cursorPos + variable.length, cursorPos + variable.length);
+}
+
+// 测试播报
+async function testBroadcast() {
+    showError('播报测试功能暂未实现');
+}
+
+// 数据管理
+async function loadDataManagement() {
+    showError('数据管理功能暂未实现');
+}
+
+// 显示创建群组模态框
+function showCreateGroupModal() {
+    document.getElementById('createGroupModal').style.display = 'block';
+}
+
+// 下载JSON文件辅助函数
+function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// 确认管理员操作
 window.confirmAdminAction = confirmAdminAction;

@@ -862,8 +862,42 @@ function initBotHandlers() {
 
         // 处理 /help 命令
         if (text === '/help') {
-            bot.sendMessage(chatId, '📖 使用说明：\n\n/start - 开始使用\n/bind <绑定码> - 商家绑定账户\n/help - 查看帮助');
+            let helpMessage = '📖 使用说明：\n\n/start - 开始使用\n/bind <绑定码> - 商家绑定账户\n/help - 查看帮助';
+            
+            // 如果启用了等级系统，添加等级相关命令
+            if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+                helpMessage += '\n\n🏆 等级系统：\n/level - 查看我的等级\n/badges - 查看我的勋章\n/points - 查看积分历史\n/ranking - 查看等级排行榜';
+            }
+            
+            bot.sendMessage(chatId, helpMessage);
             return;
+        }
+        
+        // 处理等级系统命令
+        if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+            // 处理 /level 命令
+            if (text === '/level') {
+                await handleLevelCommand(userId, chatId, username);
+                return;
+            }
+            
+            // 处理 /badges 命令
+            if (text === '/badges') {
+                await handleBadgesCommand(userId, chatId);
+                return;
+            }
+            
+            // 处理 /points 命令
+            if (text === '/points') {
+                await handlePointsCommand(userId, chatId);
+                return;
+            }
+            
+            // 处理 /ranking 命令
+            if (text === '/ranking') {
+                await handleRankingCommand(userId, chatId);
+                return;
+            }
         }
 
         // 处理文字输入（评价系统和触发词检查）
@@ -4667,6 +4701,225 @@ async function getBotUsername() {
 // 清除Bot用户名缓存（用于重新获取）
 function clearBotUsernameCache() {
     cachedBotUsername = null;
+}
+
+// 等级系统命令处理函数
+async function handleLevelCommand(userId, chatId, username) {
+    try {
+        const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
+        const groupId = process.env.GROUP_CHAT_ID;
+        
+        const levelInfo = await levelServiceHook.getUserLevelInfo(userId, groupId);
+        
+        if (!levelInfo || !levelInfo.profile) {
+            // 用户还没有等级数据，创建初始档案
+            bot.sendMessage(chatId, '🎮 正在初始化您的等级档案...');
+            
+            // 触发一个初始化事件
+            await levelServiceHook.grantReward(userId, groupId, 0, 0, '系统初始化');
+            
+            // 重新获取
+            const newLevelInfo = await levelServiceHook.getUserLevelInfo(userId, groupId);
+            if (!newLevelInfo) {
+                bot.sendMessage(chatId, '❌ 初始化失败，请稍后重试');
+                return;
+            }
+            
+            await displayLevelInfo(chatId, newLevelInfo);
+        } else {
+            await displayLevelInfo(chatId, levelInfo);
+        }
+        
+    } catch (error) {
+        console.error('处理等级命令失败:', error);
+        bot.sendMessage(chatId, '❌ 获取等级信息失败，请稍后重试');
+    }
+}
+
+async function displayLevelInfo(chatId, levelInfo) {
+    const { profile, currentLevel, nextLevel } = levelInfo;
+    
+    let message = `🏆 **我的等级信息**\n\n`;
+    message += `👤 昵称：${profile.display_name}\n`;
+    message += `⭐ 等级：Lv.${profile.level} ${currentLevel.name}\n`;
+    message += `💎 经验值：${profile.total_exp}\n`;
+    message += `🪙 可用积分：${profile.available_points}\n`;
+    message += `📊 评价次数：${profile.user_eval_count}\n`;
+    message += `📈 被评价次数：${profile.merchant_eval_count}\n\n`;
+    
+    if (nextLevel) {
+        const expProgress = profile.total_exp;
+        const expNeeded = nextLevel.required_exp;
+        const progressPercent = Math.floor((expProgress / expNeeded) * 100);
+        
+        message += `📊 **升级进度**\n`;
+        message += `下一级：Lv.${nextLevel.level} ${nextLevel.name}\n`;
+        message += `进度：${expProgress}/${expNeeded} (${progressPercent}%)\n`;
+        message += `还需评价：${Math.max(0, nextLevel.required_evals - profile.user_eval_count)} 次\n`;
+    } else {
+        message += `🎉 恭喜！您已达到最高等级！\n`;
+    }
+    
+    message += `\n💡 提示：完成评价可获得经验值和积分奖励！`;
+    
+    bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+}
+
+async function handleBadgesCommand(userId, chatId) {
+    try {
+        const badgeService = require('../level/services/badgeService').getInstance();
+        const groupId = process.env.GROUP_CHAT_ID;
+        
+        const badgeWall = await badgeService.getUserBadgeWall(userId, groupId);
+        
+        if (!badgeWall) {
+            bot.sendMessage(chatId, '❌ 获取勋章信息失败，请稍后重试');
+            return;
+        }
+        
+        let message = `🏅 **我的勋章墙**\n\n`;
+        message += `📊 收集进度：${badgeWall.stats.unlocked}/${badgeWall.stats.total} (${badgeWall.stats.percentage}%)\n\n`;
+        
+        // 显示已解锁的勋章
+        if (badgeWall.userBadges.length > 0) {
+            message += `✨ **已解锁勋章**\n`;
+            for (const badge of badgeWall.userBadges) {
+                const unlockDate = new Date(badge.unlocked_at * 1000).toLocaleDateString('zh-CN');
+                message += `${badge.badge_emoji} ${badge.badge_name} - ${unlockDate}\n`;
+            }
+            message += `\n`;
+        }
+        
+        // 显示未解锁的勋章（按稀有度）
+        const rarityOrder = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+        let hasLocked = false;
+        
+        for (const rarity of rarityOrder) {
+            const badges = badgeWall.badges[rarity] || [];
+            const lockedBadges = badges.filter(b => !b.unlocked);
+            
+            if (lockedBadges.length > 0) {
+                if (!hasLocked) {
+                    message += `🔒 **未解锁勋章**\n`;
+                    hasLocked = true;
+                }
+                
+                const rarityDisplay = badgeService.getRarityDisplay(rarity);
+                message += `\n${rarityDisplay}\n`;
+                
+                for (const badge of lockedBadges) {
+                    message += `▫️ ${badge.badge_name}\n`;
+                }
+            }
+        }
+        
+        message += `\n💡 提示：完成特定成就可解锁新勋章！`;
+        
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        
+    } catch (error) {
+        console.error('处理勋章命令失败:', error);
+        bot.sendMessage(chatId, '❌ 获取勋章信息失败，请稍后重试');
+    }
+}
+
+async function handlePointsCommand(userId, chatId) {
+    try {
+        const levelService = require('../level/services/levelService').getInstance();
+        const groupId = process.env.GROUP_CHAT_ID;
+        
+        const history = await levelService.getUserPointsHistory(userId, groupId, 10);
+        
+        if (history.length === 0) {
+            bot.sendMessage(chatId, '📊 您还没有积分记录');
+            return;
+        }
+        
+        let message = `💰 **积分历史记录**\n\n`;
+        
+        for (const record of history) {
+            const date = new Date(record.timestamp * 1000);
+            const dateStr = date.toLocaleDateString('zh-CN');
+            const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            
+            const expChange = record.exp_change > 0 ? `+${record.exp_change}` : `${record.exp_change}`;
+            const pointsChange = record.points_change > 0 ? `+${record.points_change}` : `${record.points_change}`;
+            
+            message += `📅 ${dateStr} ${timeStr}\n`;
+            message += `📝 ${record.description}\n`;
+            message += `⚡ 经验：${expChange} | 💎 积分：${pointsChange}\n`;
+            message += `📊 余额：${record.points_after} 积分\n\n`;
+        }
+        
+        message += `💡 提示：积分可用于兑换特殊奖励！`;
+        
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        
+    } catch (error) {
+        console.error('处理积分历史命令失败:', error);
+        bot.sendMessage(chatId, '❌ 获取积分历史失败，请稍后重试');
+    }
+}
+
+async function handleRankingCommand(userId, chatId) {
+    try {
+        const levelDbManager = require('../level/config/levelDatabase').getInstance();
+        const db = levelDbManager.getDatabase();
+        
+        if (!db) {
+            bot.sendMessage(chatId, '❌ 等级系统暂时不可用');
+            return;
+        }
+        
+        const groupId = process.env.GROUP_CHAT_ID;
+        
+        // 获取前10名用户
+        const topUsers = db.prepare(`
+            SELECT user_id, display_name, level, total_exp, user_eval_count
+            FROM user_levels
+            WHERE group_id = ?
+            ORDER BY level DESC, total_exp DESC
+            LIMIT 10
+        `).all(groupId);
+        
+        if (topUsers.length === 0) {
+            bot.sendMessage(chatId, '📊 暂无排行榜数据');
+            return;
+        }
+        
+        let message = `🏆 **等级排行榜 TOP 10**\n\n`;
+        
+        topUsers.forEach((user, index) => {
+            const rank = index + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`;
+            
+            message += `${medal} ${user.display_name}\n`;
+            message += `   Lv.${user.level} | ${user.total_exp} 经验 | ${user.user_eval_count} 次评价\n\n`;
+        });
+        
+        // 获取当前用户的排名
+        const userRank = db.prepare(`
+            SELECT COUNT(*) + 1 as rank
+            FROM user_levels
+            WHERE group_id = ? AND (level > ? OR (level = ? AND total_exp > ?))
+        `).get(groupId, 0, 0, 0);
+        
+        const currentUser = db.prepare(`
+            SELECT * FROM user_levels
+            WHERE user_id = ? AND group_id = ?
+        `).get(userId, groupId);
+        
+        if (currentUser && userRank) {
+            message += `\n📍 **我的排名**\n`;
+            message += `第 ${userRank.rank} 名 | Lv.${currentUser.level} | ${currentUser.total_exp} 经验\n`;
+        }
+        
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        
+    } catch (error) {
+        console.error('处理排行榜命令失败:', error);
+        bot.sendMessage(chatId, '❌ 获取排行榜失败，请稍后重试');
+    }
 }
 
 module.exports = {

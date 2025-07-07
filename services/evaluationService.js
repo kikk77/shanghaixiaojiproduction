@@ -115,6 +115,13 @@ class EvaluationService {
                 // 如果评价完成，更新相关的汇总数据
                 if (status === 'completed') {
                     this.updateRatingSummary(evaluationId);
+                    
+                    // 集成等级系统钩子
+                    if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+                        this.triggerLevelSystemHook(evaluationId).catch(error => {
+                            console.error('等级系统钩子执行失败:', error);
+                        });
+                    }
                 }
                 
                 return true;
@@ -494,6 +501,40 @@ class EvaluationService {
             
         } catch (error) {
             console.error('批量更新评分汇总失败:', error);
+        }
+    }
+    
+    // 触发等级系统钩子
+    async triggerLevelSystemHook(evaluationId) {
+        try {
+            // 获取评价详情
+            const evaluation = this.getEvaluation(evaluationId);
+            if (!evaluation) {
+                console.error('评价不存在:', evaluationId);
+                return;
+            }
+            
+            // 延迟加载等级系统钩子，避免循环依赖
+            const levelServiceHook = require('../level/services/levelServiceHook');
+            
+            // 准备钩子数据
+            const hookData = {
+                user_id: evaluation.evaluator_id,
+                group_id: process.env.GROUP_CHAT_ID,
+                evaluation_id: evaluationId,
+                evaluation_type: evaluation.evaluator_type === 'user' ? 'merchant' : 'user',
+                merchant_id: evaluation.evaluator_type === 'user' ? evaluation.target_id : evaluation.evaluator_id,
+                action_type: evaluation.evaluator_type === 'user' ? 'evaluate_merchant' : 'evaluate_user'
+            };
+            
+            // 调用等级系统钩子
+            await levelServiceHook.onEvaluationComplete(hookData);
+            
+            console.log('等级系统钩子触发成功:', hookData);
+            
+        } catch (error) {
+            console.error('触发等级系统钩子失败:', error);
+            throw error;
         }
     }
 }

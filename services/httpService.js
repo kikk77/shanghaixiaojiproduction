@@ -86,9 +86,49 @@ function handleRoutes(req, res, pathname, method) {
         });
         return;
     }
+    
+    // 等级系统管理界面
+    if (pathname === '/admin/level-system') {
+        const path = require('path');
+        const levelAdminPath = path.join(__dirname, '..', 'level', 'admin', 'level-system.html');
+        fs.readFile(levelAdminPath, 'utf8', (err, data) => {
+            if (err) {
+                console.error('读取等级系统管理界面失败:', err);
+                res.writeHead(404);
+                res.end('Level system admin file not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
 
     // 静态资源服务（CSS, JS文件）
     if (pathname.startsWith('/admin/')) {
+        const path = require('path');
+        const filePath = path.join(__dirname, '..', pathname);
+        const ext = path.extname(filePath);
+        
+        let contentType = 'text/plain';
+        if (ext === '.css') contentType = 'text/css';
+        else if (ext === '.js') contentType = 'application/javascript';
+        else if (ext === '.html') contentType = 'text/html';
+        
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                res.writeHead(404);
+                res.end('File not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
+    
+    // 等级系统静态资源服务
+    if (pathname.startsWith('/level/admin/')) {
         const path = require('path');
         const filePath = path.join(__dirname, '..', pathname);
         const ext = path.extname(filePath);
@@ -1032,6 +1072,11 @@ async function processApiRequest(pathname, method, data) {
     // 频道管理API路由 - 独立的API命名空间
     if (pathname.startsWith('/api/channel/')) {
         return await handleChannelApiRequest(pathname, method, data);
+    }
+    
+    // 等级系统API路由
+    if (pathname.startsWith('/api/level/')) {
+        return await handleLevelApiRequest(pathname, method, data);
     }
 
     // 绑定码管理API
@@ -2261,6 +2306,276 @@ function sendResponse(res, statusCode, data, contentType = 'application/json') {
                 console.error('发送错误响应也失败:', secondError);
             }
         }
+    }
+}
+
+// 等级系统API处理函数
+async function handleLevelApiRequest(pathname, method, data) {
+    console.log(`🏆 [API] 等级系统API请求: ${method} ${pathname}`);
+    
+    try {
+        // 检查等级系统是否启用
+        if (process.env.LEVEL_SYSTEM_ENABLED !== 'true') {
+            return { success: false, error: '等级系统未启用' };
+        }
+        
+        // 获取等级系统服务
+        const levelService = require('../level/services/levelService').getInstance();
+        const badgeService = require('../level/services/badgeService').getInstance();
+        const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
+        const levelDbManager = require('../level/config/levelDatabase').getInstance();
+        
+        const pathParts = pathname.split('/');
+        const endpoint = pathParts[3]; // /api/level/{endpoint}
+        const id = pathParts[4]; // /api/level/{endpoint}/{id}
+        
+        // 用户等级信息API
+        if (endpoint === 'users' && method === 'GET') {
+            if (id) {
+                // 获取单个用户等级信息
+                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const levelInfo = await levelServiceHook.getUserLevelInfo(id, groupId);
+                
+                if (!levelInfo) {
+                    return { success: false, error: '用户等级信息不存在' };
+                }
+                
+                return { success: true, data: levelInfo };
+            } else {
+                // 获取用户列表
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const limit = parseInt(data.limit) || 50;
+                const offset = parseInt(data.offset) || 0;
+                
+                const users = db.prepare(`
+                    SELECT * FROM user_levels 
+                    WHERE group_id = ?
+                    ORDER BY level DESC, total_exp DESC
+                    LIMIT ? OFFSET ?
+                `).all(groupId, limit, offset);
+                
+                const total = db.prepare(`
+                    SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
+                `).get(groupId);
+                
+                return { 
+                    success: true, 
+                    data: {
+                        users,
+                        total: total.count,
+                        limit,
+                        offset
+                    }
+                };
+            }
+        }
+        
+        // 用户等级更新API（管理员功能）
+        if (endpoint === 'users' && id && method === 'PUT') {
+            const { exp, points, level, displayName } = data;
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            
+            // 更新经验值和积分
+            if (exp !== undefined || points !== undefined) {
+                await levelServiceHook.grantReward(
+                    id, 
+                    groupId, 
+                    exp || 0, 
+                    points || 0, 
+                    '管理员手动调整'
+                );
+            }
+            
+            // 更新等级
+            if (level !== undefined) {
+                const db = levelDbManager.getDatabase();
+                if (db) {
+                    db.prepare(`
+                        UPDATE user_levels 
+                        SET level = ?, updated_at = ?
+                        WHERE user_id = ? AND group_id = ?
+                    `).run(level, Date.now() / 1000, id, groupId);
+                }
+            }
+            
+            // 更新显示名称
+            if (displayName !== undefined) {
+                await levelService.setCustomDisplayName(id, groupId, displayName);
+            }
+            
+            return { success: true, message: '用户等级信息更新成功' };
+        }
+        
+        // 勋章管理API
+        if (endpoint === 'badges') {
+            if (method === 'GET') {
+                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const badges = await badgeService.getAvailableBadges(groupId);
+                return { success: true, data: badges };
+            } else if (method === 'POST') {
+                // 创建新勋章（管理员功能）
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                const { badge_id, badge_name, badge_emoji, badge_desc, badge_type, rarity, unlock_conditions } = data;
+                const groupId = data.group_id || process.env.GROUP_CHAT_ID;
+                
+                if (!badge_id || !badge_name) {
+                    return { success: false, error: '勋章ID和名称不能为空' };
+                }
+                
+                try {
+                    db.prepare(`
+                        INSERT INTO badge_definitions 
+                        (group_id, badge_id, badge_name, badge_emoji, badge_desc, 
+                         badge_type, rarity, unlock_conditions, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                    `).run(
+                        groupId, badge_id, badge_name, badge_emoji || '🏅',
+                        badge_desc || '', badge_type || 'achievement',
+                        rarity || 'common', JSON.stringify(unlock_conditions || {})
+                    );
+                    
+                    return { success: true, message: '勋章创建成功' };
+                } catch (error) {
+                    return { success: false, error: '勋章创建失败: ' + error.message };
+                }
+            }
+        }
+        
+        // 勋章授予/撤销API
+        if (endpoint === 'badges' && pathParts[4] === 'grant' && method === 'POST') {
+            const { userId, badgeId, groupId } = data;
+            const grantedBy = 'admin';
+            
+            const result = await badgeService.grantBadge(
+                userId, 
+                groupId || process.env.GROUP_CHAT_ID, 
+                badgeId, 
+                grantedBy
+            );
+            
+            return result ? 
+                { success: true, message: '勋章授予成功' } : 
+                { success: false, error: '勋章授予失败' };
+        }
+        
+        if (endpoint === 'badges' && pathParts[4] === 'revoke' && method === 'POST') {
+            const { userId, badgeId, groupId } = data;
+            const revokedBy = 'admin';
+            
+            const result = await badgeService.revokeBadge(
+                userId, 
+                groupId || process.env.GROUP_CHAT_ID, 
+                badgeId, 
+                revokedBy
+            );
+            
+            return result ? 
+                { success: true, message: '勋章撤销成功' } : 
+                { success: false, error: '勋章撤销失败' };
+        }
+        
+        // 群组配置API
+        if (endpoint === 'groups') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            if (method === 'GET') {
+                const configs = db.prepare(`
+                    SELECT * FROM group_configs
+                    ORDER BY created_at DESC
+                `).all();
+                
+                return { success: true, data: configs };
+            } else if (method === 'PUT' && id) {
+                // 更新群组配置
+                const { level_config, points_config, broadcast_config } = data;
+                
+                try {
+                    db.prepare(`
+                        UPDATE group_configs 
+                        SET level_config = ?, points_config = ?, broadcast_config = ?, updated_at = ?
+                        WHERE group_id = ?
+                    `).run(
+                        JSON.stringify(level_config),
+                        JSON.stringify(points_config),
+                        JSON.stringify(broadcast_config),
+                        Date.now() / 1000,
+                        id
+                    );
+                    
+                    return { success: true, message: '群组配置更新成功' };
+                } catch (error) {
+                    return { success: false, error: '配置更新失败: ' + error.message };
+                }
+            }
+        }
+        
+        // 统计数据API
+        if (endpoint === 'stats' && method === 'GET') {
+            const db = levelDbManager.getDatabase();
+            if (!db) {
+                return { success: false, error: '数据库不可用' };
+            }
+            
+            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            
+            // 获取统计数据
+            const stats = {
+                totalUsers: db.prepare(`
+                    SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
+                `).get(groupId).count,
+                
+                activeUsers: db.prepare(`
+                    SELECT COUNT(*) as count FROM user_levels 
+                    WHERE group_id = ? AND updated_at > ?
+                `).get(groupId, Date.now() / 1000 - 7 * 24 * 60 * 60).count, // 7天内活跃
+                
+                totalBadges: db.prepare(`
+                    SELECT COUNT(*) as count FROM badge_definitions 
+                    WHERE (group_id = ? OR group_id = 'default') AND status = 'active'
+                `).get(groupId).count,
+                
+                totalBadgesUnlocked: db.prepare(`
+                    SELECT COUNT(*) as count FROM user_badges WHERE group_id = ?
+                `).get(groupId).count,
+                
+                levelDistribution: db.prepare(`
+                    SELECT level, COUNT(*) as count 
+                    FROM user_levels 
+                    WHERE group_id = ?
+                    GROUP BY level
+                    ORDER BY level ASC
+                `).all(groupId),
+                
+                topUsers: db.prepare(`
+                    SELECT user_id, display_name, level, total_exp, user_eval_count
+                    FROM user_levels
+                    WHERE group_id = ?
+                    ORDER BY level DESC, total_exp DESC
+                    LIMIT 10
+                `).all(groupId)
+            };
+            
+            return { success: true, data: stats };
+        }
+        
+        // 404 - 未找到的API端点
+        return { success: false, error: 'API端点不存在', status: 404 };
+        
+    } catch (error) {
+        console.error('❌ 等级系统API错误:', error);
+        return { success: false, error: error.message };
     }
 }
 

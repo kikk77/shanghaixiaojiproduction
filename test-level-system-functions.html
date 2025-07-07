@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>等级系统功能测试</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🧪 等级系统功能测试</h1>
+    
+    <div class="test-section">
+        <h2>1. API状态测试</h2>
+        <button class="test-button" onclick="testAPI('/api/level/stats', 'GET')">测试统计API</button>
+        <button class="test-button" onclick="testAPI('/api/level/users', 'GET')">测试用户列表API</button>
+        <button class="test-button" onclick="testAPI('/api/level/badges', 'GET')">测试勋章列表API</button>
+        <button class="test-button" onclick="testAPI('/api/level/groups', 'GET')">测试群组列表API</button>
+        <div id="api-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 数据操作测试</h2>
+        <button class="test-button" onclick="createTestGroup()">创建测试群组</button>
+        <button class="test-button" onclick="createTestBadge()">创建测试勋章</button>
+        <button class="test-button" onclick="testLevelConfig()">测试等级配置</button>
+        <div id="data-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 页面功能测试</h2>
+        <button class="test-button" onclick="testPageFunctions()">测试页面函数</button>
+        <button class="test-button" onclick="window.open('/admin/level-system', '_blank')">打开管理页面</button>
+        <div id="page-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 环境状态</h2>
+        <div id="env-status" class="result"></div>
+    </div>
+
+    <script>
+        // 显示结果
+        function showResult(elementId, message, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.className = 'result ' + (isSuccess ? 'success' : 'error');
+            element.textContent = message;
+        }
+        
+        // 测试API
+        async function testAPI(url, method = 'GET') {
+            try {
+                const response = await fetch(url, { method });
+                const data = await response.json();
+                showResult('api-result', `${url}\n状态: ${response.status}\n响应: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                showResult('api-result', `错误: ${error.message}`, false);
+            }
+        }
+        
+        // 创建测试群组
+        async function createTestGroup() {
+            try {
+                const response = await fetch('/api/level/groups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        group_id: 'test_' + Date.now(),
+                        group_name: '测试群组'
+                    })
+                });
+                const data = await response.json();
+                showResult('data-result', `创建群组结果: ${JSON.stringify(data, null, 2)}`, data.success);
+            } catch (error) {
+                showResult('data-result', `错误: ${error.message}`, false);
+            }
+        }
+        
+        // 创建测试勋章
+        async function createTestBadge() {
+            try {
+                const response = await fetch('/api/level/badges', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        badge_id: 'test_badge_' + Date.now(),
+                        badge_name: '测试勋章',
+                        badge_emoji: '🧪',
+                        badge_desc: '这是一个测试勋章',
+                        badge_type: 'manual',
+                        rarity: 'common'
+                    })
+                });
+                const data = await response.json();
+                showResult('data-result', `创建勋章结果: ${JSON.stringify(data, null, 2)}`, data.success);
+            } catch (error) {
+                showResult('data-result', `错误: ${error.message}`, false);
+            }
+        }
+        
+        // 测试等级配置
+        async function testLevelConfig() {
+            try {
+                const response = await fetch('/api/level/groups/default');
+                const data = await response.json();
+                showResult('data-result', `默认群组配置: ${JSON.stringify(data, null, 2)}`, data.success);
+            } catch (error) {
+                showResult('data-result', `错误: ${error.message}`, false);
+            }
+        }
+        
+        // 测试页面函数
+        function testPageFunctions() {
+            const functions = [
+                'switchTab',
+                'toggleLevelSystem',
+                'searchUser',
+                'createNewGroup',
+                'exportAllData',
+                'showCreateBadgeModal',
+                'saveLevelConfig',
+                'saveRewardsConfig',
+                'saveBroadcastConfig'
+            ];
+            
+            let result = '页面函数检查:\n';
+            functions.forEach(func => {
+                const exists = typeof window[func] === 'function';
+                result += `${func}: ${exists ? '✅ 存在' : '❌ 不存在'}\n`;
+            });
+            
+            showResult('page-result', result);
+        }
+        
+        // 检查环境状态
+        async function checkEnvironment() {
+            try {
+                // 检查健康状态
+                const healthResponse = await fetch('/health');
+                const health = await healthResponse.json();
+                
+                // 检查等级系统状态
+                const levelResponse = await fetch('/api/level/stats');
+                const levelData = await levelResponse.json();
+                
+                let status = '环境状态:\n';
+                status += `健康检查: ${health.success ? '✅ 正常' : '❌ 异常'}\n`;
+                status += `等级系统: ${levelData.success ? '✅ 已启用' : '❌ 未启用'}\n`;
+                status += `数据库: ${health.services?.database?.connected ? '✅ 已连接' : '❌ 未连接'}\n`;
+                status += `环境: ${health.environment || 'unknown'}\n`;
+                
+                showResult('env-status', status);
+            } catch (error) {
+                showResult('env-status', `检查失败: ${error.message}`, false);
+            }
+        }
+        
+        // 页面加载时检查环境
+        window.onload = function() {
+            checkEnvironment();
+        };
+    </script>
+</body>
+</html> 

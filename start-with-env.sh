@@ -23,6 +23,9 @@ export GROUP_CHAT_ID=-1002793326688
 export NODE_ENV=development
 export PORT=3000
 
+# 等级系统配置
+export LEVEL_SYSTEM_ENABLED=true
+
 echo "🚀 启动本地开发环境"
 echo "📡 端口: $PORT"
 echo "👥 群组ID: $GROUP_CHAT_ID"

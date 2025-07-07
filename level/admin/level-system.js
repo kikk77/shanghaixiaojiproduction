@@ -1348,7 +1348,43 @@ function searchUser() {
 
 // 创建新群组（简化版）
 function createNewGroup() {
-    showCreateGroupModal();
+    // 获取表单中的值
+    const groupId = document.querySelector('input[placeholder="例如：-1001234567890"]').value;
+    const groupName = document.querySelector('input[placeholder="例如：测试群组"]').value;
+    
+    if (!groupId) {
+        showError('群组ID不能为空');
+        return;
+    }
+    
+    // 调用API创建群组
+    fetch('/api/level/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            group_id: groupId,
+            group_name: groupName
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showSuccess('群组创建成功');
+            // 关闭表单（如果是直接在页面上的表单，可能需要隐藏它）
+            const createForm = document.querySelector('.modal:not(#createGroupModal):not(#createBadgeModal):not(#userDetailModal)');
+            if (createForm) {
+                createForm.style.display = 'none';
+            }
+            // 刷新群组列表
+            loadGroups();
+        } else {
+            showError(result.error || '创建失败');
+        }
+    })
+    .catch(error => {
+        console.error('创建群组失败:', error);
+        showError('创建失败');
+    });
 }
 
 // 导出完整数据

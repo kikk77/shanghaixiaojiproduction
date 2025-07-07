@@ -45,13 +45,10 @@ class LevelSystemInitializer {
         const db = levelDb.getDatabase();
         if (!db) return;
         
-        // 不再依赖环境变量，由管理员面板手动创建群组配置
-        console.log('🏆 等级系统初始化完成，请通过管理员面板手动添加群组配置');
-        return;
-        
-        const config = {
-            group_id: defaultGroupId,
-            group_name: process.env.GROUP_CHAT_NAME || '默认群组',
+        // 创建默认群组配置，确保等级系统能正常工作
+        const defaultConfig = {
+            group_id: 'default',
+            group_name: '默认配置',
             level_config: JSON.stringify({
                 levels: [
                     { level: 1, name: "新手勇士 🟢", required_evals: 0, required_exp: 0 },
@@ -70,11 +67,17 @@ class LevelSystemInitializer {
                 version: "1.0"
             }),
             points_config: JSON.stringify({
-                attack: { exp: 20, points: 10, desc: "完成出击" },
-                user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
-                merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
-                text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
-                level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" },
+                base_rewards: {
+                    attack: { exp: 20, points: 10, desc: "完成出击" },
+                    user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
+                    merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
+                    text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
+                    level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" },
+                    evaluate_merchant: { exp: 30, points: 25, desc: "评价商家" },
+                    evaluate_user: { exp: 25, points: 20, desc: "评价用户" },
+                    be_evaluated: { exp: 15, points: 10, desc: "被评价" },
+                    manual_grant: { exp: 0, points: 0, desc: "手动奖励" }
+                },
                 special_rewards: {
                     perfect_score: { exp: 50, points: 100, desc: "获得满分评价" },
                     first_evaluation: { exp: 10, points: 20, desc: "首次评价" },
@@ -90,23 +93,25 @@ class LevelSystemInitializer {
                 auto_pin: true,
                 auto_delete_time: 0
             }),
+            broadcast_enabled: 1,
             status: 'active'
         };
         
         try {
             const stmt = db.prepare(`
                 INSERT OR REPLACE INTO group_configs 
-                (group_id, group_name, level_config, points_config, broadcast_config, status)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (group_id, group_name, level_config, points_config, broadcast_config, broadcast_enabled, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `);
             
             stmt.run(
-                config.group_id, 
-                config.group_name, 
-                config.level_config, 
-                config.points_config,
-                config.broadcast_config,
-                config.status
+                defaultConfig.group_id, 
+                defaultConfig.group_name, 
+                defaultConfig.level_config, 
+                defaultConfig.points_config,
+                defaultConfig.broadcast_config,
+                defaultConfig.broadcast_enabled,
+                defaultConfig.status
             );
             
             console.log('✅ 默认群组配置创建成功');

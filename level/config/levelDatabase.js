@@ -133,6 +133,7 @@ class LevelDatabaseManager {
                 level_config TEXT,
                 points_config TEXT,
                 broadcast_config TEXT,
+                broadcast_enabled INTEGER DEFAULT 1,
                 status TEXT DEFAULT 'active',
                 created_at INTEGER DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER DEFAULT (strftime('%s', 'now'))

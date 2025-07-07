@@ -19,10 +19,6 @@ if (missingEnvs.length > 0) {
 // 设置NODE_ENV
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
-// 确保等级系统在生产环境中启用
-process.env.LEVEL_SYSTEM_ENABLED = process.env.LEVEL_SYSTEM_ENABLED || 'true';
-console.log('🏆 等级系统已启用:', process.env.LEVEL_SYSTEM_ENABLED);
-
 // 确保数据目录存在并修复权限
 const fs = require('fs');
 const path = require('path');

@@ -737,31 +737,44 @@ window.viewUserBadges = viewUserBadges;
 window.showCreateBadgeModal = showCreateBadgeModal;
 window.createBadge = createBadge;
 window.closeModal = closeModal;
-  window.saveUserEdit = saveUserEdit;
-  window.loadUsers = loadUsers;
-  
-  // 导出配置管理函数
-  window.removeLevelRow = removeLevelRow;
-  window.updateLevelField = updateLevelField;
-  window.addLevelRow = addLevelRow;
-  window.saveLevelConfig = saveLevelConfig;
-  window.resetLevelConfig = resetLevelConfig;
-  window.saveRewardsConfig = saveRewardsConfig;
-  window.saveBroadcastConfig = saveBroadcastConfig;
-  window.insertVariable = insertVariable;
-  window.testBroadcast = testBroadcast;
-  window.updateConditionForm = updateConditionForm;
-  window.createBadge = createBadge;
-  window.showCreateBadgeModal = showCreateBadgeModal;
-  window.showCreateGroupModal = showCreateGroupModal;
-  window.createGroup = createGroup;
-  window.editGroupConfig = editGroupConfig;
-  window.deleteGroup = deleteGroup;
-  window.exportData = exportData;
-  window.showImportModal = showImportModal;
-  window.importData = importData;
-  window.showMigrateModal = showMigrateModal;
-  window.migrateData = migrateData;
+window.saveUserEdit = saveUserEdit;
+window.loadUsers = loadUsers;
+window.switchTab = switchTab;
+
+// 导出配置管理函数
+window.removeLevelRow = removeLevelRow;
+window.updateLevelField = updateLevelField;
+window.addLevelRow = addLevelRow;
+window.saveLevelConfig = saveLevelConfig;
+window.resetLevelConfig = resetLevelConfig;
+window.saveRewardsConfig = saveRewardsConfig;
+window.saveBroadcastConfig = saveBroadcastConfig;
+window.insertVariable = insertVariable;
+window.testBroadcast = testBroadcast;
+window.updateConditionForm = updateConditionForm;
+window.createBadge = createBadge;
+window.showCreateBadgeModal = showCreateBadgeModal;
+window.showCreateGroupModal = showCreateGroupModal;
+window.createGroup = createGroup;
+window.editGroupConfig = editGroupConfig;
+window.deleteGroup = deleteGroup;
+window.exportData = exportData;
+window.showImportModal = showImportModal;
+window.importData = importData;
+window.showMigrateModal = showMigrateModal;
+window.migrateData = migrateData;
+
+  // 导出其他缺失的函数
+  window.toggleLevelSystem = toggleLevelSystem;
+  window.searchUser = searchUser;
+  window.createNewGroup = createNewGroup;
+  window.exportAllData = exportAllData;
+  window.exportUserData = exportUserData;
+  window.exportConfig = exportConfig;
+  window.migrateGroup = migrateGroup;
+  window.adjustUserData = adjustUserData;
+  window.awardBadge = awardBadge;
+  window.loadGroups = loadGroups;
 
 // ==================== 缺失的配置管理函数 ====================
 
@@ -1026,5 +1039,175 @@ async function migrateData() {
     } catch (error) {
         console.error('数据迁移失败:', error);
         showError('迁移失败');
+    }
+}
+
+// ==================== 额外的功能函数 ====================
+
+// 切换等级系统状态
+async function toggleLevelSystem() {
+    try {
+        const response = await fetch('/api/level/toggle', {
+            method: 'POST'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess(`等级系统已${result.enabled ? '启用' : '禁用'}`);
+            checkLevelSystemStatus();
+        } else {
+            showError('切换状态失败');
+        }
+    } catch (error) {
+        console.error('切换等级系统状态失败:', error);
+        showError('切换状态失败');
+    }
+}
+
+// 搜索用户
+function searchUser() {
+    const keyword = document.getElementById('userSearch').value.trim();
+    if (!keyword) {
+        renderUserTable(allUsers);
+        return;
+    }
+    
+    const filtered = allUsers.filter(user => 
+        user.user_id.includes(keyword) || 
+        user.display_name.toLowerCase().includes(keyword.toLowerCase())
+    );
+    renderUserTable(filtered);
+}
+
+// 创建新群组（简化版）
+function createNewGroup() {
+    showCreateGroupModal();
+}
+
+// 导出完整数据
+async function exportAllData() {
+    await exportData('all');
+}
+
+// 导出用户数据
+async function exportUserData() {
+    await exportData('users');
+}
+
+// 导出配置
+async function exportConfig() {
+    await exportData('config');
+}
+
+// 导出数据（通用函数）
+async function exportData(type = 'all') {
+    try {
+        const response = await fetch('/api/level/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: type,
+                groupId: currentGroupId
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `level_system_export_${type}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showSuccess('数据导出成功');
+        } else {
+            showError('导出失败');
+        }
+    } catch (error) {
+        console.error('导出数据失败:', error);
+        showError('导出失败');
+    }
+}
+
+// 迁移群组
+function migrateGroup() {
+    showMigrateModal();
+}
+
+// 调整用户数据
+async function adjustUserData() {
+    const userId = currentUserId;
+    const adjustExp = parseInt(document.getElementById('adjustExp').value) || 0;
+    const adjustPoints = parseInt(document.getElementById('adjustPoints').value) || 0;
+    const adjustLevel = parseInt(document.getElementById('adjustLevel').value);
+    
+    if (!userId) {
+        showError('请先选择用户');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/level/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                exp: adjustExp,
+                points: adjustPoints,
+                level: adjustLevel,
+                groupId: currentGroupId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('用户数据调整成功');
+            closeModal('userDetailModal');
+            loadUsers();
+        } else {
+            showError(result.error || '调整失败');
+        }
+    } catch (error) {
+        console.error('调整用户数据失败:', error);
+        showError('调整失败');
+    }
+}
+
+// 授予勋章
+async function awardBadge() {
+    const userId = currentUserId;
+    const badgeId = document.getElementById('awardBadgeSelect').value;
+    
+    if (!userId || !badgeId) {
+        showError('请选择用户和勋章');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/badges/grant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId,
+                badgeId: badgeId,
+                groupId: currentGroupId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('勋章授予成功');
+            closeModal('userDetailModal');
+            loadUsers();
+        } else {
+            showError(result.error || '授予失败');
+        }
+    } catch (error) {
+        console.error('授予勋章失败:', error);
+        showError('授予失败');
     }
 } 

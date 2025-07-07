@@ -469,7 +469,8 @@ function renderBadgesList(badges) {
 
 // 显示创建勋章模态框
 function showCreateBadgeModal() {
-    document.getElementById('createBadgeModal').style.display = 'block';
+    const modal = document.getElementById('createBadgeModal');
+    modal.style.display = 'flex';
     updateConditionForm();
 }
 
@@ -1103,7 +1104,8 @@ function renderGroupsList(groups) {
 
 // 显示创建群组模态框
 function showCreateGroupModal() {
-    document.getElementById('createGroupModal').style.display = 'block';
+    const modal = document.getElementById('createGroupModal');
+    modal.style.display = 'flex';
 }
 
 // 创建群组

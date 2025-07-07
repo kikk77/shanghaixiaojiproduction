@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试等级系统管理界面</title>
+</head>
+<body>
+    <h1>测试等级系统管理界面</h1>
+    
+    <h2>1. 检查API连接</h2>
+    <button onclick="testAPI()">测试API</button>
+    <div id="apiResult"></div>
+    
+    <h2>2. 检查等级系统状态</h2>
+    <button onclick="checkLevelSystem()">检查状态</button>
+    <div id="statusResult"></div>
+    
+    <h2>3. 测试按钮功能</h2>
+    <button onclick="alert('按钮工作正常！')">测试按钮</button>
+    
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('apiResult');
+            try {
+                const response = await fetch('/api/level/stats');
+                const data = await response.json();
+                result.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                result.innerHTML = '错误: ' + error.message;
+            }
+        }
+        
+        async function checkLevelSystem() {
+            const result = document.getElementById('statusResult');
+            result.innerHTML = '环境变量 LEVEL_SYSTEM_ENABLED = ' + (typeof process !== 'undefined' ? process.env.LEVEL_SYSTEM_ENABLED : '浏览器中无法访问');
+            
+            // 测试是否能访问管理界面
+            try {
+                const response = await fetch('/level/admin/level-system.js');
+                if (response.ok) {
+                    result.innerHTML += '<br>✅ JS文件可以访问';
+                } else {
+                    result.innerHTML += '<br>❌ JS文件无法访问: ' + response.status;
+                }
+            } catch (error) {
+                result.innerHTML += '<br>❌ JS文件加载失败: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -103,6 +103,22 @@ function handleRoutes(req, res, pathname, method) {
         });
         return;
     }
+    
+    // 等级系统测试页面
+    if (pathname === '/admin/level-test') {
+        const path = require('path');
+        const testPath = path.join(__dirname, '..', 'level', 'admin', 'test-buttons.html');
+        fs.readFile(testPath, 'utf8', (err, data) => {
+            if (err) {
+                res.writeHead(404);
+                res.end('Test page not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
 
     // 静态资源服务（CSS, JS文件）
     if (pathname.startsWith('/admin/')) {

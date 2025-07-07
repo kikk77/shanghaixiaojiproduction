@@ -9,6 +9,8 @@ let allBadges = [];
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🏆 等级系统管理界面初始化开始...');
+    
     // 检查等级系统是否启用
     checkLevelSystemStatus();
     
@@ -23,21 +25,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化搜索
     initSearch();
+    
+    console.log('✅ 等级系统管理界面初始化完成');
 });
 
 // 检查等级系统状态
 async function checkLevelSystemStatus() {
+    console.log('🔍 检查等级系统状态...');
     try {
         const response = await fetch('/api/level/stats');
+        console.log('API响应状态:', response.status);
+        
         if (!response.ok) {
             const error = await response.json();
+            console.error('API错误:', error);
             if (error.error === '等级系统未启用') {
                 showError('等级系统未启用，请在环境变量中设置 LEVEL_SYSTEM_ENABLED=true');
-                document.querySelector('.level-container').style.opacity = '0.5';
+                const container = document.querySelector('.level-container');
+                if (container) {
+                    container.style.opacity = '0.5';
+                }
             }
+        } else {
+            console.log('✅ 等级系统状态正常');
         }
     } catch (error) {
         console.error('检查等级系统状态失败:', error);
+        showError('无法连接到服务器，请检查服务是否运行');
     }
 }
 
@@ -70,45 +84,63 @@ async function loadStats() {
 
 // 绘制等级分布图表
 function drawLevelChart(distribution) {
-    const ctx = document.getElementById('levelChart').getContext('2d');
-    
-    if (levelChart) {
-        levelChart.destroy();
-    }
-    
-    const levelNames = ['Lv.1 新手', 'Lv.2 熟练', 'Lv.3 精英', 'Lv.4 大师', 'Lv.5 传说'];
-    const labels = distribution.map(d => levelNames[d.level - 1] || `Lv.${d.level}`);
-    const data = distribution.map(d => d.count);
-    
-    levelChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '用户数量',
-                data: data,
-                backgroundColor: [
-                    '#1976d2',
-                    '#388e3c',
-                    '#f57c00',
-                    '#c2185b',
-                    '#7b1fa2'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
+    try {
+        // 检查Chart.js是否加载
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js未加载，跳过图表绘制');
+            return;
+        }
+        
+        const canvas = document.getElementById('levelChart');
+        if (!canvas) {
+            console.warn('找不到图表canvas元素');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        
+        if (levelChart) {
+            levelChart.destroy();
+        }
+        
+        const levelNames = ['Lv.1 新手', 'Lv.2 熟练', 'Lv.3 精英', 'Lv.4 大师', 'Lv.5 传说'];
+        const labels = distribution.map(d => levelNames[d.level - 1] || `Lv.${d.level}`);
+        const data = distribution.map(d => d.count);
+        
+        levelChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '用户数量',
+                    data: data,
+                    backgroundColor: [
+                        '#1976d2',
+                        '#388e3c',
+                        '#f57c00',
+                        '#c2185b',
+                        '#7b1fa2'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('✅ 图表绘制成功');
+    } catch (error) {
+        console.error('绘制图表失败:', error);
+    }
 }
 
 // 初始化标签页
@@ -568,4 +600,13 @@ window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
         event.target.style.display = 'none';
     }
-}; 
+};
+
+// 将函数暴露到全局作用域
+window.editUser = editUser;
+window.viewUserBadges = viewUserBadges;
+window.showCreateBadgeModal = showCreateBadgeModal;
+window.createBadge = createBadge;
+window.closeModal = closeModal;
+window.saveUserEdit = saveUserEdit;
+window.loadUsers = loadUsers; 

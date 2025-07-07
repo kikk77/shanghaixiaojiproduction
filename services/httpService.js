@@ -2475,7 +2475,11 @@ async function handleLevelApiRequest(pathname, method, data) {
         if (endpoint === 'users' && method === 'GET') {
             if (id) {
                 // 获取单个用户等级信息
-                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const groupId = data.groupId;
+                if (!groupId) {
+                    return { success: false, error: '请提供groupId参数' };
+                }
+                
                 const levelInfo = await levelServiceHook.getUserLevelInfo(id, groupId);
                 
                 if (!levelInfo) {
@@ -2491,7 +2495,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                 }
                 
                 // 从URL查询参数中获取参数
-                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const groupId = data.groupId;
                 const limit = parseInt(data.limit) || 50;
                 const offset = parseInt(data.offset) || 0;
                 const search = data.search || '';
@@ -2500,7 +2504,7 @@ async function handleLevelApiRequest(pathname, method, data) {
                 if (!groupId) {
                     return { 
                         success: false, 
-                        error: '群组ID未设置，请在Railway环境变量中设置GROUP_CHAT_ID或在请求中提供groupId参数' 
+                        error: '请提供groupId参数，或通过管理员面板选择群组' 
                     };
                 }
                 
@@ -2573,7 +2577,11 @@ async function handleLevelApiRequest(pathname, method, data) {
         // 用户等级更新API（管理员功能）
         if (endpoint === 'users' && id && method === 'PUT') {
             const { exp, points, level, displayName } = data;
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
+            
+            if (!groupId) {
+                return { success: false, error: '请提供groupId参数' };
+            }
             
             // 更新经验值和积分
             if (exp !== undefined || points !== undefined) {
@@ -2609,7 +2617,11 @@ async function handleLevelApiRequest(pathname, method, data) {
         // 勋章管理API
         if (endpoint === 'badges') {
             if (method === 'GET') {
-                const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+                const groupId = data.groupId;
+                if (!groupId) {
+                    return { success: false, error: '请提供groupId参数' };
+                }
+                
                 const badges = await badgeService.getAvailableBadges(groupId);
                 return { success: true, data: badges };
             } else if (method === 'POST') {
@@ -2620,7 +2632,11 @@ async function handleLevelApiRequest(pathname, method, data) {
                 }
                 
                 const { badge_id, badge_name, badge_emoji, badge_desc, badge_type, rarity, unlock_conditions } = data;
-                const groupId = data.group_id || process.env.GROUP_CHAT_ID;
+                const groupId = data.group_id;
+                
+                if (!groupId) {
+                    return { success: false, error: '请提供group_id参数' };
+                }
                 
                 if (!badge_id || !badge_name) {
                     return { success: false, error: '勋章ID和名称不能为空' };
@@ -2985,13 +3001,13 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             // 从URL查询参数中获取groupId
-            const groupId = data.groupId || process.env.GROUP_CHAT_ID;
+            const groupId = data.groupId;
             
             // 检查是否有有效的群组ID
             if (!groupId) {
                 return { 
                     success: false, 
-                    error: '群组ID未设置，请在Railway环境变量中设置GROUP_CHAT_ID或在请求中提供groupId参数' 
+                    error: '请提供groupId参数，或通过管理员面板选择群组' 
                 };
             }
             

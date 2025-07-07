@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function checkLevelSystemStatus() {
     console.log('🔍 检查等级系统状态...');
     try {
-        const response = await fetch('/api/level/stats');
+        const response = await fetch('/api/level/groups');
         console.log('API响应状态:', response.status);
         
         if (!response.ok) {
@@ -186,6 +186,10 @@ async function checkLevelSystemStatus() {
                 }
             }
         } else {
+            const result = await response.json();
+            if (result.success && result.data.length === 0) {
+                showMessage('欢迎使用等级系统！请先在"群组管理"页面添加您的群组配置。', 'info');
+            }
             console.log('✅ 等级系统状态正常');
         }
     } catch (error) {
@@ -197,7 +201,40 @@ async function checkLevelSystemStatus() {
 // 加载统计数据
 async function loadStats() {
     try {
-        const response = await fetch('/api/level/stats');
+        // 首先检查是否有群组配置
+        const groupsResponse = await fetch('/api/level/groups');
+        const groupsResult = await groupsResponse.json();
+        
+        if (!groupsResult.success || groupsResult.data.length === 0) {
+            // 没有群组配置，显示提示信息
+            const container = document.querySelector('.stats-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; background: #e8f4fd; border: 1px solid #b3d4fc; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #1565c0;">🎮 开始使用等级系统</h3>
+                        <p style="color: #1565c0; margin: 10px 0;">欢迎使用等级系统！请先添加您的群组配置：</p>
+                        <div style="margin: 20px 0;">
+                            <button onclick="switchTab('groups')" style="background: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                                📝 前往群组管理
+                            </button>
+                        </div>
+                        <p style="color: #1565c0; margin: 10px 0; font-size: 14px;">添加群组后即可开始使用等级系统的所有功能</p>
+                    </div>
+                `;
+            }
+            
+            // 清空统计卡片
+            document.getElementById('totalUsers').textContent = '0';
+            document.getElementById('totalPoints').textContent = '0';
+            document.getElementById('avgLevel').textContent = '-';
+            document.getElementById('totalBadges').textContent = '0';
+            
+            return;
+        }
+        
+        // 使用第一个群组的ID来获取统计数据
+        const firstGroup = groupsResult.data[0];
+        const response = await fetch(`/api/level/stats?groupId=${firstGroup.group_id}`);
         const result = await response.json();
         
         if (result.success) {
@@ -217,24 +254,7 @@ async function loadStats() {
             
             console.log('✅ 统计数据加载成功:', stats);
         } else {
-            // 处理API错误
-            if (result.error && result.error.includes('群组ID未设置')) {
-                showError('请在Railway环境变量中设置GROUP_CHAT_ID，或联系管理员配置群组ID');
-                // 显示配置提示
-                const container = document.querySelector('.stats-container');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 40px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; margin: 20px 0;">
-                            <h3 style="color: #856404;">⚠️ 配置缺失</h3>
-                            <p style="color: #856404; margin: 10px 0;">群组ID未配置，请在Railway环境变量中设置：</p>
-                            <code style="background: #f8f9fa; padding: 8px 12px; border-radius: 4px; color: #495057;">GROUP_CHAT_ID=你的群组ID</code>
-                            <p style="color: #856404; margin: 10px 0; font-size: 14px;">配置完成后重新部署即可正常使用</p>
-                        </div>
-                    `;
-                }
-            } else {
-                showError('加载统计数据失败：' + result.error);
-            }
+            showError('加载统计数据失败：' + result.error);
         }
     } catch (error) {
         console.error('加载统计数据失败:', error);
@@ -392,8 +412,35 @@ async function loadInitialData() {
 // 加载用户列表
 async function loadUsers(page = 1) {
     try {
+        // 首先检查是否有群组配置
+        const groupsResponse = await fetch('/api/level/groups');
+        const groupsResult = await groupsResponse.json();
+        
+        if (!groupsResult.success || groupsResult.data.length === 0) {
+            // 没有群组配置，显示提示信息
+            const tbody = document.getElementById('userTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px;">
+                            <div style="background: #e8f4fd; border: 1px solid #b3d4fc; border-radius: 8px; padding: 20px; margin: 10px;">
+                                <h4 style="color: #1565c0; margin-bottom: 10px;">🎮 开始使用等级系统</h4>
+                                <p style="color: #1565c0; margin: 5px 0;">请先在群组管理页面添加您的群组配置</p>
+                                <button onclick="switchTab('groups')" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                                    📝 前往群组管理
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+            return;
+        }
+        
+        // 使用第一个群组的ID来获取用户列表
+        const firstGroup = groupsResult.data[0];
         const offset = (page - 1) * pageSize;
-        const response = await fetch(`/api/level/users?limit=${pageSize}&offset=${offset}`);
+        const response = await fetch(`/api/level/users?limit=${pageSize}&offset=${offset}&groupId=${firstGroup.group_id}`);
         const result = await response.json();
         
         if (result.success) {
@@ -401,29 +448,8 @@ async function loadUsers(page = 1) {
             renderUserTable(allUsers);
             renderPagination(result.data.total, page);
         } else {
-            // 处理API错误
-            if (result.error && result.error.includes('群组ID未设置')) {
-                showError('请在Railway环境变量中设置GROUP_CHAT_ID，或联系管理员配置群组ID');
-                // 显示配置提示在用户表格中
-                const tbody = document.getElementById('userTableBody');
-                if (tbody) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 40px;">
-                                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 10px;">
-                                    <h4 style="color: #856404; margin-bottom: 10px;">⚠️ 配置缺失</h4>
-                                    <p style="color: #856404; margin: 5px 0;">群组ID未配置，请在Railway环境变量中设置：</p>
-                                    <code style="background: #f8f9fa; padding: 8px 12px; border-radius: 4px; color: #495057;">GROUP_CHAT_ID=你的群组ID</code>
-                                    <p style="color: #856404; margin: 5px 0; font-size: 14px;">配置完成后重新部署即可正常使用</p>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }
-            } else {
-                showError('加载用户列表失败：' + result.error);
-                renderUserTable([]); // 显示空表格
-            }
+            showError('加载用户列表失败：' + result.error);
+            renderUserTable([]); // 显示空表格
         }
     } catch (error) {
         console.error('加载用户列表失败:', error);

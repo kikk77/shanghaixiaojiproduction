@@ -181,10 +181,12 @@ class LevelServiceHook {
         if (!this.enabled) return null;
         
         try {
-            return await this.levelService.getUserLevelInfo(
-                userId,
-                groupId || process.env.GROUP_CHAT_ID
-            );
+            if (!groupId) {
+                console.error('获取用户等级信息失败: groupId不能为空');
+                return null;
+            }
+            
+            return await this.levelService.getUserLevelInfo(userId, groupId);
         } catch (error) {
             console.error('获取用户等级信息失败:', error);
             return null;
@@ -232,9 +234,14 @@ class LevelServiceHook {
         if (!this.enabled) return false;
         
         try {
+            if (!groupId) {
+                console.error('手动奖励失败: groupId不能为空');
+                return false;
+            }
+            
             await this.levelService.updateUserRewards(
                 userId,
-                groupId || process.env.GROUP_CHAT_ID,
+                groupId,
                 expAmount,
                 pointsAmount,
                 'manual_grant',

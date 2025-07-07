@@ -45,12 +45,9 @@ class LevelSystemInitializer {
         const db = levelDb.getDatabase();
         if (!db) return;
         
-        // 只有在设置了GROUP_CHAT_ID环境变量时才创建默认群组
-        const defaultGroupId = process.env.GROUP_CHAT_ID;
-        if (!defaultGroupId) {
-            console.log('🏆 未设置GROUP_CHAT_ID环境变量，跳过默认群组创建');
-            return;
-        }
+        // 不再依赖环境变量，由管理员面板手动创建群组配置
+        console.log('🏆 等级系统初始化完成，请通过管理员面板手动添加群组配置');
+        return;
         
         const config = {
             group_id: defaultGroupId,
@@ -223,11 +220,9 @@ class LevelSystemInitializer {
             }
         ];
         
-        const groupId = process.env.GROUP_CHAT_ID;
-        if (!groupId) {
-            console.log('🏆 未设置GROUP_CHAT_ID环境变量，跳过默认勋章创建');
-            return;
-        }
+        // 不再依赖环境变量，勋章将通过管理员面板手动创建
+        console.log('🏆 勋章系统初始化完成，请通过管理员面板手动添加勋章配置');
+        return;
         
         // 批量插入勋章（使用better-sqlite3的事务）
         const insertStmt = db.prepare(`

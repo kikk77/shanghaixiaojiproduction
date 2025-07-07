@@ -4809,8 +4809,9 @@ function clearBotUsernameCache() {
 // 等级系统命令处理函数
 async function handleLevelCommand(userId, chatId, username) {
     try {
+        // 使用当前聊天ID作为群组ID
+        const groupId = chatId.toString();
         const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
-        const groupId = process.env.GROUP_CHAT_ID;
         
         const levelInfo = await levelServiceHook.getUserLevelInfo(userId, groupId);
         
@@ -4870,8 +4871,9 @@ async function displayLevelInfo(chatId, levelInfo) {
 
 async function handleBadgesCommand(userId, chatId) {
     try {
+        // 使用当前聊天ID作为群组ID
+        const groupId = chatId.toString();
         const badgeService = require('../level/services/badgeService').getInstance();
-        const groupId = process.env.GROUP_CHAT_ID;
         
         const badgeWall = await badgeService.getUserBadgeWall(userId, groupId);
         
@@ -4928,8 +4930,9 @@ async function handleBadgesCommand(userId, chatId) {
 
 async function handlePointsCommand(userId, chatId) {
     try {
+        // 使用当前聊天ID作为群组ID
+        const groupId = chatId.toString();
         const levelService = require('../level/services/levelService').getInstance();
-        const groupId = process.env.GROUP_CHAT_ID;
         
         const history = await levelService.getUserPointsHistory(userId, groupId, 10);
         
@@ -4966,6 +4969,8 @@ async function handlePointsCommand(userId, chatId) {
 
 async function handleRankingCommand(userId, chatId) {
     try {
+        // 使用当前聊天ID作为群组ID
+        const groupId = chatId.toString();
         const levelDbManager = require('../level/config/levelDatabase').getInstance();
         const db = levelDbManager.getDatabase();
         
@@ -4973,8 +4978,6 @@ async function handleRankingCommand(userId, chatId) {
             bot.sendMessage(chatId, '❌ 等级系统暂时不可用');
             return;
         }
-        
-        const groupId = process.env.GROUP_CHAT_ID;
         
         // 获取前10名用户
         const topUsers = db.prepare(`

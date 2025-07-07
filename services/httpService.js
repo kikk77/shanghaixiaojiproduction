@@ -2513,51 +2513,31 @@ async function handleLevelApiRequest(pathname, method, data) {
                 let users, total;
                 
                 if (search) {
-                    // 搜索用户
+                    // 搜索用户（简化版：不按群组区分）
                     users = db.prepare(`
                         SELECT * FROM user_levels 
-                        WHERE group_id = ? AND (
-                            user_id LIKE ? OR 
-                            display_name LIKE ?
-                        )
+                        WHERE user_id LIKE ? OR display_name LIKE ?
                         ORDER BY level DESC, total_exp DESC
                         LIMIT ? OFFSET ?
-                    `).all(groupId, `%${search}%`, `%${search}%`, limit, offset);
+                    `).all(`%${search}%`, `%${search}%`, limit, offset);
                     
                     const searchTotal = db.prepare(`
                         SELECT COUNT(*) as count FROM user_levels 
-                        WHERE group_id = ? AND (
-                            user_id LIKE ? OR 
-                            display_name LIKE ?
-                        )
-                    `).get(groupId, `%${search}%`, `%${search}%`);
+                        WHERE user_id LIKE ? OR display_name LIKE ?
+                    `).get(`%${search}%`, `%${search}%`);
                     
                     total = searchTotal;
                 } else {
-                    // 如果没有指定群组ID且环境变量也没有设置，获取所有群组的用户
-                    if (!data.groupId && !process.env.GROUP_CHAT_ID) {
-                        users = db.prepare(`
-                            SELECT * FROM user_levels 
-                            ORDER BY level DESC, total_exp DESC
-                            LIMIT ? OFFSET ?
-                        `).all(limit, offset);
-                        
-                        total = db.prepare(`
-                            SELECT COUNT(*) as count FROM user_levels
-                        `).get();
-                    } else {
-                        // 获取指定群组的用户
-                        users = db.prepare(`
-                            SELECT * FROM user_levels 
-                            WHERE group_id = ?
-                            ORDER BY level DESC, total_exp DESC
-                            LIMIT ? OFFSET ?
-                        `).all(groupId, limit, offset);
-                        
-                        total = db.prepare(`
-                            SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
-                        `).get(groupId);
-                    }
+                    // 获取所有用户（简化版：不按群组区分）
+                    users = db.prepare(`
+                        SELECT * FROM user_levels 
+                        ORDER BY level DESC, total_exp DESC
+                        LIMIT ? OFFSET ?
+                    `).all(limit, offset);
+                    
+                    total = db.prepare(`
+                        SELECT COUNT(*) as count FROM user_levels
+                    `).get();
                 }
                 
                 console.log(`🏆 [API] 查询结果: 找到 ${users.length} 个用户，总计 ${total.count} 个`);
@@ -2601,8 +2581,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                     db.prepare(`
                         UPDATE user_levels 
                         SET level = ?, updated_at = ?
-                        WHERE user_id = ? AND group_id = ?
-                    `).run(level, Date.now() / 1000, id, groupId);
+                        WHERE user_id = ?
+                    `).run(level, Date.now() / 1000, id);
                 }
             }
             
@@ -3013,48 +2993,46 @@ async function handleLevelApiRequest(pathname, method, data) {
             
             console.log(`🏆 [API] 查询统计数据: groupId=${groupId}`);
             
-            // 获取统计数据
+            // 获取统计数据（简化版：不按群组区分用户）
             const stats = {
                 totalUsers: db.prepare(`
-                    SELECT COUNT(*) as count FROM user_levels WHERE group_id = ?
-                `).get(groupId).count,
+                    SELECT COUNT(*) as count FROM user_levels
+                `).get().count,
                 
                 activeUsers: db.prepare(`
                     SELECT COUNT(*) as count FROM user_levels 
-                    WHERE group_id = ? AND updated_at > ?
-                `).get(groupId, Date.now() / 1000 - 7 * 24 * 60 * 60).count, // 7天内活跃
+                    WHERE updated_at > ?
+                `).get(Date.now() / 1000 - 7 * 24 * 60 * 60).count, // 7天内活跃
                 
                 totalBadges: db.prepare(`
                     SELECT COUNT(*) as count FROM badge_definitions 
-                    WHERE (group_id = ? OR group_id = 'default') AND status = 'active'
+                    WHERE (group_id = ? OR group_id = 'global') AND status = 'active'
                 `).get(groupId).count,
                 
                 totalBadgesUnlocked: db.prepare(`
-                    SELECT COUNT(*) as count FROM user_badges WHERE group_id = ?
+                    SELECT COUNT(*) as count FROM user_badges WHERE source_group_id = ? OR source_group_id IS NULL
                 `).get(groupId).count,
                 
                 avgLevel: (() => {
                     const result = db.prepare(`
-                        SELECT AVG(level) as avg FROM user_levels WHERE group_id = ?
-                    `).get(groupId);
+                        SELECT AVG(level) as avg FROM user_levels
+                    `).get();
                     return result.avg ? parseFloat(result.avg).toFixed(1) : 0;
                 })(),
                 
                 levelDistribution: db.prepare(`
                     SELECT level, COUNT(*) as count 
                     FROM user_levels 
-                    WHERE group_id = ?
                     GROUP BY level
                     ORDER BY level ASC
-                `).all(groupId),
+                `).all(),
                 
                 topUsers: db.prepare(`
                     SELECT user_id, display_name, level, total_exp, user_eval_count
                     FROM user_levels
-                    WHERE group_id = ?
                     ORDER BY level DESC, total_exp DESC
                     LIMIT 10
-                `).all(groupId)
+                `).all()
             };
             
             return { success: true, data: stats };

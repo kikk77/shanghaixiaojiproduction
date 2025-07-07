@@ -80,17 +80,22 @@ async function startFullApplication() {
             console.warn('⚠️ 播报功能迁移检查失败:', error.message);
         }
         
-        // 初始化等级系统
+        // 自动修复和初始化等级系统
         if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
-            console.log(`🏆 初始化等级系统...`);
+            console.log(`🏆 启动等级系统...`);
             try {
+                // 1. 先执行自动修复检查
+                const AutoFixOnStartup = require('./level/scripts/auto-fix-on-startup');
+                await AutoFixOnStartup.fix();
+                
+                // 2. 然后初始化等级系统
                 const LevelSystemInitializer = require('./level/scripts/init-level-system');
                 const initializer = new LevelSystemInitializer();
                 await initializer.initialize();
-                console.log('✅ 等级系统初始化完成');
+                console.log('✅ 等级系统启动完成');
             } catch (error) {
-                console.error('❌ 等级系统初始化失败:', error.message);
-                // 等级系统初始化失败不影响主系统运行
+                console.error('❌ 等级系统启动失败:', error.message);
+                // 等级系统启动失败不影响主系统运行
             }
         } else {
             console.log('🏆 等级系统未启用');

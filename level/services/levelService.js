@@ -9,7 +9,8 @@
 
 class LevelService {
     constructor() {
-        this.levelDb = require('../config/levelDatabase');
+        const levelDbManager = require('../config/levelDatabase');
+        this.levelDb = levelDbManager.getInstance();
         this.botService = require('../../services/botService');
         this.dbOperations = require('../../models/dbOperations');
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';

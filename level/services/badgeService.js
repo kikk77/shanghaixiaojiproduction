@@ -9,7 +9,8 @@
 
 class BadgeService {
     constructor() {
-        this.levelDb = require('../config/levelDatabase');
+        const levelDbManager = require('../config/levelDatabase');
+        this.levelDb = levelDbManager.getInstance();
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
         
         if (!this.enabled) {

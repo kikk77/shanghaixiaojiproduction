@@ -113,7 +113,10 @@ async function deleteGroupWithPassword(groupId, adminPassword) {
                 console.log('删除详情:', result.details);
                 showSuccess(`删除完成：配置${result.details.configDeleted}条，用户${result.details.usersDeleted}条，勋章${result.details.badgesDeleted}条`);
             }
-            loadGroups(); // 重新加载群组列表
+            
+            // 强制刷新所有相关数据
+            await refreshAllData();
+            showSuccess('页面数据已刷新');
         } else {
             if (result.requirePassword) {
                 showError(result.error);
@@ -1483,5 +1486,42 @@ function downloadJSON(data, filename) {
     URL.revokeObjectURL(url);
 }
 
+// ==================== 数据刷新功能 ====================
+
+// 刷新所有数据
+async function refreshAllData() {
+    console.log('🔄 开始刷新所有数据...');
+    
+    try {
+        // 清除缓存
+        groupConfigs = {};
+        allUsers = [];
+        allBadges = [];
+        
+        // 重新加载所有数据
+        await Promise.all([
+            loadStats(),
+            loadGroups(),
+            loadUsers(),
+            loadBadges(),
+            loadInitialData()
+        ]);
+        
+        console.log('✅ 所有数据刷新完成');
+    } catch (error) {
+        console.error('❌ 数据刷新失败:', error);
+        showError('数据刷新失败');
+    }
+}
+
+// 手动刷新页面数据
+async function manualRefresh() {
+    showSuccess('正在刷新数据...');
+    await refreshAllData();
+    showSuccess('数据刷新完成！');
+}
+
 // 确认管理员操作
 window.confirmAdminAction = confirmAdminAction;
+window.refreshAllData = refreshAllData;
+window.manualRefresh = manualRefresh;

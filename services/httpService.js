@@ -2645,6 +2645,91 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
         }
         
+        // 单个勋章管理API（更新和删除）
+        if (endpoint === 'badges' && id) {
+            if (method === 'PUT') {
+                // 更新勋章
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                const { badge_name, badge_emoji, badge_desc, badge_type, rarity, unlock_conditions } = data;
+                
+                if (!badge_name) {
+                    return { success: false, error: '勋章名称不能为空' };
+                }
+                
+                try {
+                    const result = db.prepare(`
+                        UPDATE badge_definitions 
+                        SET badge_name = ?, badge_emoji = ?, badge_desc = ?, 
+                            badge_type = ?, rarity = ?, unlock_conditions = ?
+                        WHERE badge_id = ?
+                    `).run(
+                        badge_name,
+                        badge_emoji || '🏅',
+                        badge_desc || '',
+                        badge_type || 'achievement',
+                        rarity || 'common',
+                        typeof unlock_conditions === 'string' ? unlock_conditions : JSON.stringify(unlock_conditions || {}),
+                        id
+                    );
+                    
+                    if (result.changes === 0) {
+                        return { success: false, error: '勋章不存在或未更新' };
+                    }
+                    
+                    return { success: true, message: '勋章更新成功' };
+                } catch (error) {
+                    console.error('更新勋章失败:', error);
+                    return { success: false, error: '勋章更新失败: ' + error.message };
+                }
+            } else if (method === 'DELETE') {
+                // 删除勋章（破坏性操作）
+                const db = levelDbManager.getDatabase();
+                if (!db) {
+                    return { success: false, error: '数据库不可用' };
+                }
+                
+                try {
+                    // 开始事务
+                    db.prepare('BEGIN TRANSACTION').run();
+                    
+                    try {
+                        // 1. 删除勋章定义
+                        const deleteBadgeResult = db.prepare('DELETE FROM badge_definitions WHERE badge_id = ?').run(id);
+                        
+                        // 2. 删除用户勋章记录
+                        const deleteUserBadgesResult = db.prepare('DELETE FROM user_badges WHERE badge_id = ?').run(id);
+                        
+                        // 提交事务
+                        db.prepare('COMMIT').run();
+                        
+                        console.log(`🗑️ 勋章删除完成: ${id}`);
+                        console.log(`   - 勋章定义删除: ${deleteBadgeResult.changes} 条`);
+                        console.log(`   - 用户勋章删除: ${deleteUserBadgesResult.changes} 条`);
+                        
+                        return { 
+                            success: true, 
+                            message: '勋章删除成功',
+                            details: {
+                                badgeDeleted: deleteBadgeResult.changes,
+                                userBadgesDeleted: deleteUserBadgesResult.changes
+                            }
+                        };
+                    } catch (error) {
+                        // 回滚事务
+                        db.prepare('ROLLBACK').run();
+                        throw error;
+                    }
+                } catch (error) {
+                    console.error('删除勋章失败:', error);
+                    return { success: false, error: '勋章删除失败: ' + error.message };
+                }
+            }
+        }
+        
         // 勋章授予/撤销API
         if (endpoint === 'badges' && pathParts[4] === 'grant' && method === 'POST') {
             const { userId, badgeId, groupId } = data;

@@ -4809,42 +4809,68 @@ function clearBotUsernameCache() {
 // 等级系统命令处理函数
 async function handleLevelCommand(userId, chatId, username) {
     try {
+        console.log(`🏆 处理等级命令 - 用户ID: ${userId}, 聊天ID: ${chatId}, 用户名: ${username}`);
+        
         // 确保是私聊消息
         if (chatId < 0) {
+            console.log(`❌ 等级命令在群组中使用，chatId: ${chatId}`);
             bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /level 命令');
             return;
         }
         
+        console.log(`🔧 开始获取等级服务实例...`);
         const levelService = require('../level/services/levelService').getInstance();
         
+        console.log(`📊 等级服务状态: enabled=${levelService.enabled}`);
+        if (!levelService.enabled) {
+            console.log(`❌ 等级系统未启用`);
+            bot.sendMessage(chatId, '❌ 等级系统暂时不可用');
+            return;
+        }
+        
+        console.log(`🔍 获取用户等级信息 - 用户ID: ${userId}`);
         // 获取用户等级信息（简化版本：不需要群组参数）
         const levelInfo = await levelService.getUserLevelInfo(userId);
         
+        console.log(`📋 等级信息结果:`, levelInfo ? '有数据' : '无数据');
+        
         if (!levelInfo || !levelInfo.profile) {
+            console.log(`🎮 用户还没有等级数据，开始创建档案...`);
             // 用户还没有等级数据，创建初始档案
             bot.sendMessage(chatId, '🎮 正在初始化您的等级档案...');
             
             // 创建用户档案
+            console.log(`🔨 创建用户档案 - 用户ID: ${userId}`);
             const userProfile = await levelService.createUserProfile(userId);
+            console.log(`📝 用户档案创建结果:`, userProfile ? '成功' : '失败');
+            
             if (!userProfile) {
+                console.log(`❌ 用户档案创建失败`);
                 bot.sendMessage(chatId, '❌ 初始化失败，请联系管理员');
                 return;
             }
             
             // 重新获取等级信息
+            console.log(`🔄 重新获取等级信息...`);
             const newLevelInfo = await levelService.getUserLevelInfo(userId);
+            console.log(`📊 新等级信息结果:`, newLevelInfo ? '有数据' : '无数据');
+            
             if (!newLevelInfo) {
+                console.log(`❌ 重新获取等级信息失败`);
                 bot.sendMessage(chatId, '❌ 获取等级信息失败，请稍后重试');
                 return;
             }
             
+            console.log(`✅ 显示等级信息`);
             await displayLevelInfo(chatId, newLevelInfo);
         } else {
+            console.log(`✅ 直接显示已有等级信息`);
             await displayLevelInfo(chatId, levelInfo);
         }
         
     } catch (error) {
-        console.error('处理等级命令失败:', error);
+        console.error('❌ 处理等级命令失败:', error);
+        console.error('错误详情:', error.stack);
         bot.sendMessage(chatId, '❌ 获取等级信息失败，请稍后重试');
     }
 }
@@ -4880,17 +4906,32 @@ async function displayLevelInfo(chatId, levelInfo) {
 
 async function handleBadgesCommand(userId, chatId) {
     try {
+        console.log(`🏅 处理勋章命令 - 用户ID: ${userId}, 聊天ID: ${chatId}`);
+        
         // 确保是私聊消息
         if (chatId < 0) {
+            console.log(`❌ 勋章命令在群组中使用，chatId: ${chatId}`);
             bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /badges 命令');
             return;
         }
         
+        console.log(`🔧 开始获取勋章服务实例...`);
         const badgeService = require('../level/services/badgeService').getInstance();
         
+        console.log(`📊 勋章服务状态: enabled=${badgeService.enabled}`);
+        if (!badgeService.enabled) {
+            console.log(`❌ 勋章系统未启用`);
+            bot.sendMessage(chatId, '❌ 等级系统暂时不可用');
+            return;
+        }
+        
+        console.log(`🔍 获取用户勋章墙 - 用户ID: ${userId}`);
         const badgeWall = await badgeService.getUserBadgeWall(userId);
         
+        console.log(`📋 勋章墙结果:`, badgeWall ? '有数据' : '无数据');
+        
         if (!badgeWall) {
+            console.log(`❌ 获取勋章墙失败`);
             bot.sendMessage(chatId, '❌ 获取勋章信息失败，请稍后重试');
             return;
         }

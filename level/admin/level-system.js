@@ -9,7 +9,6 @@ let allBadges = [];
 let currentUserId = null;
 let currentGroupId = 'default';
 let groupConfigs = {};
-let autoRefreshInterval = null;
 
 // ==================== 管理员密码验证系统 ====================
 
@@ -179,33 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // 启动定时自动刷新（每30秒刷新一次统计数据）
-    startAutoRefresh();
-    
     console.log('✅ 等级系统管理界面初始化完成');
 });
-
-// 启动自动刷新
-function startAutoRefresh() {
-    // 清除现有的定时器
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-    }
-    
-    // 每30秒自动刷新统计数据
-    autoRefreshInterval = setInterval(() => {
-        console.log('🔄 定时自动刷新统计数据');
-        loadStats();
-    }, 30000);
-}
-
-// 停止自动刷新
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-    }
-}
 
 // 检查等级系统状态
 async function checkLevelSystemStatus() {

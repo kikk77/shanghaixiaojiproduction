@@ -3,27 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>等级系统管理</title>
-    <link rel="stylesheet" href="/admin/styles/common.css">
+    <title>等级系统管理中心</title>
+    <link rel="stylesheet" href="/level/admin/styles/level-system.css">
     <style>
-        /* 等级系统专用样式 */
-        .level-container {
-            padding: 20px;
-            max-width: 1400px;
-            margin: 0 auto;
+        /* 基础样式 */
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
         }
         
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* 系统状态 */
+        .system-status {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-enabled { background: #d4edda; color: #155724; padding: 5px 10px; border-radius: 3px; }
+        .status-disabled { background: #f8d7da; color: #721c24; padding: 5px 10px; border-radius: 3px; }
+        
+        /* 标签页 */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: #f8f9fa;
+            border-radius: 5px 5px 0 0;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover { background: #e9ecef; }
+        .tab.active { background: #2196F3; color: white; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 表单样式 */
+        .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 15px 0;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary { background: #2196F3; color: white; }
+        .btn-primary:hover { background: #1976D2; }
+        
+        .btn-success { background: #4CAF50; color: white; }
+        .btn-success:hover { background: #388E3C; }
+        
+        .btn-warning { background: #FF9800; color: white; }
+        .btn-warning:hover { background: #F57C00; }
+        
+        .btn-danger { background: #f44336; color: white; }
+        .btn-danger:hover { background: #D32F2F; }
+        
+        /* 表格样式 */
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .config-table th,
+        .config-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .config-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .config-table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        /* 警告框 */
+        .warning-box {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #ffc107;
+        }
+        
+        /* 成功框 */
+        .success-box {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #28a745;
+        }
+        
+        /* 信息框 */
+        .info-box {
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        /* 统计卡片 */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
         }
         
         .stat-card {
-            background: #fff;
-            border-radius: 8px;
+            background: white;
             padding: 20px;
+            border-radius: 8px;
+            text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
@@ -39,171 +203,22 @@
             color: #2196F3;
         }
         
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 16px;
-            color: #666;
-            position: relative;
-        }
-        
-        .tab.active {
-            color: #2196F3;
-        }
-        
-        .tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: #2196F3;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .user-table {
-            width: 100%;
-            background: #fff;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .user-table th {
-            background: #f5f5f5;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-        
-        .user-table td {
-            padding: 15px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .level-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .level-1 { background: #e3f2fd; color: #1976d2; }
-        .level-2 { background: #e8f5e9; color: #388e3c; }
-        .level-3 { background: #fff3e0; color: #f57c00; }
-        .level-4 { background: #fce4ec; color: #c2185b; }
-        .level-5 { background: #f3e5f5; color: #7b1fa2; }
-        
+        /* 勋章样式 */
         .badge-item {
             display: inline-block;
-            margin: 5px;
+            background: #fff3cd;
             padding: 8px 12px;
-            background: #f5f5f5;
+            margin: 5px;
             border-radius: 20px;
-            font-size: 14px;
+            border: 1px solid #ffeaa7;
         }
         
         .badge-rarity-common { background: #e0e0e0; }
         .badge-rarity-rare { background: #bbdefb; }
-        .badge-rarity-epic { background: #e1bee7; }
-        .badge-rarity-legendary { background: #fff9c4; }
-        .badge-rarity-mythic { background: #ffcdd2; }
+        .badge-rarity-epic { background: #ce93d8; }
+        .badge-rarity-legendary { background: #ffcc80; }
         
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-sm {
-            padding: 5px 10px;
-            font-size: 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .btn-primary {
-            background: #2196F3;
-            color: white;
-        }
-        
-        .btn-success {
-            background: #4CAF50;
-            color: white;
-        }
-        
-        .btn-danger {
-            background: #f44336;
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: #757575;
-            color: white;
-        }
-        
-        .btn:hover {
-            opacity: 0.9;
-            cursor: pointer;
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .search-bar {
-            margin-bottom: 20px;
-        }
-        
-        .search-bar input {
-            width: 300px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .level-chart {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        .chart-container {
-            position: relative;
-            height: 300px;
-        }
-        
+        /* 模态框 */
         .modal {
             display: none;
             position: fixed;
@@ -211,281 +226,455 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
+            overflow-y: auto;
         }
         
         .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            min-width: 400px;
+            margin: 5% auto;
+            padding: 20px;
+            width: 90%;
             max-width: 600px;
+            border-radius: 8px;
+            position: relative;
         }
         
-        .modal-header {
-            margin-bottom: 20px;
+        .modal-close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
         }
         
-        .modal-header h2 {
-            margin: 0;
+        .modal-close:hover {
+            color: #333;
         }
         
-        .modal-body {
-            margin-bottom: 20px;
+        /* 变量按钮 */
+        .variable-btn {
+            background: #e3f2fd;
+            border: 1px solid #2196F3;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
         }
         
-        .form-group {
-            margin-bottom: 15px;
+        .variable-btn:hover {
+            background: #bbdefb;
         }
         
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        
-        .error-message {
-            background: #ffebee;
-            color: #c62828;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-        }
-        
-        .success-message {
-            background: #e8f5e9;
-            color: #2e7d32;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
+        /* 预览框 */
+        .preview-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
-    <div class="level-container">
-        <h1>🏆 等级系统管理</h1>
+    <div class="admin-container">
+        <h1>🏆 等级系统管理中心</h1>
         
-        <!-- 统计卡片 -->
-        <div class="stats-grid" id="statsGrid">
+        <!-- 系统状态 -->
+        <div class="system-status">
+            <div>
+                <strong>等级系统状态：</strong>
+                <span id="systemStatus" class="status-enabled">已启用</span>
+                <span style="margin-left: 20px;">数据库：level_system.db</span>
+            </div>
+            <button class="btn btn-warning" onclick="toggleLevelSystem()">切换状态</button>
+        </div>
+        
+        <!-- 统计概览 -->
+        <div class="stats-grid">
             <div class="stat-card">
-                <h3>总用户数</h3>
+                <h3>👥 总用户数</h3>
                 <div class="stat-value" id="totalUsers">-</div>
             </div>
             <div class="stat-card">
-                <h3>活跃用户（7天内）</h3>
-                <div class="stat-value" id="activeUsers">-</div>
+                <h3>🏆 总积分发放</h3>
+                <div class="stat-value" id="totalPoints">-</div>
             </div>
             <div class="stat-card">
-                <h3>勋章总数</h3>
+                <h3>⭐ 平均等级</h3>
+                <div class="stat-value" id="avgLevel">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>🎖️ 勋章总数</h3>
                 <div class="stat-value" id="totalBadges">-</div>
-            </div>
-            <div class="stat-card">
-                <h3>已解锁勋章</h3>
-                <div class="stat-value" id="totalBadgesUnlocked">-</div>
-            </div>
-        </div>
-        
-        <!-- 等级分布图表 -->
-        <div class="level-chart">
-            <h2>等级分布</h2>
-            <div class="chart-container">
-                <canvas id="levelChart"></canvas>
             </div>
         </div>
         
         <!-- 标签页 -->
         <div class="tabs">
-            <button class="tab active" data-tab="users">用户管理</button>
-            <button class="tab" data-tab="badges">勋章管理</button>
-            <button class="tab" data-tab="config">系统配置</button>
-            <button class="tab" data-tab="ranking">排行榜</button>
+            <button class="tab active" onclick="switchTab('users')">👥 用户管理</button>
+            <button class="tab" onclick="switchTab('levels')">⭐ 等级配置</button>
+            <button class="tab" onclick="switchTab('rewards')">🎁 奖励规则</button>
+            <button class="tab" onclick="switchTab('badges')">🏆 勋章管理</button>
+            <button class="tab" onclick="switchTab('broadcast')">📢 播报配置</button>
+            <button class="tab" onclick="switchTab('groups')">👥 群组管理</button>
+            <button class="tab" onclick="switchTab('data')">💾 数据管理</button>
         </div>
         
-        <!-- 用户管理标签页 -->
-        <div class="tab-content active" id="users-tab">
-            <div class="search-bar">
-                <input type="text" id="userSearch" placeholder="搜索用户ID或昵称...">
+        <!-- 用户管理 -->
+        <div id="users-tab" class="tab-content active">
+            <div class="form-section">
+                <h2>🔍 用户搜索</h2>
+                <div class="form-grid">
+                    <div>
+                        <input type="text" id="userSearchInput" placeholder="输入用户ID或显示名称">
+                        <button class="btn btn-primary" onclick="searchUser()">搜索</button>
+                    </div>
+                </div>
+                
+                <div id="userSearchResult" style="display: none;">
+                    <!-- 搜索结果将显示在这里 -->
+                </div>
             </div>
             
-            <table class="user-table">
-                <thead>
-                    <tr>
-                        <th>用户ID</th>
-                        <th>昵称</th>
-                        <th>等级</th>
-                        <th>经验值</th>
-                        <th>积分</th>
-                        <th>评价次数</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="userTableBody">
-                    <tr>
-                        <td colspan="7" class="loading">加载中...</td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <div class="pagination" id="userPagination"></div>
-        </div>
-        
-        <!-- 勋章管理标签页 -->
-        <div class="tab-content" id="badges-tab">
-            <div style="margin-bottom: 20px;">
-                <button class="btn btn-primary" onclick="showCreateBadgeModal()">创建新勋章</button>
-            </div>
-            
-            <div id="badgesList">
-                <div class="loading">加载中...</div>
+            <div class="form-section">
+                <h2>📊 用户排行榜</h2>
+                <table class="config-table">
+                    <thead>
+                        <tr>
+                            <th>排名</th>
+                            <th>用户</th>
+                            <th>等级</th>
+                            <th>经验值</th>
+                            <th>积分</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userRankingBody">
+                        <tr><td colspan="6" style="text-align: center;">加载中...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
         
-        <!-- 系统配置标签页 -->
-        <div class="tab-content" id="config-tab">
-            <div id="configContent">
-                <div class="loading">加载中...</div>
+        <!-- 等级配置 -->
+        <div id="levels-tab" class="tab-content">
+            <div class="form-section">
+                <h2>⚙️ 等级配置管理</h2>
+                
+                <div class="form-group">
+                    <label>选择群组：</label>
+                    <select id="levelGroupSelect" onchange="loadGroupLevelConfig()">
+                        <option value="default">默认群组</option>
+                    </select>
+                    <button class="btn btn-success" onclick="createNewGroup()">创建新群组</button>
+                </div>
+                
+                <table class="config-table" id="levelConfigTable">
+                    <thead>
+                        <tr>
+                            <th>等级</th>
+                            <th>等级名称</th>
+                            <th>所需经验值</th>
+                            <th>所需评价次数</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="levelConfigBody">
+                        <!-- 动态生成 -->
+                    </tbody>
+                </table>
+                
+                <button class="btn btn-primary" onclick="addLevelRow()">➕ 添加等级</button>
+                <button class="btn btn-success" onclick="saveLevelConfig()">💾 保存配置</button>
+                <button class="btn btn-warning" onclick="resetLevelConfig()">🔄 重置为默认</button>
             </div>
         </div>
         
-        <!-- 排行榜标签页 -->
-        <div class="tab-content" id="ranking-tab">
-            <h2>🏆 等级排行榜 TOP 10</h2>
-            <table class="user-table">
-                <thead>
-                    <tr>
-                        <th>排名</th>
-                        <th>用户</th>
-                        <th>等级</th>
-                        <th>经验值</th>
-                        <th>评价次数</th>
-                    </tr>
-                </thead>
-                <tbody id="rankingTableBody">
-                    <tr>
-                        <td colspan="5" class="loading">加载中...</td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- 奖励规则 -->
+        <div id="rewards-tab" class="tab-content">
+            <div class="form-section">
+                <h2>🎁 奖励规则配置</h2>
+                
+                <h3>基础奖励（经验值 + 积分）</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>🎯 完成出击</label>
+                        <input type="number" id="attackExp" placeholder="经验值" value="20">
+                        <input type="number" id="attackPoints" placeholder="积分" value="10">
+                    </div>
+                    <div class="form-group">
+                        <label>📝 12项评价</label>
+                        <input type="number" id="userEvalExp" placeholder="经验值" value="30">
+                        <input type="number" id="userEvalPoints" placeholder="积分" value="25">
+                    </div>
+                    <div class="form-group">
+                        <label>🏪 商家评价</label>
+                        <input type="number" id="merchantEvalExp" placeholder="经验值" value="25">
+                        <input type="number" id="merchantEvalPoints" placeholder="积分" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label>✍️ 文字评价</label>
+                        <input type="number" id="textEvalExp" placeholder="经验值" value="15">
+                        <input type="number" id="textEvalPoints" placeholder="积分" value="15">
+                    </div>
+                </div>
+                
+                <h3>特殊奖励</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>💯 满分奖励</label>
+                        <input type="number" id="perfectScoreExp" placeholder="额外经验值" value="50">
+                        <input type="number" id="perfectScorePoints" placeholder="额外积分" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label>🎊 升级奖励</label>
+                        <input type="number" id="levelUpPoints" placeholder="奖励积分" value="50">
+                    </div>
+                </div>
+                
+                <h3>奖励倍数</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>经验值倍数</label>
+                        <input type="number" id="expMultiplier" step="0.1" value="1.0">
+                    </div>
+                    <div class="form-group">
+                        <label>积分倍数</label>
+                        <input type="number" id="pointsMultiplier" step="0.1" value="1.0">
+                    </div>
+                    <div class="form-group">
+                        <label>周末奖励倍数</label>
+                        <input type="number" id="weekendBonus" step="0.1" value="1.2">
+                    </div>
+                </div>
+                
+                <button class="btn btn-success" onclick="saveRewardsConfig()">💾 保存奖励配置</button>
+            </div>
         </div>
-    </div>
-    
-    <!-- 编辑用户模态框 -->
-    <div class="modal" id="editUserModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>编辑用户等级信息</h2>
+        
+        <!-- 勋章管理 -->
+        <div id="badges-tab" class="tab-content">
+            <div class="form-section">
+                <h2>🏆 勋章管理</h2>
+                
+                <button class="btn btn-primary" onclick="showCreateBadgeModal()">➕ 创建新勋章</button>
+                
+                <div id="badgesList" style="margin-top: 20px;">
+                    <!-- 勋章列表 -->
+                </div>
             </div>
-            <div class="modal-body">
-                <form id="editUserForm">
-                    <input type="hidden" id="editUserId">
-                    <div class="form-group">
-                        <label>昵称</label>
-                        <input type="text" id="editDisplayName" required>
+        </div>
+        
+        <!-- 播报配置 -->
+        <div id="broadcast-tab" class="tab-content">
+            <div class="form-section">
+                <h2>📢 播报配置</h2>
+                
+                <h3>播报开关</h3>
+                <div class="form-grid">
+                    <label><input type="checkbox" id="enableLevelUp" checked> 升级播报</label>
+                    <label><input type="checkbox" id="enableBadgeUnlock" checked> 勋章解锁播报</label>
+                    <label><input type="checkbox" id="enableMilestone"> 里程碑播报</label>
+                    <label><input type="checkbox" id="enablePerfectScore"> 满分播报</label>
+                </div>
+                
+                <h3>播报模板</h3>
+                <div class="form-group">
+                    <label>升级播报模板：</label>
+                    <textarea id="levelUpTemplate" rows="5">🎉 恭喜 {{user_name}} 升级了！
+⭐ Lv.{{old_level}} → Lv.{{new_level}} {{level_name}}
+💎 升级奖励：{{level_up_points}}积分
+继续努力，成为传说勇士！💪</textarea>
+                    <div class="variable-list">
+                        可用变量：
+                        <button class="variable-btn" onclick="insertVariable('levelUpTemplate', '{{user_name}}')">{{user_name}}</button>
+                        <button class="variable-btn" onclick="insertVariable('levelUpTemplate', '{{old_level}}')">{{old_level}}</button>
+                        <button class="variable-btn" onclick="insertVariable('levelUpTemplate', '{{new_level}}')">{{new_level}}</button>
+                        <button class="variable-btn" onclick="insertVariable('levelUpTemplate', '{{level_name}}')">{{level_name}}</button>
+                        <button class="variable-btn" onclick="insertVariable('levelUpTemplate', '{{level_up_points}}')">{{level_up_points}}</button>
                     </div>
-                    <div class="form-group">
-                        <label>等级</label>
-                        <input type="number" id="editLevel" min="1" max="5" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>勋章解锁模板：</label>
+                    <textarea id="badgeUnlockTemplate" rows="4">🏆 {{user_name}} 解锁了新勋章！
+{{badge_emoji}} {{badge_name}}
+{{badge_desc}}</textarea>
+                    <div class="variable-list">
+                        可用变量：
+                        <button class="variable-btn" onclick="insertVariable('badgeUnlockTemplate', '{{user_name}}')">{{user_name}}</button>
+                        <button class="variable-btn" onclick="insertVariable('badgeUnlockTemplate', '{{badge_emoji}}')">{{badge_emoji}}</button>
+                        <button class="variable-btn" onclick="insertVariable('badgeUnlockTemplate', '{{badge_name}}')">{{badge_name}}</button>
+                        <button class="variable-btn" onclick="insertVariable('badgeUnlockTemplate', '{{badge_desc}}')">{{badge_desc}}</button>
                     </div>
-                    <div class="form-group">
-                        <label>经验值调整</label>
-                        <input type="number" id="editExp" placeholder="输入要增加/减少的经验值">
-                    </div>
-                    <div class="form-group">
-                        <label>积分调整</label>
-                        <input type="number" id="editPoints" placeholder="输入要增加/减少的积分">
-                    </div>
-                </form>
+                </div>
+                
+                <button class="btn btn-success" onclick="saveBroadcastConfig()">💾 保存播报配置</button>
+                <button class="btn btn-primary" onclick="testBroadcast()">🧪 测试播报</button>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('editUserModal')">取消</button>
-                <button class="btn btn-primary" onclick="saveUserEdit()">保存</button>
+        </div>
+        
+        <!-- 群组管理 -->
+        <div id="groups-tab" class="tab-content">
+            <div class="form-section">
+                <h2>👥 群组管理</h2>
+                
+                <table class="config-table">
+                    <thead>
+                        <tr>
+                            <th>群组ID</th>
+                            <th>群组名称</th>
+                            <th>用户数</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groupsTableBody">
+                        <tr><td colspan="5" style="text-align: center;">加载中...</td></tr>
+                    </tbody>
+                </table>
+                
+                <button class="btn btn-primary" onclick="showCreateGroupModal()">➕ 创建新群组</button>
+            </div>
+        </div>
+        
+        <!-- 数据管理 -->
+        <div id="data-tab" class="tab-content">
+            <div class="form-section">
+                <h2>💾 数据管理</h2>
+                
+                <div class="info-box">
+                    <p><strong>数据库文件：</strong>level_system.db</p>
+                    <p><strong>数据库大小：</strong><span id="dbSize">-</span></p>
+                    <p><strong>最后更新：</strong><span id="lastUpdate">-</span></p>
+                </div>
+                
+                <h3>数据导出</h3>
+                <div class="form-grid">
+                    <button class="btn btn-primary" onclick="exportAllData()">📤 导出完整数据</button>
+                    <button class="btn btn-primary" onclick="exportUserData()">👥 导出用户数据</button>
+                    <button class="btn btn-primary" onclick="exportConfig()">⚙️ 导出配置</button>
+                </div>
+                
+                <h3>数据导入</h3>
+                <div class="warning-box">
+                    ⚠️ 导入数据会覆盖现有数据，请谨慎操作！
+                </div>
+                <input type="file" id="importFile" accept=".json">
+                <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                
+                <h3>群组迁移</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>源群组：</label>
+                        <select id="sourceGroup">
+                            <option value="">选择源群组</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>目标群组ID：</label>
+                        <input type="text" id="targetGroupId" placeholder="-1001234567890">
+                    </div>
+                </div>
+                <button class="btn btn-warning" onclick="migrateGroup()">🔄 迁移群组</button>
             </div>
         </div>
     </div>
     
     <!-- 创建勋章模态框 -->
-    <div class="modal" id="createBadgeModal">
+    <div id="createBadgeModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2>创建新勋章</h2>
+            <span class="modal-close" onclick="closeModal('createBadgeModal')">&times;</span>
+            <h2>✨ 创建新勋章</h2>
+            
+            <div class="form-group">
+                <label>勋章ID：</label>
+                <input type="text" id="newBadgeId" placeholder="例如：perfect_warrior">
             </div>
-            <div class="modal-body">
-                <form id="createBadgeForm">
-                    <div class="form-group">
-                        <label>勋章ID</label>
-                        <input type="text" id="badgeId" required placeholder="例如: first_eval">
-                    </div>
-                    <div class="form-group">
-                        <label>勋章名称</label>
-                        <input type="text" id="badgeName" required placeholder="例如: 初次评价">
-                    </div>
-                    <div class="form-group">
-                        <label>勋章图标</label>
-                        <input type="text" id="badgeEmoji" placeholder="例如: 🌟" value="🏅">
-                    </div>
-                    <div class="form-group">
-                        <label>勋章描述</label>
-                        <input type="text" id="badgeDesc" placeholder="例如: 完成第一次评价">
-                    </div>
-                    <div class="form-group">
-                        <label>稀有度</label>
-                        <select id="badgeRarity">
-                            <option value="common">普通</option>
-                            <option value="rare">稀有</option>
-                            <option value="epic">史诗</option>
-                            <option value="legendary">传说</option>
-                            <option value="mythic">神话</option>
-                        </select>
-                    </div>
-                </form>
+            
+            <div class="form-group">
+                <label>勋章名称：</label>
+                <input type="text" id="newBadgeName" placeholder="例如：完美战士">
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('createBadgeModal')">取消</button>
-                <button class="btn btn-primary" onclick="createBadge()">创建</button>
+            
+            <div class="form-group">
+                <label>勋章图标：</label>
+                <input type="text" id="newBadgeEmoji" placeholder="例如：🏆" value="🏆">
+            </div>
+            
+            <div class="form-group">
+                <label>勋章描述：</label>
+                <textarea id="newBadgeDesc" placeholder="例如：连续10次获得满分评价"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>稀有度：</label>
+                <select id="newBadgeRarity">
+                    <option value="common">普通 ⚪</option>
+                    <option value="rare">稀有 🔵</option>
+                    <option value="epic">史诗 🟣</option>
+                    <option value="legendary">传说 🟡</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>解锁条件类型：</label>
+                <select id="badgeConditionType" onchange="updateConditionForm()">
+                    <option value="stat_based">基于统计数据</option>
+                    <option value="evaluation_streak">评价连击</option>
+                    <option value="manual">手动授予</option>
+                </select>
+            </div>
+            
+            <div id="conditionDetails">
+                <!-- 动态生成条件表单 -->
+            </div>
+            
+            <button class="btn btn-success" onclick="createBadge()">创建勋章</button>
+        </div>
+    </div>
+    
+    <!-- 用户详情模态框 -->
+    <div id="userDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('userDetailModal')">&times;</span>
+            <h2>👤 用户详情</h2>
+            
+            <div id="userDetailContent">
+                <!-- 用户详情内容 -->
+            </div>
+            
+            <h3>调整等级数据</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>经验值调整：</label>
+                    <input type="number" id="adjustExp" placeholder="正数增加，负数减少">
+                </div>
+                <div class="form-group">
+                    <label>积分调整：</label>
+                    <input type="number" id="adjustPoints" placeholder="正数增加，负数减少">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>调整原因：</label>
+                <input type="text" id="adjustReason" placeholder="请输入调整原因">
+            </div>
+            <button class="btn btn-warning" onclick="adjustUserData()">执行调整</button>
+            
+            <h3>授予勋章</h3>
+            <div class="form-group">
+                <select id="awardBadgeSelect">
+                    <option value="">选择勋章</option>
+                </select>
+                <button class="btn btn-success" onclick="awardBadge()">授予勋章</button>
             </div>
         </div>
     </div>
     
-    <!-- 消息提示 -->
-    <div id="messageContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000;"></div>
-    
-    <!-- 引入Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/level/admin/level-system.js"></script>
-    
-    <script>
-        // 调试信息
-        console.log('页面加载完成，等待DOMContentLoaded事件...');
-        
-        // 添加错误捕获
-        window.addEventListener('error', function(e) {
-            console.error('全局错误:', e.message, e.filename, e.lineno, e.colno);
-        });
-    </script>
 </body>
 </html> 

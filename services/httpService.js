@@ -2325,6 +2325,48 @@ function sendResponse(res, statusCode, data, contentType = 'application/json') {
     }
 }
 
+// 获取默认等级配置
+function getDefaultLevelConfig() {
+    return {
+        levels: [
+            { level: 1, name: "新手勇士 🟢", required_exp: 0, required_evals: 0 },
+            { level: 2, name: "初级勇士 🔵", required_exp: 50, required_evals: 3 },
+            { level: 3, name: "中级勇士 🟣", required_exp: 150, required_evals: 8 },
+            { level: 4, name: "高级勇士 🟠", required_exp: 300, required_evals: 15 },
+            { level: 5, name: "专家勇士 🔴", required_exp: 500, required_evals: 25 }
+        ]
+    };
+}
+
+// 获取默认积分配置
+function getDefaultPointsConfig() {
+    return {
+        attack: { exp: 20, points: 10, desc: "完成出击" },
+        user_eval_12: { exp: 30, points: 25, desc: "完成12项按钮评价" },
+        merchant_eval: { exp: 25, points: 20, desc: "商家评价用户" },
+        text_eval: { exp: 15, points: 15, desc: "文字详细评价" },
+        perfect_score: { exp: 50, points: 100, desc: "获得满分评价" },
+        level_up_bonus: { exp: 0, points: 50, desc: "升级奖励" },
+        multipliers: { exp: 1.0, points: 1.0, weekend: 1.2 }
+    };
+}
+
+// 获取默认播报配置
+function getDefaultBroadcastConfig() {
+    return {
+        events: {
+            level_up: true,
+            badge_unlock: true,
+            milestone: false,
+            perfect_score: false
+        },
+        templates: {
+            level_up: `🎉 恭喜 {{user_name}} 升级了！\n⭐ Lv.{{old_level}} → Lv.{{new_level}} {{level_name}}\n💎 升级奖励：{{level_up_points}}积分\n继续努力，成为传说勇士！💪`,
+            badge_unlock: `🏆 {{user_name}} 解锁了新勋章！\n{{badge_emoji}} {{badge_name}}\n{{badge_desc}}`
+        }
+    };
+}
+
 // 等级系统API处理函数
 async function handleLevelApiRequest(pathname, method, data) {
     console.log(`🏆 [API] 等级系统API请求: ${method} ${pathname}`);
@@ -2507,32 +2549,162 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
             
             if (method === 'GET') {
-                const configs = db.prepare(`
-                    SELECT * FROM group_configs
-                    ORDER BY created_at DESC
-                `).all();
+                if (id) {
+                    // 获取单个群组配置
+                    const config = db.prepare(`
+                        SELECT * FROM group_configs WHERE group_id = ?
+                    `).get(id);
+                    
+                    if (!config) {
+                        // 如果不存在，创建默认配置
+                        const defaultConfig = {
+                            group_id: id,
+                            group_name: id,
+                            level_config: JSON.stringify(getDefaultLevelConfig()),
+                            points_config: JSON.stringify(getDefaultPointsConfig()),
+                            broadcast_config: JSON.stringify(getDefaultBroadcastConfig()),
+                            created_at: Date.now() / 1000,
+                            updated_at: Date.now() / 1000
+                        };
+                        
+                        db.prepare(`
+                            INSERT INTO group_configs 
+                            (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        `).run(
+                            defaultConfig.group_id,
+                            defaultConfig.group_name,
+                            defaultConfig.level_config,
+                            defaultConfig.points_config,
+                            defaultConfig.broadcast_config,
+                            defaultConfig.created_at,
+                            defaultConfig.updated_at
+                        );
+                        
+                        return { success: true, data: defaultConfig };
+                    }
+                    
+                    return { success: true, data: config };
+                } else {
+                    // 获取所有群组配置
+                    const configs = db.prepare(`
+                        SELECT * FROM group_configs
+                        ORDER BY created_at DESC
+                    `).all();
+                    
+                    return { success: true, data: configs };
+                }
+            } else if (method === 'POST' && !id) {
+                // 创建新群组配置
+                const { group_id, group_name } = data;
                 
-                return { success: true, data: configs };
-            } else if (method === 'PUT' && id) {
-                // 更新群组配置
-                const { level_config, points_config, broadcast_config } = data;
+                if (!group_id) {
+                    return { success: false, error: '群组ID不能为空' };
+                }
                 
                 try {
                     db.prepare(`
-                        UPDATE group_configs 
-                        SET level_config = ?, points_config = ?, broadcast_config = ?, updated_at = ?
-                        WHERE group_id = ?
+                        INSERT INTO group_configs 
+                        (group_id, group_name, level_config, points_config, broadcast_config, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     `).run(
-                        JSON.stringify(level_config),
-                        JSON.stringify(points_config),
-                        JSON.stringify(broadcast_config),
+                        group_id,
+                        group_name || group_id,
+                        JSON.stringify(getDefaultLevelConfig()),
+                        JSON.stringify(getDefaultPointsConfig()),
+                        JSON.stringify(getDefaultBroadcastConfig()),
                         Date.now() / 1000,
-                        id
+                        Date.now() / 1000
                     );
+                    
+                    return { success: true, message: '群组配置创建成功' };
+                } catch (error) {
+                    return { success: false, error: '群组配置创建失败: ' + error.message };
+                }
+            } else if (method === 'PUT' && id) {
+                // 更新群组配置
+                const { level_config, points_config, broadcast_config, group_name } = data;
+                
+                try {
+                    // 构建动态SQL
+                    const updates = [];
+                    const params = [];
+                    
+                    if (level_config !== undefined) {
+                        updates.push('level_config = ?');
+                        params.push(typeof level_config === 'string' ? level_config : JSON.stringify(level_config));
+                    }
+                    
+                    if (points_config !== undefined) {
+                        updates.push('points_config = ?');
+                        params.push(typeof points_config === 'string' ? points_config : JSON.stringify(points_config));
+                    }
+                    
+                    if (broadcast_config !== undefined) {
+                        updates.push('broadcast_config = ?');
+                        params.push(typeof broadcast_config === 'string' ? broadcast_config : JSON.stringify(broadcast_config));
+                    }
+                    
+                    if (group_name !== undefined) {
+                        updates.push('group_name = ?');
+                        params.push(group_name);
+                    }
+                    
+                    if (updates.length === 0) {
+                        return { success: false, error: '没有要更新的字段' };
+                    }
+                    
+                    updates.push('updated_at = ?');
+                    params.push(Date.now() / 1000);
+                    params.push(id);
+                    
+                    const sql = `UPDATE group_configs SET ${updates.join(', ')} WHERE group_id = ?`;
+                    db.prepare(sql).run(...params);
                     
                     return { success: true, message: '群组配置更新成功' };
                 } catch (error) {
                     return { success: false, error: '配置更新失败: ' + error.message };
+                }
+            } else if (method === 'DELETE' && id) {
+                // 删除群组配置
+                try {
+                    db.prepare('DELETE FROM group_configs WHERE group_id = ?').run(id);
+                    return { success: true, message: '群组配置删除成功' };
+                } catch (error) {
+                    return { success: false, error: '群组配置删除失败: ' + error.message };
+                }
+            }
+        }
+        
+        // 群组配置子路径API
+        if (endpoint === 'groups' && id && pathParts[5] === 'config') {
+            const configType = pathParts[6]; // level, points, broadcast
+            
+            if (method === 'GET') {
+                const config = db.prepare(`
+                    SELECT ${configType}_config FROM group_configs WHERE group_id = ?
+                `).get(id);
+                
+                if (!config) {
+                    return { success: false, error: '群组配置不存在' };
+                }
+                
+                return { 
+                    success: true, 
+                    data: JSON.parse(config[`${configType}_config`])
+                };
+            } else if (method === 'PUT') {
+                try {
+                    const sql = `UPDATE group_configs SET ${configType}_config = ?, updated_at = ? WHERE group_id = ?`;
+                    db.prepare(sql).run(
+                        JSON.stringify(data),
+                        Date.now() / 1000,
+                        id
+                    );
+                    
+                    return { success: true, message: `${configType}配置更新成功` };
+                } catch (error) {
+                    return { success: false, error: `${configType}配置更新失败: ` + error.message };
                 }
             }
         }

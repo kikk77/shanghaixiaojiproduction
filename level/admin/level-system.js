@@ -6,6 +6,9 @@ let pageSize = 20;
 let levelChart = null;
 let allUsers = [];
 let allBadges = [];
+let currentUserId = null;
+let currentGroupId = 'default';
+let groupConfigs = {};
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -16,6 +19,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 加载统计数据
     loadStats();
+    
+    // 加载初始数据
+    loadInitialData();
     
     // 初始化标签页
     initTabs();
@@ -160,7 +166,7 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
     
     // 更新内容
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -173,15 +179,55 @@ function switchTab(tabName) {
         case 'users':
             loadUsers();
             break;
+        case 'levels':
+            loadLevelConfig();
+            break;
+        case 'rewards':
+            loadRewardsConfig();
+            break;
         case 'badges':
             loadBadges();
             break;
-        case 'config':
-            loadConfig();
+        case 'broadcast':
+            loadBroadcastConfig();
             break;
-        case 'ranking':
-            loadStats(); // 重新加载统计数据以更新排行榜
+        case 'groups':
+            loadGroups();
             break;
+        case 'data':
+            loadDataManagement();
+            break;
+    }
+}
+
+// 加载初始数据
+async function loadInitialData() {
+    try {
+        // 加载群组列表
+        const response = await fetch('/api/level/groups');
+        const result = await response.json();
+        
+        if (result.success) {
+            const groups = result.data;
+            
+            // 更新群组选择器
+            const selectors = ['levelGroupSelect', 'sourceGroup'];
+            selectors.forEach(id => {
+                const select = document.getElementById(id);
+                if (select) {
+                    select.innerHTML = groups.map(g => 
+                        `<option value="${g.group_id}">${g.group_name || g.group_id}</option>`
+                    ).join('');
+                }
+            });
+            
+            // 保存群组配置
+            groups.forEach(g => {
+                groupConfigs[g.group_id] = g;
+            });
+        }
+    } catch (error) {
+        console.error('加载初始数据失败:', error);
     }
 }
 
@@ -423,26 +469,110 @@ function renderBadgesList(badges) {
 
 // 显示创建勋章模态框
 function showCreateBadgeModal() {
-    document.getElementById('createBadgeForm').reset();
     document.getElementById('createBadgeModal').style.display = 'block';
+    updateConditionForm();
+}
+
+// 更新条件表单
+function updateConditionForm() {
+    const type = document.getElementById('badgeConditionType').value;
+    const container = document.getElementById('conditionDetails');
+    
+    switch(type) {
+        case 'stat_based':
+            container.innerHTML = `
+                <div class="form-group">
+                    <label>统计字段：</label>
+                    <select id="conditionField">
+                        <option value="total_exp">总经验值</option>
+                        <option value="available_points">可用积分</option>
+                        <option value="total_points_earned">累计获得积分</option>
+                        <option value="attack_count">出击次数</option>
+                        <option value="user_eval_count">用户评价次数</option>
+                        <option value="level">等级</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>目标值：</label>
+                    <input type="number" id="conditionTarget" placeholder="例如：100">
+                </div>
+            `;
+            break;
+            
+        case 'evaluation_streak':
+            container.innerHTML = `
+                <div class="form-group">
+                    <label>评价类型：</label>
+                    <select id="streakType">
+                        <option value="perfect_score">满分评价</option>
+                        <option value="high_score">高分评价（8分以上）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>连续次数：</label>
+                    <input type="number" id="streakCount" placeholder="例如：10">
+                </div>
+            `;
+            break;
+            
+        case 'manual':
+            container.innerHTML = `
+                <div class="info-box">
+                    此勋章只能由管理员手动授予
+                </div>
+            `;
+            break;
+    }
 }
 
 // 创建勋章
 async function createBadge() {
-    const data = {
-        badge_id: document.getElementById('badgeId').value,
-        badge_name: document.getElementById('badgeName').value,
-        badge_emoji: document.getElementById('badgeEmoji').value || '🏅',
-        badge_desc: document.getElementById('badgeDesc').value,
-        rarity: document.getElementById('badgeRarity').value,
-        unlock_conditions: {} // TODO: 添加解锁条件配置
+    const type = document.getElementById('badgeConditionType').value;
+    let unlockConditions = {};
+    
+    switch(type) {
+        case 'stat_based':
+            unlockConditions = {
+                type: 'stat_based',
+                field: document.getElementById('conditionField').value,
+                operator: '>=',
+                target: parseInt(document.getElementById('conditionTarget').value)
+            };
+            break;
+            
+        case 'evaluation_streak':
+            unlockConditions = {
+                type: 'evaluation_streak',
+                streak_type: document.getElementById('streakType').value,
+                count: parseInt(document.getElementById('streakCount').value),
+                consecutive: true
+            };
+            break;
+            
+        case 'manual':
+            unlockConditions = {
+                type: 'manual',
+                desc: '仅管理员可授予'
+            };
+            break;
+    }
+    
+    const badgeData = {
+        badge_id: document.getElementById('newBadgeId').value,
+        badge_name: document.getElementById('newBadgeName').value,
+        badge_emoji: document.getElementById('newBadgeEmoji').value || '🏆',
+        badge_desc: document.getElementById('newBadgeDesc').value,
+        badge_type: type === 'manual' ? 'manual' : 'auto',
+        rarity: document.getElementById('newBadgeRarity').value,
+        unlock_conditions: JSON.stringify(unlockConditions),
+        group_id: currentGroupId
     };
     
     try {
         const response = await fetch('/api/level/badges', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(badgeData)
         });
         
         const result = await response.json();
@@ -451,7 +581,6 @@ async function createBadge() {
             showSuccess('勋章创建成功');
             closeModal('createBadgeModal');
             loadBadges();
-            loadStats(); // 重新加载统计数据
         } else {
             showError(result.error || '创建失败');
         }
@@ -608,5 +737,294 @@ window.viewUserBadges = viewUserBadges;
 window.showCreateBadgeModal = showCreateBadgeModal;
 window.createBadge = createBadge;
 window.closeModal = closeModal;
-window.saveUserEdit = saveUserEdit;
-window.loadUsers = loadUsers; 
+  window.saveUserEdit = saveUserEdit;
+  window.loadUsers = loadUsers;
+  
+  // 导出配置管理函数
+  window.removeLevelRow = removeLevelRow;
+  window.updateLevelField = updateLevelField;
+  window.addLevelRow = addLevelRow;
+  window.saveLevelConfig = saveLevelConfig;
+  window.resetLevelConfig = resetLevelConfig;
+  window.saveRewardsConfig = saveRewardsConfig;
+  window.saveBroadcastConfig = saveBroadcastConfig;
+  window.insertVariable = insertVariable;
+  window.testBroadcast = testBroadcast;
+  window.updateConditionForm = updateConditionForm;
+  window.createBadge = createBadge;
+  window.showCreateBadgeModal = showCreateBadgeModal;
+  window.showCreateGroupModal = showCreateGroupModal;
+  window.createGroup = createGroup;
+  window.editGroupConfig = editGroupConfig;
+  window.deleteGroup = deleteGroup;
+  window.exportData = exportData;
+  window.showImportModal = showImportModal;
+  window.importData = importData;
+  window.showMigrateModal = showMigrateModal;
+  window.migrateData = migrateData;
+
+// ==================== 缺失的配置管理函数 ====================
+
+// 删除等级行
+function removeLevelRow(index) {
+    const groupId = document.getElementById('levelGroupSelect').value || 'default';
+    const config = groupConfigs[groupId];
+    
+    if (!config) return;
+    
+    const levelConfig = JSON.parse(config.level_config || '{}');
+    if (!levelConfig.levels) return;
+    
+    levelConfig.levels.splice(index, 1);
+    
+    // 重新编号
+    levelConfig.levels.forEach((level, idx) => {
+        level.level = idx + 1;
+    });
+    
+    config.level_config = JSON.stringify(levelConfig);
+    renderLevelConfig(levelConfig.levels);
+}
+
+// 加载群组列表
+async function loadGroups() {
+    try {
+        const response = await fetch('/api/level/groups');
+        const result = await response.json();
+        
+        if (result.success) {
+            renderGroupsList(result.data);
+        }
+    } catch (error) {
+        console.error('加载群组列表失败:', error);
+        showError('加载群组列表失败');
+    }
+}
+
+// 渲染群组列表
+function renderGroupsList(groups) {
+    const tbody = document.getElementById('groupsTableBody');
+    
+    if (groups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">暂无群组</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = groups.map(group => `
+        <tr>
+            <td>${group.group_id}</td>
+            <td>${group.group_name || '-'}</td>
+            <td>${new Date(group.created_at * 1000).toLocaleDateString()}</td>
+            <td>
+                <button class="btn btn-primary" onclick="editGroupConfig('${group.group_id}')">配置</button>
+                <button class="btn btn-danger" onclick="deleteGroup('${group.group_id}')">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// 显示创建群组模态框
+function showCreateGroupModal() {
+    document.getElementById('createGroupModal').style.display = 'block';
+}
+
+// 创建群组
+async function createGroup() {
+    const groupId = document.getElementById('newGroupId').value;
+    const groupName = document.getElementById('newGroupName').value;
+    
+    if (!groupId) {
+        showError('群组ID不能为空');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                group_id: groupId,
+                group_name: groupName
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('群组创建成功');
+            closeModal('createGroupModal');
+            loadGroups();
+        } else {
+            showError(result.error || '创建失败');
+        }
+    } catch (error) {
+        console.error('创建群组失败:', error);
+        showError('创建失败');
+    }
+}
+
+// 编辑群组配置
+function editGroupConfig(groupId) {
+    currentGroupId = groupId;
+    switchTab('levels');
+}
+
+// 删除群组
+async function deleteGroup(groupId) {
+    if (!confirm(`确定要删除群组 ${groupId} 吗？`)) return;
+    
+    try {
+        const response = await fetch(`/api/level/groups/${groupId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('群组删除成功');
+            loadGroups();
+        } else {
+            showError(result.error || '删除失败');
+        }
+    } catch (error) {
+        console.error('删除群组失败:', error);
+        showError('删除失败');
+    }
+}
+
+// 加载数据管理
+async function loadDataManagement() {
+    // 更新界面显示
+    const container = document.getElementById('dataManagementContent');
+    container.innerHTML = `
+        <div class="data-actions">
+            <button class="btn btn-primary" onclick="exportData()">导出数据</button>
+            <button class="btn btn-warning" onclick="showImportModal()">导入数据</button>
+            <button class="btn btn-info" onclick="showMigrateModal()">群组迁移</button>
+        </div>
+    `;
+}
+
+// 导出数据
+async function exportData() {
+    const exportType = document.getElementById('exportType').value;
+    const groupId = document.getElementById('exportGroup').value || 'all';
+    
+    try {
+        const response = await fetch('/api/level/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: exportType,
+                groupId: groupId
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `level_system_export_${exportType}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showSuccess('数据导出成功');
+        } else {
+            showError('导出失败');
+        }
+    } catch (error) {
+        console.error('导出数据失败:', error);
+        showError('导出失败');
+    }
+}
+
+// 显示导入模态框
+function showImportModal() {
+    document.getElementById('importModal').style.display = 'block';
+}
+
+// 导入数据
+async function importData() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showError('请选择要导入的文件');
+        return;
+    }
+    
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        const response = await fetch('/api/level/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('数据导入成功');
+            closeModal('importModal');
+            // 刷新页面
+            location.reload();
+        } else {
+            showError(result.error || '导入失败');
+        }
+    } catch (error) {
+        console.error('导入数据失败:', error);
+        showError('导入失败：' + error.message);
+    }
+}
+
+// 显示迁移模态框
+function showMigrateModal() {
+    document.getElementById('migrateModal').style.display = 'block';
+}
+
+// 执行数据迁移
+async function migrateData() {
+    const sourceGroup = document.getElementById('sourceGroup').value;
+    const targetGroup = document.getElementById('targetGroup').value;
+    const migrateUsers = document.getElementById('migrateUsers').checked;
+    const migrateBadges = document.getElementById('migrateBadges').checked;
+    const migrateConfig = document.getElementById('migrateConfig').checked;
+    
+    if (sourceGroup === targetGroup) {
+        showError('源群组和目标群组不能相同');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/level/migrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sourceGroup,
+                targetGroup,
+                options: {
+                    users: migrateUsers,
+                    badges: migrateBadges,
+                    config: migrateConfig
+                }
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('数据迁移成功');
+            closeModal('migrateModal');
+        } else {
+            showError(result.error || '迁移失败');
+        }
+    } catch (error) {
+        console.error('数据迁移失败:', error);
+        showError('迁移失败');
+    }
+} 

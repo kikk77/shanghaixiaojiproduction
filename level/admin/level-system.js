@@ -1419,7 +1419,41 @@ async function loadGroups() {
 
 // 编辑群组配置
 function editGroupConfig(groupId) {
-    showError('群组配置编辑功能暂未实现');
+    const config = groupConfigs[groupId];
+    if (!config) {
+        showError('群组配置不存在');
+        return;
+    }
+    
+    // 设置当前编辑的群组
+    currentGroupId = groupId;
+    
+    // 填充模态框数据
+    document.getElementById('editGroupId').value = groupId;
+    document.getElementById('editGroupName').value = config.group_name || '';
+    
+    // 解析配置数据
+    let levelConfig = {};
+    let pointsConfig = {};
+    let broadcastConfig = {};
+    
+    try {
+        levelConfig = JSON.parse(config.level_config || '{}');
+        pointsConfig = JSON.parse(config.points_config || '{}');
+        broadcastConfig = JSON.parse(config.broadcast_config || '{}');
+    } catch (error) {
+        console.error('解析配置失败:', error);
+    }
+    
+    // 设置系统开关
+    const settings = levelConfig.settings || {};
+    document.getElementById('editEnableLevelSystem').checked = settings.enable_level_system !== false;
+    document.getElementById('editEnablePointsSystem').checked = settings.enable_points_system !== false;
+    document.getElementById('editEnableRanking').checked = settings.enable_ranking !== false;
+    document.getElementById('editEnableNotifications').checked = settings.enable_notifications !== false;
+    
+    // 显示模态框
+    document.getElementById('editGroupConfigModal').style.display = 'block';
 }
 
 // 数据导出功能
@@ -1692,7 +1726,97 @@ async function manualRefresh() {
     showSuccess('数据刷新完成！');
 }
 
+// 保存群组配置
+async function saveGroupConfig() {
+    const groupId = document.getElementById('editGroupId').value;
+    const groupName = document.getElementById('editGroupName').value.trim();
+    
+    if (!groupId || !groupName) {
+        showError('请填写完整的群组信息');
+        return;
+    }
+    
+    const config = groupConfigs[groupId];
+    if (!config) {
+        showError('群组配置不存在');
+        return;
+    }
+    
+    try {
+        // 更新群组基本信息和设置
+        const updateData = {
+            group_name: groupName,
+            level_config: JSON.stringify({
+                ...JSON.parse(config.level_config || '{}'),
+                settings: {
+                    enable_level_system: document.getElementById('editEnableLevelSystem').checked,
+                    enable_points_system: document.getElementById('editEnablePointsSystem').checked,
+                    enable_ranking: document.getElementById('editEnableRanking').checked,
+                    enable_notifications: document.getElementById('editEnableNotifications').checked
+                }
+            })
+        };
+        
+        const response = await fetch(`/api/level/groups/${groupId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('群组配置保存成功');
+            closeModal('editGroupConfigModal');
+            // 刷新数据
+            await refreshAllData();
+        } else {
+            showError(result.error || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存群组配置失败:', error);
+        showError('保存失败');
+    }
+}
+
+// 打开等级配置编辑器
+function openLevelConfigEditor() {
+    closeModal('editGroupConfigModal');
+    switchTab('levels');
+    const groupSelect = document.getElementById('levelGroupSelect');
+    if (groupSelect) {
+        groupSelect.value = currentGroupId;
+        loadGroupLevelConfig();
+    }
+}
+
+// 打开积分配置编辑器
+function openPointsConfigEditor() {
+    closeModal('editGroupConfigModal');
+    switchTab('rewards');
+    // 这里可以添加积分配置的特定逻辑
+}
+
+// 打开播报配置编辑器
+function openBroadcastConfigEditor() {
+    closeModal('editGroupConfigModal');
+    switchTab('broadcast');
+    // 这里可以添加播报配置的特定逻辑
+}
+
+// 打开勋章配置编辑器
+function openBadgeConfigEditor() {
+    closeModal('editGroupConfigModal');
+    switchTab('badges');
+    // 这里可以添加勋章配置的特定逻辑
+}
+
 // 确认管理员操作
 window.confirmAdminAction = confirmAdminAction;
 window.refreshAllData = refreshAllData;
 window.manualRefresh = manualRefresh;
+window.saveGroupConfig = saveGroupConfig;
+window.openLevelConfigEditor = openLevelConfigEditor;
+window.openPointsConfigEditor = openPointsConfigEditor;
+window.openBroadcastConfigEditor = openBroadcastConfigEditor;
+window.openBadgeConfigEditor = openBadgeConfigEditor;

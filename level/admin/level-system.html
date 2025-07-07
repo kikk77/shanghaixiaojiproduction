@@ -707,6 +707,61 @@
     <!-- 消息容器 -->
     <div id="messageContainer"></div>
     
+    <!-- 群组配置编辑模态框 -->
+    <div id="editGroupConfigModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="modal-close" onclick="closeModal('editGroupConfigModal')">&times;</span>
+            <h2>⚙️ 编辑群组配置</h2>
+            
+            <div class="form-section">
+                <h3>基本信息</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>群组ID：</label>
+                        <input type="text" id="editGroupId" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>群组名称：</label>
+                        <input type="text" id="editGroupName" placeholder="请输入群组名称">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h3>系统设置</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label><input type="checkbox" id="editEnableLevelSystem"> 启用等级系统</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="editEnablePointsSystem"> 启用积分系统</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="editEnableRanking"> 启用排行榜</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="editEnableNotifications"> 启用通知播报</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h3>快速配置</h3>
+                <div class="form-grid">
+                    <button class="btn btn-primary" onclick="openLevelConfigEditor()">📊 等级配置</button>
+                    <button class="btn btn-primary" onclick="openPointsConfigEditor()">💰 积分配置</button>
+                    <button class="btn btn-primary" onclick="openBroadcastConfigEditor()">📢 播报配置</button>
+                    <button class="btn btn-primary" onclick="openBadgeConfigEditor()">🏆 勋章配置</button>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editGroupConfigModal')">取消</button>
+                <button class="btn btn-success" onclick="saveGroupConfig()">💾 保存配置</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 管理员密码验证模态框 -->
     <div id="adminPasswordModal" class="modal">
         <div class="modal-content">

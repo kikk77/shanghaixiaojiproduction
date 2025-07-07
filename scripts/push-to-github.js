@@ -79,6 +79,14 @@ async function pushToGithub() {
   try {
     console.log('开始强制推送到finalversion仓库...');
     
+    // 检查远程仓库是否存在
+    try {
+      execSync('git remote get-url finalversion', { stdio: 'inherit' });
+    } catch (error) {
+      console.log('添加finalversion远程仓库...');
+      execSync('git remote add finalversion https://github.com/kikk77/06200217uploadfinalversion.git', { stdio: 'inherit' });
+    }
+    
     // 确保我们在正确的分支上
     execSync('git checkout main', { stdio: 'inherit' });
     
@@ -86,10 +94,12 @@ async function pushToGithub() {
     execSync('git add .', { stdio: 'inherit' });
     
     // 提交更改
-    execSync('git commit -m "force push: 强制推送所有更改"', { stdio: 'inherit' });
+    const date = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    execSync(`git commit -m "force push: 强制推送所有更改 - ${date}"`, { stdio: 'inherit' });
     
     // 强制推送到finalversion仓库
-    execSync('git push finalversion main --force', { stdio: 'inherit' });
+    console.log('正在强制推送到finalversion仓库...');
+    execSync('git push -f finalversion main', { stdio: 'inherit' });
     
     console.log('✅ 成功推送到finalversion仓库！');
   } catch (error) {

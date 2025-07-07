@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
@@ -58,17 +58,13 @@ class LevelDatabaseManager {
     
     initializeDatabase() {
         try {
-            // 创建数据库连接
-            this.db = new sqlite3.Database(this.dbPath, (err) => {
-                if (err) {
-                    console.error('❌ 等级系统数据库连接失败:', err);
-                    throw err;
-                }
-                console.log('✅ 等级系统数据库连接成功');
-            });
+            // 创建数据库连接（使用better-sqlite3，与现有项目保持一致）
+            this.db = new Database(this.dbPath);
+            console.log('✅ 等级系统数据库连接成功');
             
-            // 启用外键约束
-            this.db.run('PRAGMA foreign_keys = ON');
+            // 启用外键约束和WAL模式（与现有项目保持一致）
+            this.db.pragma('foreign_keys = ON');
+            this.db.pragma('journal_mode = WAL');
             
             // 创建表结构
             this.createTables();
@@ -181,21 +177,21 @@ class LevelDatabaseManager {
             'CREATE INDEX IF NOT EXISTS idx_badge_definitions_group ON badge_definitions(group_id, status)'
         ];
         
-        // 执行创建表和索引
+        // 执行创建表和索引（使用better-sqlite3的同步方式）
         tables.forEach(sql => {
-            this.db.run(sql, (err) => {
-                if (err) {
-                    console.error('创建表失败:', err);
-                }
-            });
+            try {
+                this.db.exec(sql);
+            } catch (err) {
+                console.error('创建表失败:', err);
+            }
         });
         
         indexes.forEach(sql => {
-            this.db.run(sql, (err) => {
-                if (err) {
-                    console.error('创建索引失败:', err);
-                }
-            });
+            try {
+                this.db.exec(sql);
+            } catch (err) {
+                console.error('创建索引失败:', err);
+            }
         });
         
         console.log('✅ 等级系统数据库表结构创建完成');
@@ -212,13 +208,12 @@ class LevelDatabaseManager {
     // 关闭数据库连接
     close() {
         if (this.db) {
-            this.db.close((err) => {
-                if (err) {
-                    console.error('关闭等级系统数据库失败:', err);
-                } else {
-                    console.log('等级系统数据库已关闭');
-                }
-            });
+            try {
+                this.db.close();
+                console.log('等级系统数据库已关闭');
+            } catch (err) {
+                console.error('关闭等级系统数据库失败:', err);
+            }
         }
     }
 }

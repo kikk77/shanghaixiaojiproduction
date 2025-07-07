@@ -91,28 +91,27 @@ class LevelSystemInitializer {
             status: 'active'
         };
         
-        return new Promise((resolve, reject) => {
-            db.run(`
+        try {
+            const stmt = db.prepare(`
                 INSERT OR REPLACE INTO group_configs 
                 (group_id, group_name, level_config, points_config, broadcast_config, status)
                 VALUES (?, ?, ?, ?, ?, ?)
-            `, [
+            `);
+            
+            stmt.run(
                 config.group_id, 
                 config.group_name, 
                 config.level_config, 
                 config.points_config,
                 config.broadcast_config,
                 config.status
-            ], (err) => {
-                if (err) {
-                    console.error('创建默认群组配置失败:', err);
-                    reject(err);
-                } else {
-                    console.log('✅ 默认群组配置创建成功');
-                    resolve();
-                }
-            });
-        });
+            );
+            
+            console.log('✅ 默认群组配置创建成功');
+        } catch (err) {
+            console.error('创建默认群组配置失败:', err);
+            throw err;
+        }
     }
     
     async initializeDefaultBadges(levelDb) {
@@ -221,30 +220,25 @@ class LevelSystemInitializer {
         
         const groupId = process.env.GROUP_CHAT_ID || 'default';
         
-        // 使用Promise.all批量插入
-        const insertPromises = defaultBadges.map(badge => {
-            return new Promise((resolve, reject) => {
-                db.run(`
-                    INSERT OR IGNORE INTO badge_definitions 
-                    (group_id, badge_id, badge_name, badge_emoji, badge_desc, 
-                     badge_type, rarity, unlock_conditions, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-                `, [
+        // 批量插入勋章（使用better-sqlite3的事务）
+        const insertStmt = db.prepare(`
+            INSERT OR IGNORE INTO badge_definitions 
+            (group_id, badge_id, badge_name, badge_emoji, badge_desc, 
+             badge_type, rarity, unlock_conditions, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        `);
+        
+        const insertMany = db.transaction((badges) => {
+            for (const badge of badges) {
+                insertStmt.run(
                     groupId, badge.badge_id, badge.badge_name, badge.badge_emoji,
                     badge.badge_desc, badge.badge_type, badge.rarity, badge.unlock_conditions
-                ], (err) => {
-                    if (err) {
-                        console.error(`创建勋章 ${badge.badge_id} 失败:`, err);
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
+                );
+            }
         });
         
         try {
-            await Promise.all(insertPromises);
+            insertMany(defaultBadges);
             console.log('✅ 默认勋章初始化完成');
         } catch (error) {
             console.error('❌ 勋章初始化失败:', error);
@@ -261,23 +255,19 @@ class LevelSystemInitializer {
             { key: 'database_version', value: '1', description: '数据库架构版本' }
         ];
         
-        const insertPromises = metaData.map(meta => {
-            return new Promise((resolve, reject) => {
-                db.run(`
-                    INSERT OR REPLACE INTO level_meta (key, value, description)
-                    VALUES (?, ?, ?)
-                `, [meta.key, meta.value, meta.description], (err) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
+        const insertStmt = db.prepare(`
+            INSERT OR REPLACE INTO level_meta (key, value, description)
+            VALUES (?, ?, ?)
+        `);
+        
+        const insertMany = db.transaction((metas) => {
+            for (const meta of metas) {
+                insertStmt.run(meta.key, meta.value, meta.description);
+            }
         });
         
         try {
-            await Promise.all(insertPromises);
+            insertMany(metaData);
             console.log('✅ 系统元信息插入完成');
         } catch (error) {
             console.error('❌ 元信息插入失败:', error);

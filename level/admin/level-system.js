@@ -1436,38 +1436,61 @@ async function createGroup() {
     const groupId = document.getElementById('newGroupId').value.trim();
     const groupName = document.getElementById('newGroupName').value.trim();
     
+    // 验证输入
     if (!groupId || !groupName) {
         showError('请填写完整的群组信息');
         return;
     }
     
+    // 验证群组ID格式
+    if (!groupId.startsWith('-100')) {
+        showError('群组ID格式不正确，应该以-100开头（例如：-1002793326688）');
+        return;
+    }
+    
+    // 验证群组ID是否为数字
+    if (!/^-\d+$/.test(groupId)) {
+        showError('群组ID应该是负数（例如：-1002793326688）');
+        return;
+    }
+    
     try {
+        showMessage('正在创建群组配置...', 'info');
+        
         const response = await fetch('/api/level/groups', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                groupId: groupId,
-                groupName: groupName
+                group_id: groupId,
+                group_name: groupName
             })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            showSuccess('群组创建成功');
+            showSuccess(`群组配置创建成功！现在可以在群组中使用 /level 命令了`);
             closeModal('createGroupModal');
+            
+            // 清空表单
+            document.getElementById('newGroupId').value = '';
+            document.getElementById('newGroupName').value = '';
+            
             // 自动刷新相关数据
             await Promise.all([
                 loadGroups(),
                 loadInitialData(),
                 loadStats()
             ]);
+            
+            // 显示成功提示
+            showMessage('🎉 群组配置创建完成！您现在可以：\n1. 在群组中发送 /level 命令测试\n2. 通过其他标签页配置等级、积分、勋章等', 'success');
         } else {
             showError(result.error || '创建失败');
         }
     } catch (error) {
         console.error('创建群组失败:', error);
-        showError('创建失败');
+        showError('网络错误，创建失败');
     }
 }
 
@@ -1487,18 +1510,37 @@ async function loadGroups() {
             });
             
             const tbody = document.getElementById('groupsTableBody');
+            const guideElement = document.getElementById('groupsGuide');
+            
             if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无群组</td></tr>';
+                // 没有群组时显示指南和空状态
+                if (guideElement) {
+                    guideElement.style.display = 'block';
+                }
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px;">
+                            <div style="color: #666;">
+                                <h4>🎮 还没有群组配置</h4>
+                                <p>点击上方的"➕ 创建新群组"按钮开始配置</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
             } else {
+                // 有群组时隐藏指南，显示群组列表
+                if (guideElement) {
+                    guideElement.style.display = 'none';
+                }
                 tbody.innerHTML = result.data.map(group => `
                     <tr>
-                        <td>${group.group_id}</td>
+                        <td style="font-family: monospace; font-weight: bold;">${group.group_id}</td>
                         <td>${group.group_name || '-'}</td>
                         <td>-</td>
-                        <td>活跃</td>
+                        <td><span style="color: #28a745;">●</span> 活跃</td>
                         <td>
-                            <button class="btn btn-primary" onclick="editGroupConfig('${group.group_id}')">配置</button>
-                            <button class="btn btn-danger" onclick="deleteGroup('${group.group_id}')">删除</button>
+                            <button class="btn btn-primary btn-sm" onclick="editGroupConfig('${group.group_id}')">⚙️ 配置</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteGroup('${group.group_id}')" style="margin-left: 5px;">🗑️ 删除</button>
                         </td>
                     </tr>
                 `).join('');

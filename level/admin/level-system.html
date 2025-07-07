@@ -530,6 +530,26 @@
             <div class="form-section">
                 <h2>👥 群组管理</h2>
                 
+                <!-- 使用指南 -->
+                <div id="groupsGuide" class="info-box" style="background: #e8f4fd; border: 1px solid #b3d4fc; margin-bottom: 20px;">
+                    <h3 style="color: #1565c0; margin-top: 0;">🎮 开始使用等级系统</h3>
+                    <div style="color: #1565c0;">
+                        <p><strong>第一次使用？</strong>请按以下步骤操作：</p>
+                        <ol style="margin: 10px 0; padding-left: 20px;">
+                            <li>点击"➕ 创建新群组"按钮</li>
+                            <li>输入您的Telegram群组ID（例如：-1002793326688）</li>
+                            <li>设置群组名称（例如：上海小鸡管家群）</li>
+                            <li>保存后即可在群组中使用 <code>/level</code> 命令</li>
+                        </ol>
+                        <p><strong>💡 如何获取群组ID？</strong></p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>在群组中发送消息，查看Bot日志</li>
+                            <li>使用 @userinfobot 等机器人获取</li>
+                            <li>群组ID通常以 -100 开头</li>
+                        </ul>
+                    </div>
+                </div>
+                
                 <table class="config-table">
                     <thead>
                         <tr>
@@ -545,8 +565,14 @@
                     </tbody>
                 </table>
                 
-                <button class="btn btn-primary" onclick="showCreateGroupModal()">➕ 创建新群组</button>
-                <button class="btn btn-success" onclick="loadGroups()" style="margin-left: 10px;">🔄 刷新列表</button>
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="showCreateGroupModal()" style="font-size: 16px; padding: 12px 24px;">
+                        ➕ 创建新群组
+                    </button>
+                    <button class="btn btn-success" onclick="loadGroups()" style="margin-left: 10px;">
+                        🔄 刷新列表
+                    </button>
+                </div>
             </div>
         </div>
         
@@ -731,22 +757,48 @@
     
     <!-- 创建群组模态框 -->
     <div id="createGroupModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <span class="modal-close" onclick="closeModal('createGroupModal')">&times;</span>
-            <h2>➕ 创建新群组</h2>
+            <h2>➕ 创建新群组配置</h2>
             
-            <div class="form-group">
-                <label>群组ID：</label>
-                <input type="text" id="newGroupId" placeholder="例如：-1001234567890">
-                <small style="display: block; color: #666;">请输入Telegram群组ID（通常以-100开头）</small>
+            <div class="info-box" style="background: #fff3cd; border: 1px solid #ffeaa7; margin-bottom: 20px;">
+                <h4 style="color: #856404; margin-top: 0;">📋 配置说明</h4>
+                <p style="color: #856404; margin: 5px 0;">创建群组配置后，用户就可以在对应的Telegram群组中使用等级系统功能了。</p>
             </div>
             
             <div class="form-group">
-                <label>群组名称：</label>
-                <input type="text" id="newGroupName" placeholder="例如：测试群组">
+                <label><strong>群组ID：</strong></label>
+                <input type="text" id="newGroupId" placeholder="例如：-1002793326688" style="font-family: monospace;">
+                <small style="display: block; color: #666; margin-top: 5px;">
+                    <strong>重要：</strong>请输入您的Telegram群组ID（通常以-100开头的负数）<br>
+                    💡 您可以在群组中发送任意消息，然后查看Bot日志获取群组ID
+                </small>
             </div>
             
-            <button class="btn btn-success" onclick="createGroup()">创建群组</button>
+            <div class="form-group">
+                <label><strong>群组名称：</strong></label>
+                <input type="text" id="newGroupName" placeholder="例如：上海小鸡管家群">
+                <small style="display: block; color: #666; margin-top: 5px;">
+                    用于在管理界面中识别群组，可以设置为任意友好的名称
+                </small>
+            </div>
+            
+            <div class="info-box" style="background: #e8f4fd; border: 1px solid #b3d4fc; margin: 20px 0;">
+                <h4 style="color: #1565c0; margin-top: 0;">🚀 创建后可以做什么？</h4>
+                <ul style="color: #1565c0; margin: 5px 0; padding-left: 20px;">
+                    <li>在群组中使用 <code>/level</code> 查看等级信息</li>
+                    <li>使用 <code>/badges</code> 查看勋章收集</li>
+                    <li>使用 <code>/ranking</code> 查看排行榜</li>
+                    <li>通过管理面板配置等级、积分、勋章等</li>
+                </ul>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px;">
+                <button class="btn btn-secondary" onclick="closeModal('createGroupModal')">取消</button>
+                <button class="btn btn-success" onclick="createGroup()" style="font-size: 16px; padding: 10px 20px;">
+                    ✅ 创建群组配置
+                </button>
+            </div>
         </div>
     </div>
     

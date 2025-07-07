@@ -4,22 +4,16 @@
 console.log('🔧 开始更新生产环境用户数据...');
 
 const Database = require('better-sqlite3');
-const path = require('path');
+const envHelper = require('../utils/environmentHelper');
 
 async function updateProductionUserData() {
     try {
-        // 检查环境
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-        console.log(`📊 当前环境: ${isProduction ? '生产环境' : '开发环境'}`);
+        // 使用统一的环境检测
+        envHelper.logEnvironmentInfo();
         
-        // 确定数据库路径
-        const levelDbPath = isProduction 
-            ? path.join(__dirname, '..', 'data', 'level_system.db')
-            : path.join(__dirname, '..', 'data', 'level_system_dev.db');
-            
-        const mainDbPath = isProduction 
-            ? path.join(__dirname, '..', 'data', 'marketing_bot.db')
-            : path.join(__dirname, '..', 'data', 'marketing_bot_dev.db');
+        // 使用统一的数据库路径
+        const levelDbPath = envHelper.getLevelSystemDatabasePath();
+        const mainDbPath = envHelper.getMainDatabasePath();
         
         console.log(`📂 等级数据库路径: ${levelDbPath}`);
         console.log(`📂 主数据库路径: ${mainDbPath}`);

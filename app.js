@@ -61,7 +61,8 @@ async function startFullApplication() {
         console.log(`🔄 开始启动完整应用服务...`);
         
         // 运行EAV完整修复脚本
-        if (process.env.NODE_ENV === 'production') {
+        const currentEnv = process.env.NODE_ENV || process.env.RAILWAY_ENVIRONMENT_NAME || 'development';
+        if (currentEnv === 'production') {
             console.log(`🔧 运行EAV完整修复脚本...`);
             try {
                 require('./scripts/complete-eav-fix');
@@ -94,7 +95,8 @@ async function startFullApplication() {
                 await initializer.initialize();
                 
                 // 3. 更新用户数据（生产环境）
-                if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+                const nodeEnv = process.env.NODE_ENV || process.env.RAILWAY_ENVIRONMENT_NAME || 'development';
+                if (nodeEnv === 'production' || nodeEnv === 'staging') {
                     console.log(`🔄 更新生产环境用户数据...`);
                     try {
                         require('./scripts/update-production-user-data');

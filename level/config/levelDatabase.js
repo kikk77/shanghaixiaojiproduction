@@ -206,20 +206,40 @@ class LevelDatabaseManager {
     // 检查表结构是否为新版本（简化版本）
     checkTableStructure() {
         try {
-            // 检查user_levels表是否为新结构（user_id为主键，没有group_id）
-            const tableInfo = this.db.prepare("PRAGMA table_info(user_levels)").all();
+            // 检查user_levels表是否存在
+            const tableExists = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_levels'").get();
             
-            if (tableInfo.length === 0) {
-                // 表不存在，需要创建
+            if (!tableExists) {
+                console.log('⚠️  user_levels表不存在，将创建新的简化结构');
                 return false;
             }
             
-            // 检查是否有group_id列
+            // 检查user_levels表结构
+            const tableInfo = this.db.prepare("PRAGMA table_info(user_levels)").all();
+            
+            // 检查是否有group_id列（旧结构）
             const hasGroupId = tableInfo.some(col => col.name === 'group_id');
-            const userIdIsPrimary = tableInfo.some(col => col.name === 'user_id' && col.pk === 1);
+            
+            // 检查是否有复合主键（旧结构有id和user_id, group_id的UNIQUE约束）
+            const hasIdPrimary = tableInfo.some(col => col.name === 'id' && col.pk === 1);
+            const hasUserIdPrimary = tableInfo.some(col => col.name === 'user_id' && col.pk === 1);
+            
+            if (hasGroupId || hasIdPrimary) {
+                console.log('⚠️  检测到旧的表结构（包含group_id或复合主键）');
+                console.log('💡 需要运行重构脚本来安全迁移数据:');
+                console.log('   node level/scripts/safe-restructure-level-tables.js');
+                console.log('⚠️  等级系统将暂时禁用，直到完成重构');
+                this.enabled = false;
+                return false;
+            }
             
             // 新结构应该是：user_id为主键且没有group_id列
-            return userIdIsPrimary && !hasGroupId;
+            if (hasUserIdPrimary && !hasGroupId) {
+                console.log('✅ 数据库表结构已是简化版本');
+                return true;
+            }
+            
+            return false;
             
         } catch (error) {
             console.error('检查表结构失败:', error);

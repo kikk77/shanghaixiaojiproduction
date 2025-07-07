@@ -4809,21 +4809,26 @@ function clearBotUsernameCache() {
 // 等级系统命令处理函数
 async function handleLevelCommand(userId, chatId, username) {
     try {
-        // 使用当前聊天ID作为群组ID
-        const groupId = chatId.toString();
+        // 确保是私聊消息
+        if (chatId < 0) {
+            bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /level 命令');
+            return;
+        }
+        
         const levelServiceHook = require('../level/services/levelServiceHook').getInstance();
         
-        const levelInfo = await levelServiceHook.getUserLevelInfo(userId, groupId);
+        // 获取用户等级信息（使用用户ID作为主键，不依赖群组）
+        const levelInfo = await levelServiceHook.getUserLevelInfo(userId);
         
         if (!levelInfo || !levelInfo.profile) {
             // 用户还没有等级数据，创建初始档案
             bot.sendMessage(chatId, '🎮 正在初始化您的等级档案...');
             
-            // 触发一个初始化事件
-            await levelServiceHook.grantReward(userId, groupId, 0, 0, '系统初始化');
+            // 触发一个初始化事件（不需要群组ID）
+            await levelServiceHook.grantReward(userId, null, 0, 0, '系统初始化');
             
             // 重新获取
-            const newLevelInfo = await levelServiceHook.getUserLevelInfo(userId, groupId);
+            const newLevelInfo = await levelServiceHook.getUserLevelInfo(userId);
             if (!newLevelInfo) {
                 bot.sendMessage(chatId, '❌ 初始化失败，请稍后重试');
                 return;
@@ -4871,11 +4876,15 @@ async function displayLevelInfo(chatId, levelInfo) {
 
 async function handleBadgesCommand(userId, chatId) {
     try {
-        // 使用当前聊天ID作为群组ID
-        const groupId = chatId.toString();
+        // 确保是私聊消息
+        if (chatId < 0) {
+            bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /badges 命令');
+            return;
+        }
+        
         const badgeService = require('../level/services/badgeService').getInstance();
         
-        const badgeWall = await badgeService.getUserBadgeWall(userId, groupId);
+        const badgeWall = await badgeService.getUserBadgeWall(userId);
         
         if (!badgeWall) {
             bot.sendMessage(chatId, '❌ 获取勋章信息失败，请稍后重试');
@@ -4930,11 +4939,15 @@ async function handleBadgesCommand(userId, chatId) {
 
 async function handlePointsCommand(userId, chatId) {
     try {
-        // 使用当前聊天ID作为群组ID
-        const groupId = chatId.toString();
+        // 确保是私聊消息
+        if (chatId < 0) {
+            bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /points 命令');
+            return;
+        }
+        
         const levelService = require('../level/services/levelService').getInstance();
         
-        const history = await levelService.getUserPointsHistory(userId, groupId, 10);
+        const history = await levelService.getUserPointsHistory(userId, null, 10);
         
         if (history.length === 0) {
             bot.sendMessage(chatId, '📊 您还没有积分记录');
@@ -4969,8 +4982,12 @@ async function handlePointsCommand(userId, chatId) {
 
 async function handleRankingCommand(userId, chatId) {
     try {
-        // 使用当前聊天ID作为群组ID
-        const groupId = chatId.toString();
+        // 确保是私聊消息
+        if (chatId < 0) {
+            bot.sendMessage(chatId, '❌ 等级系统命令只能在私聊中使用，请私信机器人使用 /ranking 命令');
+            return;
+        }
+        
         const levelDbManager = require('../level/config/levelDatabase').getInstance();
         const db = levelDbManager.getDatabase();
         
@@ -4979,14 +4996,13 @@ async function handleRankingCommand(userId, chatId) {
             return;
         }
         
-        // 获取前10名用户
+        // 获取前10名用户（不按群组区分）
         const topUsers = db.prepare(`
             SELECT user_id, display_name, level, total_exp, user_eval_count
             FROM user_levels
-            WHERE group_id = ?
             ORDER BY level DESC, total_exp DESC
             LIMIT 10
-        `).all(groupId);
+        `).all();
         
         if (topUsers.length === 0) {
             bot.sendMessage(chatId, '📊 暂无排行榜数据');
@@ -5004,16 +5020,19 @@ async function handleRankingCommand(userId, chatId) {
         });
         
         // 获取当前用户的排名
-        const userRank = db.prepare(`
-            SELECT COUNT(*) + 1 as rank
-            FROM user_levels
-            WHERE group_id = ? AND (level > ? OR (level = ? AND total_exp > ?))
-        `).get(groupId, 0, 0, 0);
-        
         const currentUser = db.prepare(`
             SELECT * FROM user_levels
-            WHERE user_id = ? AND group_id = ?
-        `).get(userId, groupId);
+            WHERE user_id = ?
+        `).get(userId);
+        
+        let userRank = null;
+        if (currentUser) {
+            userRank = db.prepare(`
+                SELECT COUNT(*) + 1 as rank
+                FROM user_levels
+                WHERE level > ? OR (level = ? AND total_exp > ?)
+            `).get(currentUser.level, currentUser.level, currentUser.total_exp);
+        }
         
         if (currentUser && userRank) {
             message += `\n📍 **我的排名**\n`;

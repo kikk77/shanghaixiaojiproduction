@@ -517,10 +517,10 @@ class EvaluationService {
             // 延迟加载等级系统钩子，避免循环依赖
             const levelServiceHook = require('../level/services/levelServiceHook');
             
-            // 准备钩子数据
+            // 准备钩子数据（不依赖环境变量）
             const hookData = {
                 user_id: evaluation.evaluator_id,
-                group_id: process.env.GROUP_CHAT_ID,
+                group_id: null, // 等级系统现在不依赖群组ID
                 evaluation_id: evaluationId,
                 evaluation_type: evaluation.evaluator_type === 'user' ? 'merchant' : 'user',
                 merchant_id: evaluation.evaluator_type === 'user' ? evaluation.target_id : evaluation.evaluator_id,

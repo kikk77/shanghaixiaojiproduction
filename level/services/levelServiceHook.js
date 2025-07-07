@@ -29,10 +29,10 @@ class LevelServiceHook {
                 levelActionType = 'evaluate_user';
             }
             
-            // 处理奖励
+            // 处理奖励（不依赖群组ID）
             await this.levelService.processEvaluationReward(
                 user_id,
-                group_id || process.env.GROUP_CHAT_ID,
+                group_id, // 可以为null
                 evaluation_id,
                 levelActionType
             );
@@ -41,7 +41,7 @@ class LevelServiceHook {
             if (evaluationData.merchant_id && evaluationData.merchant_id !== user_id) {
                 await this.levelService.processEvaluationReward(
                     evaluationData.merchant_id,
-                    group_id || process.env.GROUP_CHAT_ID,
+                    group_id, // 可以为null
                     evaluation_id,
                     'be_evaluated'
                 );
@@ -177,15 +177,10 @@ class LevelServiceHook {
      * 获取用户等级信息
      * 供其他服务查询使用
      */
-    async getUserLevelInfo(userId, groupId) {
+    async getUserLevelInfo(userId, groupId = null) {
         if (!this.enabled) return null;
         
         try {
-            if (!groupId) {
-                console.error('获取用户等级信息失败: groupId不能为空');
-                return null;
-            }
-            
             return await this.levelService.getUserLevelInfo(userId, groupId);
         } catch (error) {
             console.error('获取用户等级信息失败:', error);
@@ -234,11 +229,6 @@ class LevelServiceHook {
         if (!this.enabled) return false;
         
         try {
-            if (!groupId) {
-                console.error('手动奖励失败: groupId不能为空');
-                return false;
-            }
-            
             await this.levelService.updateUserRewards(
                 userId,
                 groupId,

@@ -30,8 +30,9 @@ class LevelService {
                 userProfile = await this.createUserProfile(userId, groupId);
             }
             
-            // 获取群组配置
-            const groupConfig = await this.getGroupConfig(groupId);
+            // 获取群组配置（使用用户档案中的群组ID）
+            const actualGroupId = groupId || userProfile.group_id;
+            const groupConfig = await this.getGroupConfig(actualGroupId);
             const rewardConfig = JSON.parse(groupConfig.points_config);
             
             // 计算奖励
@@ -41,7 +42,7 @@ class LevelService {
             // 更新用户数据
             const updatedProfile = await this.updateUserRewards(
                 userId, 
-                groupId, 
+                actualGroupId, 
                 reward.exp, 
                 reward.points, 
                 actionType,
@@ -51,11 +52,11 @@ class LevelService {
             // 检查升级
             const levelUpResult = await this.checkLevelUp(userProfile, updatedProfile, groupConfig);
             if (levelUpResult.leveledUp) {
-                await this.handleLevelUp(userId, groupId, levelUpResult);
+                await this.handleLevelUp(userId, actualGroupId, levelUpResult);
             }
             
             // 检查勋章解锁
-            await this.checkBadgeUnlock(userId, groupId, updatedProfile);
+            await this.checkBadgeUnlock(userId, actualGroupId, updatedProfile);
             
         } catch (error) {
             console.error('处理等级奖励失败:', error);
@@ -65,16 +66,29 @@ class LevelService {
     /**
      * 获取用户档案
      */
-    async getUserProfile(userId, groupId) {
+    async getUserProfile(userId, groupId = null) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
         try {
-            const stmt = db.prepare(`
-                SELECT * FROM user_levels 
-                WHERE user_id = ? AND group_id = ?
-            `);
-            return stmt.get(userId, groupId);
+            let stmt, result;
+            if (groupId) {
+                stmt = db.prepare(`
+                    SELECT * FROM user_levels 
+                    WHERE user_id = ? AND group_id = ?
+                `);
+                result = stmt.get(userId, groupId);
+            } else {
+                // 不指定群组时，获取用户的主档案（取第一个）
+                stmt = db.prepare(`
+                    SELECT * FROM user_levels 
+                    WHERE user_id = ? 
+                    ORDER BY created_at ASC 
+                    LIMIT 1
+                `);
+                result = stmt.get(userId);
+            }
+            return result;
         } catch (error) {
             console.error('获取用户档案失败:', error);
             return null;
@@ -84,7 +98,7 @@ class LevelService {
     /**
      * 创建新用户档案
      */
-    async createUserProfile(userId, groupId) {
+    async createUserProfile(userId, groupId = null) {
         const db = this.levelDb.getDatabase();
         if (!db) return null;
         
@@ -92,15 +106,18 @@ class LevelService {
             // 获取用户显示名称（复用现有接口）
             const userInfo = await this.getUserDisplayInfo(userId);
             
+            // 如果没有指定群组，使用'default'作为群组ID
+            const actualGroupId = groupId || 'default';
+            
             const stmt = db.prepare(`
                 INSERT INTO user_levels 
                 (user_id, group_id, display_name)
                 VALUES (?, ?, ?)
             `);
             
-            stmt.run(userId, groupId, userInfo.displayName);
+            stmt.run(userId, actualGroupId, userInfo.displayName);
             
-            return await this.getUserProfile(userId, groupId);
+            return await this.getUserProfile(userId, actualGroupId);
         } catch (error) {
             console.error('创建用户档案失败:', error);
             return null;
@@ -346,29 +363,67 @@ class LevelService {
                 `💎 升级奖励：50积分\n\n` +
                 `继续努力，成为传说勇士！💪`;
             
-            // 使用现有的bot服务发送消息
-            if (this.botService.bot) {
-                const sentMessage = await this.botService.bot.telegram.sendMessage(groupId, message, {
-                    parse_mode: 'Markdown'
-                });
-                
-                // 尝试置顶消息
+            // 获取播报目标群组
+            const targetGroups = await this.getBroadcastTargetGroups();
+            
+            if (targetGroups.length === 0) {
+                console.log('没有配置播报群组，跳过升级播报');
+                return;
+            }
+            
+            // 向所有配置的群组播报
+            for (const targetGroupId of targetGroups) {
                 try {
-                    await this.botService.bot.telegram.pinChatMessage(groupId, sentMessage.message_id);
-                    // 5秒后取消置顶
-                    setTimeout(async () => {
+                    if (this.botService.bot) {
+                        const sentMessage = await this.botService.bot.telegram.sendMessage(targetGroupId, message, {
+                            parse_mode: 'Markdown'
+                        });
+                        
+                        // 尝试置顶消息
                         try {
-                            await this.botService.bot.telegram.unpinChatMessage(groupId, sentMessage.message_id);
-                        } catch (err) {
-                            // 忽略取消置顶的错误
+                            await this.botService.bot.telegram.pinChatMessage(targetGroupId, sentMessage.message_id);
+                            // 5秒后取消置顶
+                            setTimeout(async () => {
+                                try {
+                                    await this.botService.bot.telegram.unpinChatMessage(targetGroupId, sentMessage.message_id);
+                                } catch (err) {
+                                    // 忽略取消置顶的错误
+                                }
+                            }, 5000);
+                        } catch (pinError) {
+                            console.log(`群组 ${targetGroupId} 置顶消息失败:`, pinError.message);
                         }
-                    }, 5000);
-                } catch (pinError) {
-                    console.log('置顶消息失败:', pinError.message);
+                        
+                        console.log(`升级播报成功发送到群组: ${targetGroupId}`);
+                    }
+                } catch (error) {
+                    console.error(`向群组 ${targetGroupId} 播报升级失败:`, error);
                 }
             }
         } catch (error) {
             console.error('等级系统播报失败:', error);
+        }
+    }
+    
+    /**
+     * 获取播报目标群组
+     */
+    async getBroadcastTargetGroups() {
+        const db = this.levelDb.getDatabase();
+        if (!db) return [];
+        
+        try {
+            const stmt = db.prepare(`
+                SELECT group_id FROM group_configs 
+                WHERE status = 'active' 
+                AND broadcast_enabled = 1
+                AND group_id != 'default'
+            `);
+            const groups = stmt.all();
+            return groups.map(g => g.group_id);
+        } catch (error) {
+            console.error('获取播报目标群组失败:', error);
+            return [];
         }
     }
     
@@ -389,13 +444,14 @@ class LevelService {
     /**
      * 获取用户等级信息（供Bot命令使用）
      */
-    async getUserLevelInfo(userId, groupId) {
+    async getUserLevelInfo(userId, groupId = null) {
         const userProfile = await this.getUserProfile(userId, groupId);
         if (!userProfile) {
             return null;
         }
         
-        const groupConfig = await this.getGroupConfig(groupId);
+        const actualGroupId = groupId || userProfile.group_id;
+        const groupConfig = await this.getGroupConfig(actualGroupId);
         const levelConfig = JSON.parse(groupConfig.level_config);
         const currentLevel = levelConfig.levels.find(l => l.level === userProfile.level);
         const nextLevel = levelConfig.levels.find(l => l.level === userProfile.level + 1);
@@ -411,18 +467,30 @@ class LevelService {
     /**
      * 获取用户积分历史
      */
-    async getUserPointsHistory(userId, groupId, limit = 10) {
+    async getUserPointsHistory(userId, groupId = null, limit = 10) {
         const db = this.levelDb.getDatabase();
         if (!db) return [];
         
         try {
-            const stmt = db.prepare(`
-                SELECT * FROM points_log 
-                WHERE user_id = ? AND group_id = ?
-                ORDER BY timestamp DESC 
-                LIMIT ?
-            `);
-            return stmt.all(userId, groupId, limit);
+            let stmt;
+            if (groupId) {
+                stmt = db.prepare(`
+                    SELECT * FROM points_log 
+                    WHERE user_id = ? AND group_id = ?
+                    ORDER BY timestamp DESC 
+                    LIMIT ?
+                `);
+                return stmt.all(userId, groupId, limit);
+            } else {
+                // 不指定群组时，获取用户的所有积分历史
+                stmt = db.prepare(`
+                    SELECT * FROM points_log 
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC 
+                    LIMIT ?
+                `);
+                return stmt.all(userId, limit);
+            }
         } catch (error) {
             console.error('获取积分历史失败:', error);
             return [];

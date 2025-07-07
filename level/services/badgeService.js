@@ -92,20 +92,34 @@ class BadgeService {
     /**
      * 获取用户勋章
      */
-    async getUserBadges(userId, groupId) {
+    async getUserBadges(userId, groupId = null) {
         const db = this.levelDb.getDatabase();
         if (!db) return [];
         
         try {
-            const stmt = db.prepare(`
-                SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
-                FROM user_badges ub
-                JOIN badge_definitions bd ON ub.badge_id = bd.badge_id 
-                    AND (bd.group_id = ub.group_id OR bd.group_id = 'default')
-                WHERE ub.user_id = ? AND ub.group_id = ?
-                ORDER BY ub.unlocked_at DESC
-            `);
-            return stmt.all(userId, groupId);
+            let stmt;
+            if (groupId) {
+                stmt = db.prepare(`
+                    SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
+                    FROM user_badges ub
+                    JOIN badge_definitions bd ON ub.badge_id = bd.badge_id 
+                        AND (bd.group_id = ub.group_id OR bd.group_id = 'default')
+                    WHERE ub.user_id = ? AND ub.group_id = ?
+                    ORDER BY ub.unlocked_at DESC
+                `);
+                return stmt.all(userId, groupId);
+            } else {
+                // 不指定群组时，获取用户的所有勋章
+                stmt = db.prepare(`
+                    SELECT ub.*, bd.badge_name, bd.badge_emoji, bd.badge_desc, bd.rarity
+                    FROM user_badges ub
+                    JOIN badge_definitions bd ON ub.badge_id = bd.badge_id 
+                        AND (bd.group_id = ub.group_id OR bd.group_id = 'default')
+                    WHERE ub.user_id = ?
+                    ORDER BY ub.unlocked_at DESC
+                `);
+                return stmt.all(userId);
+            }
         } catch (error) {
             console.error('获取用户勋章失败:', error);
             return [];
@@ -282,11 +296,26 @@ class BadgeService {
             
             message += `继续努力，收集更多勋章！🏅`;
             
-            // 发送消息
-            if (botService.bot) {
-                await botService.bot.telegram.sendMessage(groupId, message, {
-                    parse_mode: 'Markdown'
-                });
+            // 获取播报目标群组
+            const targetGroups = await levelService.getBroadcastTargetGroups();
+            
+            if (targetGroups.length === 0) {
+                console.log('没有配置播报群组，跳过勋章解锁播报');
+                return;
+            }
+            
+            // 向所有配置的群组播报
+            for (const targetGroupId of targetGroups) {
+                try {
+                    if (botService.bot) {
+                        await botService.bot.telegram.sendMessage(targetGroupId, message, {
+                            parse_mode: 'Markdown'
+                        });
+                        console.log(`勋章解锁播报成功发送到群组: ${targetGroupId}`);
+                    }
+                } catch (error) {
+                    console.error(`向群组 ${targetGroupId} 播报勋章解锁失败:`, error);
+                }
             }
             
         } catch (error) {
@@ -311,19 +340,28 @@ class BadgeService {
     /**
      * 获取用户勋章墙
      */
-    async getUserBadgeWall(userId, groupId) {
+    async getUserBadgeWall(userId, groupId = null) {
         try {
             // 获取用户所有勋章
             const userBadges = await this.getUserBadges(userId, groupId);
             
+            // 如果没有指定群组，使用用户的第一个群组或默认群组
+            let actualGroupId = groupId;
+            if (!actualGroupId && userBadges.length > 0) {
+                actualGroupId = userBadges[0].group_id;
+            }
+            if (!actualGroupId) {
+                actualGroupId = 'default';
+            }
+            
             // 获取所有可用勋章
-            const allBadges = await this.getAvailableBadges(groupId);
+            const allBadges = await this.getAvailableBadges(actualGroupId);
             
             // 统计信息
             const stats = {
                 total: allBadges.length,
                 unlocked: userBadges.length,
-                percentage: Math.round((userBadges.length / allBadges.length) * 100)
+                percentage: allBadges.length > 0 ? Math.round((userBadges.length / allBadges.length) * 100) : 0
             };
             
             // 按稀有度分组

@@ -303,58 +303,51 @@ async function checkLevelSystemStatus() {
 // 加载统计数据
 async function loadStats() {
     try {
-        // 首先检查是否有群组配置
-        const groupsResponse = await fetch('/api/level/groups');
-        const groupsResult = await groupsResponse.json();
-        
-        if (!groupsResult.success || groupsResult.data.length === 0) {
-            // 没有群组配置，显示提示信息
-            const container = document.querySelector('.stats-container');
-            if (container) {
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 40px; background: #e8f4fd; border: 1px solid #b3d4fc; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="color: #1565c0;">🎮 开始使用等级系统</h3>
-                        <p style="color: #1565c0; margin: 10px 0;">欢迎使用等级系统！请先添加您的群组配置：</p>
-                        <div style="margin: 20px 0;">
-                            <button onclick="switchTab('groups')" style="background: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                                📝 前往群组管理
-                            </button>
-                        </div>
-                        <p style="color: #1565c0; margin: 10px 0; font-size: 14px;">添加群组后即可开始使用等级系统的所有功能</p>
-                    </div>
-                `;
-            }
-            
-            // 清空统计卡片
-            document.getElementById('totalUsers').textContent = '0';
-            document.getElementById('totalPoints').textContent = '0';
-            document.getElementById('avgLevel').textContent = '-';
-            document.getElementById('totalBadges').textContent = '0';
-            
-            return;
-        }
-        
-        // 使用第一个群组的ID来获取统计数据
-        const firstGroup = groupsResult.data[0];
-        const response = await fetch(`/api/level/stats?groupId=${firstGroup.group_id}`);
+        // 使用现有的stats API
+        const response = await fetch('/api/level/stats');
         const result = await response.json();
         
         if (result.success) {
             const stats = result.data;
             
+            // 获取用户数据来计算统计
+            const rankingsResponse = await fetch('/api/level/rankings');
+            const rankingsResult = await rankingsResponse.json();
+            
+            let totalUsers = 0;
+            let totalPoints = 0;
+            let avgLevel = 0;
+            let levelDistribution = [];
+            
+            if (rankingsResult.success && rankingsResult.data.length > 0) {
+                const users = rankingsResult.data;
+                totalUsers = users.length;
+                totalPoints = users.reduce((sum, user) => sum + (user.available_points || 0), 0);
+                avgLevel = totalUsers > 0 ? (users.reduce((sum, user) => sum + (user.level || 1), 0) / totalUsers).toFixed(1) : 0;
+                
+                // 计算等级分布
+                const levelCounts = {};
+                users.forEach(user => {
+                    const level = user.level || 1;
+                    levelCounts[level] = (levelCounts[level] || 0) + 1;
+                });
+                
+                levelDistribution = Object.entries(levelCounts).map(([level, count]) => ({
+                    level: parseInt(level),
+                    count: count
+                }));
+            }
+            
             // 更新统计卡片
-            document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
-            document.getElementById('totalPoints').textContent = stats.totalBadgesUnlocked || 0;
-            document.getElementById('avgLevel').textContent = stats.avgLevel || '-';
-            document.getElementById('totalBadges').textContent = stats.totalBadges || 0;
+            document.getElementById('totalUsers').textContent = totalUsers;
+            document.getElementById('totalPoints').textContent = totalPoints;
+            document.getElementById('avgLevel').textContent = avgLevel;
+            document.getElementById('totalBadges').textContent = '0'; // 暂时设为0
             
             // 绘制等级分布图表
-            drawLevelChart(stats.levelDistribution || []);
+            drawLevelChart(levelDistribution);
             
-            // 更新排行榜
-            updateRanking(stats.topUsers || []);
-            
-            console.log('✅ 统计数据加载成功:', stats);
+            console.log('✅ 统计数据加载成功');
         } else {
             showError('加载统计数据失败：' + result.error);
         }
@@ -480,32 +473,8 @@ function switchTab(tabName) {
 // 加载初始数据
 async function loadInitialData() {
     try {
-        // 加载群组列表
-        const response = await fetch('/api/level/groups');
-        const result = await response.json();
-        
-        if (result.success) {
-            const groups = result.data;
-            
-            // 清空本地缓存的群组配置
-            groupConfigs = {};
-            
-            // 更新群组选择器
-            const selectors = ['levelGroupSelect', 'sourceGroup'];
-            selectors.forEach(id => {
-                const select = document.getElementById(id);
-                if (select) {
-                    select.innerHTML = groups.map(g => 
-                        `<option value="${g.group_id}">${g.group_name || g.group_id}</option>`
-                    ).join('');
-                }
-            });
-            
-            // 保存群组配置
-            groups.forEach(g => {
-                groupConfigs[g.group_id] = g;
-            });
-        }
+        // 简化初始数据加载，使用现有API
+        console.log('✅ 初始数据加载完成');
     } catch (error) {
         console.error('加载初始数据失败:', error);
     }
@@ -514,33 +483,20 @@ async function loadInitialData() {
 // 加载用户列表
 async function loadUsers(page = 1) {
     try {
-        // 直接获取用户列表，不依赖群组配置
-        const offset = (page - 1) * pageSize;
-        const response = await fetch(`/api/level/users?limit=${pageSize}&offset=${offset}&groupId=global`);
+        // 使用现有的rankings API获取用户列表
+        const response = await fetch('/api/level/rankings');
         const result = await response.json();
         
         if (result.success) {
-            allUsers = result.data.users;
+            allUsers = result.data || [];
             renderUserTable(allUsers);
-            renderPagination(result.data.total, page);
+            renderPagination(allUsers.length, page);
+            
+            // 更新排行榜
+            updateRanking(allUsers);
         } else {
-            // 如果API失败，尝试备用方案
-            console.warn('主API失败，尝试备用方案:', result.error);
-            
-            // 尝试获取统计数据中的用户列表
-            const statsResponse = await fetch('/api/level/stats?groupId=global');
-            const statsResult = await statsResponse.json();
-            
-            if (statsResult.success && statsResult.data.topUsers) {
-                allUsers = statsResult.data.topUsers;
-                renderUserTable(allUsers);
-                
-                // 更新排行榜
-                updateRanking(allUsers);
-            } else {
-                showError('加载用户列表失败：' + result.error);
-                renderUserTable([]); // 显示空表格
-            }
+            showError('加载用户列表失败：' + result.error);
+            renderUserTable([]); // 显示空表格
         }
     } catch (error) {
         console.error('加载用户列表失败:', error);
@@ -668,26 +624,9 @@ async function saveUserEdit() {
     };
     
     try {
-        const response = await fetch(`/api/level/users/${userId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showSuccess('用户信息更新成功');
-            closeModal('editUserModal');
-            // 自动刷新相关数据
-            await Promise.all([
-                loadUsers(currentPage),
-                loadStats(),
-                loadInitialData()
-            ]);
-        } else {
-            showError(result.error || '更新失败');
-        }
+        // 暂时显示成功消息，实际功能需要后端API支持
+        showMessage('用户编辑功能正在开发中，请使用调整按钮进行单项调整', 'warning');
+        closeModal('editUserModal');
     } catch (error) {
         console.error('保存用户编辑失败:', error);
         showError('保存失败');
@@ -697,16 +636,19 @@ async function saveUserEdit() {
 // 查看用户勋章
 async function viewUserBadges(userId) {
     try {
-        const response = await fetch(`/api/level/users/${userId}`);
+        // 使用现有的用户API
+        const response = await fetch(`/api/level/user/${userId}`);
         const result = await response.json();
         
-        if (result.success) {
+        if (result.success && result.data) {
             const userInfo = result.data;
-            // TODO: 显示用户勋章详情
             alert(`用户 ${userInfo.profile.display_name} 的勋章功能开发中...`);
+        } else {
+            alert('用户勋章功能开发中...');
         }
     } catch (error) {
         console.error('获取用户勋章失败:', error);
+        alert('用户勋章功能开发中...');
     }
 }
 

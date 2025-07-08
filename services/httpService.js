@@ -87,6 +87,23 @@ function handleRoutes(req, res, pathname, method) {
         return;
     }
 
+    // 等级系统管理页面特殊处理
+    if (pathname === '/admin/level-system') {
+        const path = require('path');
+        const filePath = path.join(__dirname, '..', 'level', 'admin', 'level-system.html');
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                console.error('读取等级系统管理页面失败:', err);
+                res.writeHead(404);
+                res.end('Level system admin page not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
+
     // 静态资源服务（CSS, JS文件）
     if (pathname.startsWith('/admin/')) {
         const path = require('path');

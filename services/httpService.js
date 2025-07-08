@@ -2295,7 +2295,7 @@ async function syncDataFromMainDatabase() {
         let syncedCount = 0;
         let skippedCount = 0;
         
-        for (const user of evaluationUsers.slice(0, 10)) { // 限制同步前10个用户
+        for (const user of evaluationUsers.slice(0, 20)) { // 限制同步前20个用户
             try {
                 // 检查用户是否已存在
                 const existingUser = levelDb.prepare(`

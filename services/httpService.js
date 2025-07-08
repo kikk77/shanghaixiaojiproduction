@@ -2149,6 +2149,15 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
                 };
             }
             
+            // 清理用户数据端点
+            if (endpoint === 'clear-data' && method === 'POST') {
+                const clearResult = await clearLevelSystemData();
+                return {
+                    success: true,
+                    data: clearResult
+                };
+            }
+            
             return {
                 success: false,
                 error: '等级系统API路径不存在'
@@ -2326,6 +2335,24 @@ async function syncDataFromMainDatabase() {
                     user.last_evaluation
                 );
                 
+                // 记录积分历史
+                levelDb.prepare(`
+                    INSERT INTO points_log (
+                        user_id, source_group_id, action_type, exp_change, points_change,
+                        exp_after, points_after, description, timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    user.user_id,
+                    -1,
+                    'sync_historical_data',
+                    totalExp,
+                    totalPoints,
+                    totalExp,
+                    totalPoints,
+                    `历史数据同步：${user.evaluation_count}次评价`,
+                    Date.now() / 1000
+                );
+                
                 syncedCount++;
                 
             } catch (error) {
@@ -2344,6 +2371,35 @@ async function syncDataFromMainDatabase() {
         
     } catch (error) {
         console.error('❌ 数据同步失败:', error);
+        throw error;
+    }
+}
+
+// 清理等级系统数据
+async function clearLevelSystemData() {
+    console.log('🧹 开始清理等级系统数据...');
+    
+    try {
+        const levelDb = require('../level/config/levelDatabase').getInstance().getDatabase();
+        
+        // 清理用户数据
+        const userCount = levelDb.prepare('SELECT COUNT(*) as count FROM user_levels').get().count;
+        levelDb.prepare('DELETE FROM user_levels').run();
+        
+        // 清理积分日志
+        const logCount = levelDb.prepare('SELECT COUNT(*) as count FROM points_log').get().count;
+        levelDb.prepare('DELETE FROM points_log').run();
+        
+        console.log(`✅ 清理完成：删除 ${userCount} 个用户记录，${logCount} 条积分日志`);
+        
+        return {
+            message: '数据清理完成',
+            deletedUsers: userCount,
+            deletedLogs: logCount
+        };
+        
+    } catch (error) {
+        console.error('❌ 数据清理失败:', error);
         throw error;
     }
 }

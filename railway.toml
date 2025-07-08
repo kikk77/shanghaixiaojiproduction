@@ -5,11 +5,13 @@
 # BOT_TOKEN=6873045781:AAGNvdO8TaJbOhGo5v-4NQmSU4Sd1KdKbRo (生产Bot Token)
 # BOT_USERNAME=xiaojisystembot (生产Bot用户名)
 # GROUP_CHAT_ID=-1002793326688 (目标群组ID)
+# WEBHOOK_URL=https://your-app.railway.app (Railway应用URL，用于webhook模式)
 #
 # ⚠️ 重要：切换Bot前确保：
 # 1. 新Bot已添加到目标群组
 # 2. 新Bot已获得群组管理员权限
 # 3. 旧Bot实例已停止（避免冲突）
+# 4. 生产环境必须设置WEBHOOK_URL以避免polling冲突
 
 [build]
 builder = "nixpacks"
@@ -32,6 +34,7 @@ name = "telegram-bot-data"
 NODE_ENV = "production" 
 PORT = "3000"
 LEVEL_SYSTEM_ENABLED = "true"  # 启用等级系统
+# WEBHOOK_URL 应该在Railway Variables中设置为实际的应用URL
 
 [[ports]]
 port = 3000

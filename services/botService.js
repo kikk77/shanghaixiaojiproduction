@@ -15,6 +15,8 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 // 初始化Telegram Bot
 let bot;
 try {
+    console.log(`🤖 Bot配置: 使用Polling模式（适合等级系统和商家管理）`);
+    
     // 配置Bot选项，避免IP连接问题
     const botOptions = { 
         polling: true,

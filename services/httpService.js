@@ -194,11 +194,11 @@ function handleRoutes(req, res, pathname, method) {
         return;
     }
 
-    // Webhook路由 - Telegram Bot更新
-    if (pathname === '/webhook' && method === 'POST') {
-        handleWebhookRequest(req, res);
-        return;
-    }
+    // Webhook路由已移除 - 使用Polling模式避免冲突
+    // if (pathname === '/webhook' && method === 'POST') {
+    //     handleWebhookRequest(req, res);
+    //     return;
+    // }
 
     // 健康检查端点
     if (pathname === '/health' && method === 'GET') {
@@ -245,7 +245,7 @@ function handleRoutes(req, res, pathname, method) {
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ 
         error: 'Not Found',
-        availableEndpoints: ['/health', '/admin', '/api/*', '/webhook']
+        availableEndpoints: ['/health', '/admin', '/api/*']
     }));
 }
 

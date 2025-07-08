@@ -39,11 +39,15 @@ class BroadcastService {
 {{badge_desc}}`,
                 enablePin: false
             },
-            milestone_points: {
-                template: `🎊 里程碑达成！
+            milestone: {
+                template: `🎯 里程碑达成！
 
-{{user_name}} 累计获得 {{total_points}} 积分
-🎁 获得里程碑奖励：{{bonus_points}} 积分`,
+🧑‍🚀 {{user_name}}
+{{milestone_icon}} {{milestone_name}}
+📝 {{milestone_description}}
+🎁 奖励：{{reward_description}}
+
+恭喜达成新里程碑！🎉`,
                 enablePin: false
             },
             perfect_score: {
@@ -166,6 +170,65 @@ class BroadcastService {
             
         } catch (error) {
             console.error('勋章解锁播报失败:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    /**
+     * 播报里程碑达成
+     */
+    async broadcastMilestone(userId, groupId, milestoneData) {
+        if (!this.enabled) return { success: false, error: '等级系统未启用' };
+        
+        try {
+            // 获取用户信息
+            const levelService = require('./levelService').getInstance();
+            const userInfo = await levelService.getUserDisplayInfo(userId);
+            
+            // 获取播报配置
+            const broadcastConfig = await this.getBroadcastConfig();
+            if (!broadcastConfig || !broadcastConfig.milestone) {
+                console.log('里程碑播报未启用');
+                return { success: false, error: '播报未启用' };
+            }
+            
+            // 获取播报模板
+            const template = await this.getBroadcastTemplate('milestone');
+            
+            // 准备模板数据
+            const milestone = milestoneData.milestone;
+            const templateData = {
+                user_name: milestoneData.user_name || userInfo.displayName,
+                milestone_icon: milestone.icon,
+                milestone_name: milestone.name,
+                milestone_description: milestone.description,
+                reward_description: milestone.reward_description,
+                required_points: milestone.required_points
+            };
+            
+            // 渲染消息
+            const message = this.renderTemplate(template.template, templateData);
+            
+            // 获取播报目标群组
+            const targetGroups = await this.getBroadcastTargetGroups();
+            
+            if (targetGroups.length === 0) {
+                return { success: false, error: '无播报群组' };
+            }
+            
+            // 播报到所有群组
+            const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
+            
+            // 记录播报日志
+            await this.logBroadcast('milestone', userId, groupId, results);
+            
+            return {
+                success: true,
+                results: results
+            };
+            
+        } catch (error) {
+            console.error('里程碑播报失败:', error);
             return { success: false, error: error.message };
         }
     }
@@ -351,6 +414,14 @@ class BroadcastService {
                 badge_emoji: '🏆',
                 badge_name: '测试勋章',
                 badge_desc: '这是一个测试勋章'
+            },
+            milestone: {
+                user_name: '测试用户',
+                milestone_icon: '🎯',
+                milestone_name: '积分新手',
+                milestone_description: '累计获得100积分',
+                reward_description: '奖励20积分',
+                required_points: 100
             }
         };
         

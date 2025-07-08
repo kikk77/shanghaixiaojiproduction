@@ -3013,3 +3013,402 @@ function displayEvaluationTrends(trends) {
 window.loadEnhancedRankings = loadEnhancedRankings;
 window.viewUserEvaluationReport = viewUserEvaluationReport;
 window.loadEvaluationTrends = loadEvaluationTrends;
+
+// ==================== 里程碑管理功能 ====================
+
+// 当前里程碑配置
+let currentMilestoneConfig = null;
+
+// 加载里程碑配置
+async function loadMilestoneConfig() {
+    try {
+        const groupId = document.getElementById('milestoneGroupSelect')?.value || 'global';
+        
+        const response = await fetch(`/api/level/milestones?groupId=${groupId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            currentMilestoneConfig = result.data;
+            renderMilestoneConfig(currentMilestoneConfig);
+            loadMilestoneStats();
+            console.log('✅ 里程碑配置加载成功');
+        } else {
+            showError('加载里程碑配置失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('加载里程碑配置失败:', error);
+        showError('加载里程碑配置失败');
+    }
+}
+
+// 渲染里程碑配置
+function renderMilestoneConfig(config) {
+    if (!config) return;
+    
+    // 更新系统开关
+    document.getElementById('milestoneEnabled').checked = config.enabled;
+    
+    // 更新系统设置
+    if (config.settings) {
+        document.getElementById('milestoneAutoClaim').checked = config.settings.auto_claim;
+        document.getElementById('milestoneBroadcast').checked = config.settings.broadcast_achievement;
+        document.getElementById('milestoneAllowRepeat').checked = config.settings.allow_repeat;
+        document.getElementById('milestoneCheckInterval').value = config.settings.check_interval;
+    }
+    
+    // 渲染里程碑列表
+    renderMilestoneList(config.milestones || []);
+}
+
+// 渲染里程碑列表
+function renderMilestoneList(milestones) {
+    const container = document.getElementById('milestonesContainer');
+    if (!container) return;
+    
+    container.innerHTML = milestones.map((milestone, index) => `
+        <div class="milestone-item" style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">${milestone.icon}</span>
+                    <h4 style="margin: 0; color: #333;">${milestone.name}</h4>
+                    <span style="background: ${milestone.enabled ? '#d4edda' : '#f8d7da'}; color: ${milestone.enabled ? '#155724' : '#721c24'}; padding: 2px 8px; border-radius: 12px; font-size: 12px;">
+                        ${milestone.enabled ? '已启用' : '已禁用'}
+                    </span>
+                </div>
+                <button class="btn btn-danger" onclick="removeMilestone(${index})" style="padding: 5px 10px; font-size: 12px;">删除</button>
+            </div>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>里程碑ID：</label>
+                    <input type="text" value="${milestone.id}" onchange="updateMilestone(${index}, 'id', this.value)" placeholder="例如：milestone_100">
+                </div>
+                <div class="form-group">
+                    <label>里程碑名称：</label>
+                    <input type="text" value="${milestone.name}" onchange="updateMilestone(${index}, 'name', this.value)" placeholder="例如：积分新手">
+                </div>
+                <div class="form-group">
+                    <label>图标：</label>
+                    <input type="text" value="${milestone.icon}" onchange="updateMilestone(${index}, 'icon', this.value)" placeholder="🎯" style="width: 60px;">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" ${milestone.enabled ? 'checked' : ''} onchange="updateMilestone(${index}, 'enabled', this.checked)">
+                        启用此里程碑
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>描述：</label>
+                <textarea rows="2" onchange="updateMilestone(${index}, 'description', this.value)" placeholder="例如：累计获得100积分">${milestone.description || ''}</textarea>
+            </div>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>所需积分：</label>
+                    <input type="number" value="${milestone.required_points}" onchange="updateMilestone(${index}, 'required_points', parseInt(this.value))" min="1" placeholder="100">
+                </div>
+                <div class="form-group">
+                    <label>奖励类型：</label>
+                    <select onchange="updateMilestone(${index}, 'reward_type', this.value); updateMilestoneRewardForm(${index})">
+                        <option value="points" ${milestone.reward_type === 'points' ? 'selected' : ''}>积分奖励</option>
+                        <option value="exp" ${milestone.reward_type === 'exp' ? 'selected' : ''}>经验奖励</option>
+                        <option value="mixed" ${milestone.reward_type === 'mixed' ? 'selected' : ''}>混合奖励</option>
+                        <option value="badge" ${milestone.reward_type === 'badge' ? 'selected' : ''}>勋章奖励</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="milestoneRewardForm_${index}" class="milestone-reward-form">
+                ${renderMilestoneRewardForm(milestone, index)}
+            </div>
+        </div>
+    `).join('');
+}
+
+// 渲染里程碑奖励表单
+function renderMilestoneRewardForm(milestone, index) {
+    switch (milestone.reward_type) {
+        case 'points':
+            return `
+                <div class="form-group">
+                    <label>奖励积分：</label>
+                    <input type="number" value="${milestone.reward_amount || 0}" onchange="updateMilestone(${index}, 'reward_amount', parseInt(this.value))" min="0" placeholder="20">
+                </div>
+                <div class="form-group">
+                    <label>奖励描述：</label>
+                    <input type="text" value="${milestone.reward_description || ''}" onchange="updateMilestone(${index}, 'reward_description', this.value)" placeholder="奖励20积分">
+                </div>
+            `;
+        case 'exp':
+            return `
+                <div class="form-group">
+                    <label>奖励经验：</label>
+                    <input type="number" value="${milestone.reward_amount || 0}" onchange="updateMilestone(${index}, 'reward_amount', parseInt(this.value))" min="0" placeholder="50">
+                </div>
+                <div class="form-group">
+                    <label>奖励描述：</label>
+                    <input type="text" value="${milestone.reward_description || ''}" onchange="updateMilestone(${index}, 'reward_description', this.value)" placeholder="奖励50经验">
+                </div>
+            `;
+        case 'mixed':
+            return `
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>奖励积分：</label>
+                        <input type="number" value="${milestone.reward_amount || 0}" onchange="updateMilestone(${index}, 'reward_amount', parseInt(this.value))" min="0" placeholder="100">
+                    </div>
+                    <div class="form-group">
+                        <label>奖励经验：</label>
+                        <input type="number" value="${milestone.extra_exp || 0}" onchange="updateMilestone(${index}, 'extra_exp', parseInt(this.value))" min="0" placeholder="50">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>奖励描述：</label>
+                    <input type="text" value="${milestone.reward_description || ''}" onchange="updateMilestone(${index}, 'reward_description', this.value)" placeholder="奖励100积分+50经验">
+                </div>
+            `;
+        case 'badge':
+            return `
+                <div class="form-group">
+                    <label>勋章ID：</label>
+                    <input type="text" value="${milestone.badge_reward || ''}" onchange="updateMilestone(${index}, 'badge_reward', this.value)" placeholder="legend_milestone">
+                </div>
+                <div class="form-group">
+                    <label>奖励描述：</label>
+                    <input type="text" value="${milestone.reward_description || ''}" onchange="updateMilestone(${index}, 'reward_description', this.value)" placeholder="专属勋章">
+                </div>
+            `;
+        default:
+            return '';
+    }
+}
+
+// 更新里程碑奖励表单
+function updateMilestoneRewardForm(index) {
+    const milestone = currentMilestoneConfig.milestones[index];
+    const formContainer = document.getElementById(`milestoneRewardForm_${index}`);
+    if (formContainer) {
+        formContainer.innerHTML = renderMilestoneRewardForm(milestone, index);
+    }
+}
+
+// 更新里程碑配置
+function updateMilestone(index, field, value) {
+    if (!currentMilestoneConfig || !currentMilestoneConfig.milestones[index]) return;
+    
+    currentMilestoneConfig.milestones[index][field] = value;
+    console.log(`更新里程碑 ${index} 的 ${field} 为:`, value);
+}
+
+// 添加里程碑
+function addMilestone() {
+    if (!currentMilestoneConfig) {
+        currentMilestoneConfig = {
+            enabled: true,
+            milestones: [],
+            settings: {
+                auto_claim: true,
+                broadcast_achievement: true,
+                allow_repeat: false,
+                check_interval: 'immediate'
+            }
+        };
+    }
+    
+    const newMilestone = {
+        id: `milestone_${Date.now()}`,
+        name: '新里程碑',
+        description: '请设置里程碑描述',
+        required_points: 100,
+        reward_type: 'points',
+        reward_amount: 20,
+        reward_description: '奖励20积分',
+        icon: '🎯',
+        enabled: true
+    };
+    
+    currentMilestoneConfig.milestones.push(newMilestone);
+    renderMilestoneList(currentMilestoneConfig.milestones);
+}
+
+// 删除里程碑
+function removeMilestone(index) {
+    if (!currentMilestoneConfig || !currentMilestoneConfig.milestones[index]) return;
+    
+    if (confirm('确定要删除这个里程碑吗？')) {
+        currentMilestoneConfig.milestones.splice(index, 1);
+        renderMilestoneList(currentMilestoneConfig.milestones);
+    }
+}
+
+// 切换里程碑系统
+function toggleMilestoneSystem() {
+    if (!currentMilestoneConfig) return;
+    
+    currentMilestoneConfig.enabled = document.getElementById('milestoneEnabled').checked;
+    console.log('里程碑系统状态:', currentMilestoneConfig.enabled);
+}
+
+// 保存里程碑配置
+async function saveMilestoneConfig() {
+    if (!currentMilestoneConfig) {
+        showError('没有可保存的配置');
+        return;
+    }
+    
+    try {
+        // 更新系统设置
+        currentMilestoneConfig.settings = {
+            auto_claim: document.getElementById('milestoneAutoClaim').checked,
+            broadcast_achievement: document.getElementById('milestoneBroadcast').checked,
+            allow_repeat: document.getElementById('milestoneAllowRepeat').checked,
+            check_interval: document.getElementById('milestoneCheckInterval').value
+        };
+        
+        const groupId = document.getElementById('milestoneGroupSelect')?.value || 'global';
+        
+        const response = await fetch('/api/level/milestones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: groupId,
+                config: currentMilestoneConfig
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('里程碑配置保存成功');
+            loadMilestoneStats(); // 重新加载统计
+        } else {
+            showError('保存里程碑配置失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('保存里程碑配置失败:', error);
+        showError('保存里程碑配置失败');
+    }
+}
+
+// 重置里程碑配置
+async function resetMilestoneConfig() {
+    if (!confirm('确定要重置为默认里程碑配置吗？这将覆盖当前的所有设置。')) {
+        return;
+    }
+    
+    try {
+        // 获取默认配置
+        const response = await fetch('/api/level/milestones?groupId=default');
+        const result = await response.json();
+        
+        if (result.success) {
+            currentMilestoneConfig = result.data;
+            renderMilestoneConfig(currentMilestoneConfig);
+            showSuccess('已重置为默认配置，请保存以应用更改');
+        } else {
+            showError('重置配置失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('重置配置失败:', error);
+        showError('重置配置失败');
+    }
+}
+
+// 加载里程碑统计
+async function loadMilestoneStats() {
+    try {
+        const groupId = document.getElementById('milestoneGroupSelect')?.value || 'global';
+        
+        const response = await fetch(`/api/level/milestone-stats?groupId=${groupId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const stats = result.data;
+            
+            // 更新统计卡片
+            document.getElementById('totalMilestones').textContent = stats.total_milestones || 0;
+            document.getElementById('enabledMilestones').textContent = stats.enabled_milestones || 0;
+            document.getElementById('totalAchievements').textContent = 
+                Object.values(stats.milestone_achievements || {}).reduce((sum, m) => sum + m.achievement_count, 0);
+            document.getElementById('participatingUsers').textContent = 
+                new Set(stats.recent_achievements?.map(a => a.user_id) || []).size;
+            
+            // 显示最近达成记录
+            renderRecentAchievements(stats.recent_achievements || []);
+            
+            console.log('✅ 里程碑统计加载成功');
+        } else {
+            showError('加载里程碑统计失败：' + result.error);
+        }
+    } catch (error) {
+        console.error('加载里程碑统计失败:', error);
+        showError('加载里程碑统计失败');
+    }
+}
+
+// 渲染最近达成记录
+function renderRecentAchievements(achievements) {
+    const container = document.getElementById('recentAchievements');
+    if (!container) return;
+    
+    if (achievements.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #666;">
+                <p>暂无里程碑达成记录</p>
+                <small>用户达成里程碑后将在此显示</small>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>用户</th>
+                    <th>里程碑</th>
+                    <th>奖励</th>
+                    <th>达成时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${achievements.map(achievement => `
+                    <tr>
+                        <td>${achievement.display_name || `用户${achievement.user_id}`}</td>
+                        <td>${achievement.milestone_name}</td>
+                        <td>
+                            ${achievement.reward_type === 'points' ? `${achievement.reward_amount}积分` : 
+                              achievement.reward_type === 'exp' ? `${achievement.reward_amount}经验` :
+                              achievement.reward_type === 'mixed' ? `${achievement.reward_amount}积分+${achievement.extra_exp}经验` :
+                              '勋章奖励'}
+                        </td>
+                        <td>${new Date(achievement.achieved_at * 1000).toLocaleString()}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+// 修改原有的switchTab函数以支持里程碑标签页
+const originalSwitchTab = switchTab;
+switchTab = function(tabName) {
+    originalSwitchTab(tabName);
+    
+    if (tabName === 'milestones') {
+        loadMilestoneConfig();
+    }
+};
+
+// 导出里程碑管理函数到全局作用域
+window.loadMilestoneConfig = loadMilestoneConfig;
+window.addMilestone = addMilestone;
+window.removeMilestone = removeMilestone;
+window.updateMilestone = updateMilestone;
+window.updateMilestoneRewardForm = updateMilestoneRewardForm;
+window.toggleMilestoneSystem = toggleMilestoneSystem;
+window.saveMilestoneConfig = saveMilestoneConfig;
+window.resetMilestoneConfig = resetMilestoneConfig;
+window.loadMilestoneStats = loadMilestoneStats;

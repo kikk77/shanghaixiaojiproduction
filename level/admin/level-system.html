@@ -326,6 +326,7 @@
             <button class="tab" onclick="switchTab('levels')">⭐ 等级配置</button>
             <button class="tab" onclick="switchTab('rewards')">🎁 奖励规则</button>
             <button class="tab" onclick="switchTab('badges')">🏆 勋章管理</button>
+            <button class="tab" onclick="switchTab('milestones')">🎯 里程碑管理</button>
             <button class="tab" onclick="switchTab('broadcast')">📢 播报配置</button>
             <button class="tab" onclick="switchTab('groups')">👥 群组管理</button>
             <button class="tab" onclick="switchTab('data')">💾 数据管理</button>
@@ -484,6 +485,108 @@
                 
                 <div id="badgesList" style="margin-top: 20px;">
                     <!-- 勋章列表 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 里程碑管理 -->
+        <div id="milestones-tab" class="tab-content">
+            <div class="form-section">
+                <h2>🎯 积分里程碑管理</h2>
+                
+                <div class="info-box">
+                    <h4>📖 里程碑系统说明</h4>
+                    <p>里程碑系统会在用户达到特定积分时自动发放奖励，激励用户持续参与。</p>
+                    <ul>
+                        <li>支持积分奖励、经验奖励、混合奖励和勋章奖励</li>
+                        <li>可以自定义里程碑名称、图标和奖励描述</li>
+                        <li>支持启用/禁用单个里程碑</li>
+                        <li>可以设置是否允许重复达成和自动播报</li>
+                    </ul>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>选择群组：</label>
+                        <select id="milestoneGroupSelect" onchange="loadMilestoneConfig()">
+                            <option value="global">全局配置</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="milestoneEnabled" onchange="toggleMilestoneSystem()">
+                            启用里程碑系统
+                        </label>
+                    </div>
+                </div>
+                
+                <h3>📊 里程碑统计</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>🎯 配置里程碑</h3>
+                        <div class="stat-value" id="totalMilestones">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>✅ 已启用</h3>
+                        <div class="stat-value" id="enabledMilestones">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>🏆 总达成次数</h3>
+                        <div class="stat-value" id="totalAchievements">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>👥 参与用户</h3>
+                        <div class="stat-value" id="participatingUsers">-</div>
+                    </div>
+                </div>
+                
+                <h3>🎯 里程碑配置</h3>
+                <div style="margin-bottom: 15px;">
+                    <button class="btn btn-primary" onclick="addMilestone()">➕ 添加里程碑</button>
+                    <button class="btn btn-success" onclick="saveMilestoneConfig()">💾 保存配置</button>
+                    <button class="btn btn-warning" onclick="resetMilestoneConfig()">🔄 重置为默认</button>
+                </div>
+                
+                <div id="milestonesContainer">
+                    <!-- 里程碑列表将在这里动态生成 -->
+                </div>
+                
+                <h3>⚙️ 系统设置</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="milestoneAutoClaim">
+                            自动领取奖励
+                        </label>
+                        <small style="display: block; color: #666;">启用后用户达成里程碑时自动获得奖励</small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="milestoneBroadcast">
+                            播报里程碑达成
+                        </label>
+                        <small style="display: block; color: #666;">启用后会在群组中播报用户达成里程碑</small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="milestoneAllowRepeat">
+                            允许重复达成
+                        </label>
+                        <small style="display: block; color: #666;">启用后用户可以重复获得相同里程碑的奖励</small>
+                    </div>
+                    <div class="form-group">
+                        <label>检查间隔：</label>
+                        <select id="milestoneCheckInterval">
+                            <option value="immediate">立即检查</option>
+                            <option value="daily">每日检查</option>
+                            <option value="manual">手动检查</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>🏆 最近达成记录</h3>
+                <div id="recentAchievements">
+                    <!-- 最近达成记录 -->
                 </div>
             </div>
         </div>

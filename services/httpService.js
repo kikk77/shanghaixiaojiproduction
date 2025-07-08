@@ -4042,6 +4042,112 @@ async function handleLevelApiRequest(pathname, method, data) {
                 };
             }
         }
+
+        // 里程碑配置API
+        if (endpoint === 'milestones' && method === 'GET') {
+            const groupId = data.groupId || 'global';
+            
+            try {
+                const milestoneService = require('../level/services/milestoneService').getInstance();
+                const config = await milestoneService.getMilestoneConfig(groupId);
+                
+                return {
+                    success: true,
+                    data: config
+                };
+            } catch (error) {
+                console.error('获取里程碑配置失败:', error);
+                return {
+                    success: false,
+                    error: '获取里程碑配置失败: ' + error.message
+                };
+            }
+        }
+
+        // 保存里程碑配置API
+        if (endpoint === 'milestones' && method === 'POST') {
+            const { groupId, config } = data;
+            
+            if (!groupId || !config) {
+                return {
+                    success: false,
+                    error: '群组ID和配置不能为空'
+                };
+            }
+            
+            try {
+                const milestoneService = require('../level/services/milestoneService').getInstance();
+                const success = await milestoneService.saveMilestoneConfig(groupId, config);
+                
+                if (success) {
+                    return {
+                        success: true,
+                        message: '里程碑配置保存成功'
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: '里程碑配置保存失败'
+                    };
+                }
+            } catch (error) {
+                console.error('保存里程碑配置失败:', error);
+                return {
+                    success: false,
+                    error: '保存里程碑配置失败: ' + error.message
+                };
+            }
+        }
+
+        // 里程碑统计API
+        if (endpoint === 'milestone-stats' && method === 'GET') {
+            const groupId = data.groupId || 'global';
+            
+            try {
+                const milestoneService = require('../level/services/milestoneService').getInstance();
+                const stats = await milestoneService.getMilestoneStats(groupId);
+                
+                return {
+                    success: true,
+                    data: stats
+                };
+            } catch (error) {
+                console.error('获取里程碑统计失败:', error);
+                return {
+                    success: false,
+                    error: '获取里程碑统计失败: ' + error.message
+                };
+            }
+        }
+
+        // 用户里程碑API
+        if (endpoint === 'user-milestones' && method === 'GET') {
+            const userId = parseInt(data.userId);
+            const groupId = data.groupId || 'global';
+            
+            if (!userId) {
+                return {
+                    success: false,
+                    error: '用户ID不能为空'
+                };
+            }
+            
+            try {
+                const milestoneService = require('../level/services/milestoneService').getInstance();
+                const milestones = await milestoneService.getUserMilestones(userId, groupId);
+                
+                return {
+                    success: true,
+                    data: milestones
+                };
+            } catch (error) {
+                console.error('获取用户里程碑失败:', error);
+                return {
+                    success: false,
+                    error: '获取用户里程碑失败: ' + error.message
+                };
+            }
+        }
         
         // 404 - 未找到的API端点
         return { success: false, error: 'API端点不存在', status: 404 };

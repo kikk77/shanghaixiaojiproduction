@@ -87,6 +87,11 @@ class LevelService {
                 this.checkBadgeUnlock(userId, updatedProfile);
             });
             
+            // 异步检查里程碑达成
+            setImmediate(() => {
+                this.checkMilestoneAchievement(userId, sourceGroupId, updatedProfile);
+            });
+            
         } catch (error) {
             console.error('处理评价奖励失败:', error);
         }
@@ -418,6 +423,18 @@ class LevelService {
             await badgeService.checkAndUnlockBadges(userId, userProfile);
         } catch (error) {
             console.error('检查勋章解锁失败:', error);
+        }
+    }
+    
+    /**
+     * 检查里程碑达成
+     */
+    async checkMilestoneAchievement(userId, groupId, userProfile) {
+        try {
+            const milestoneService = require('./milestoneService').getInstance();
+            await milestoneService.handlePointsChange(userId, groupId, userProfile.total_points_earned);
+        } catch (error) {
+            console.error('检查里程碑达成失败:', error);
         }
     }
     

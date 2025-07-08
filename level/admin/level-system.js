@@ -483,23 +483,39 @@ async function loadInitialData() {
 // 加载用户列表
 async function loadUsers(page = 1) {
     try {
-        // 使用现有的rankings API获取用户列表
-        const response = await fetch('/api/level/rankings');
+        console.log('🔄 开始加载用户列表...');
+        
+        // 添加时间戳防止缓存
+        const timestamp = Date.now();
+        const includeInactive = !showActiveUsersOnly;
+        const apiUrl = `/api/level/rankings?t=${timestamp}&includeInactive=${includeInactive}&limit=50`;
+        
+        console.log('🔗 API请求URL:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
         const result = await response.json();
+        
+        console.log('📊 API响应:', result);
         
         if (result.success) {
             allUsers = result.data || [];
+            console.log('👥 用户数据:', allUsers);
             renderUserTable(allUsers);
             renderPagination(allUsers.length, page);
-            
-            // 更新排行榜
-            updateRanking(allUsers);
+            console.log('✅ 用户列表加载完成，共', allUsers.length, '个用户');
         } else {
+            console.error('❌ API返回错误:', result.error);
             showError('加载用户列表失败：' + result.error);
             renderUserTable([]); // 显示空表格
         }
     } catch (error) {
-        console.error('加载用户列表失败:', error);
+        console.error('❌ 加载用户列表失败:', error);
         showError('加载用户列表失败');
         renderUserTable([]); // 显示空表格
     }
@@ -507,32 +523,45 @@ async function loadUsers(page = 1) {
 
 // 渲染用户表格
 function renderUserTable(users) {
-    const tbody = document.getElementById('userTableBody');
+    const tbody = document.getElementById('userRankingBody');
     
     if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">暂无数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">暂无数据</td></tr>';
         return;
     }
     
-    tbody.innerHTML = users.map(user => {
-        const displayName = user.display_name || `用户${user.user_id}`;
-        const username = user.username ? `@${user.username}` : '@未设置';
+    tbody.innerHTML = users.map((user, index) => {
+        const rank = index + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+        
+        // 获取用户名称和@用户名
+        const displayName = user.display_name || '未设置';
+        const username = user.username ? `@${user.username}` : '未设置用户名';
         
         return `
         <tr>
-            <td>${user.user_id}</td>
-            <td>${displayName}</td>
-            <td>${username}</td>
+            <td>${medal}</td>
+            <td style="font-family: monospace; color: #666;">${user.user_id}</td>
+            <td><strong>${displayName}</strong></td>
+            <td style="color: #0088cc;">${username}</td>
             <td><span class="level-badge level-${user.level}">Lv.${user.level}</span></td>
             <td>${user.total_exp}</td>
             <td>${user.available_points}</td>
-            <td>${user.user_eval_count}</td>
+            <td>${user.user_eval_count || 0}</td>
             <td>
                 <div class="action-buttons">
-                    <button class="btn-sm btn-info" onclick="viewUserDetails('${user.user_id}')" title="查看详情">详情</button>
-                    <button class="btn-sm btn-success" onclick="adjustUserPoints('${user.user_id}')" title="调整积分">💎 积分</button>
-                    <button class="btn-sm btn-warning" onclick="adjustUserExp('${user.user_id}')" title="调整经验">⚡ 经验</button>
-                    <button class="btn-sm btn-primary" onclick="adjustUserLevel('${user.user_id}')" title="调整等级">⭐ 等级</button>
+                    <button class="btn btn-sm btn-primary" onclick="viewUserDetails('${user.user_id}')" title="查看详情">
+                        👤 详情
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="adjustUserPoints('${user.user_id}')" title="调整积分">
+                        💎 积分
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="adjustUserExp('${user.user_id}')" title="调整经验">
+                        ⚡ 经验
+                    </button>
+                    <button class="btn btn-sm btn-info" onclick="adjustUserLevel('${user.user_id}')" title="调整等级">
+                        ⭐ 等级
+                    </button>
                 </div>
             </td>
         </tr>
@@ -974,8 +1003,11 @@ function toggleUserFilter() {
     const checkbox = document.getElementById('showActiveUsersOnly');
     showActiveUsersOnly = checkbox.checked;
     
+    console.log('🔄 切换用户筛选模式:', showActiveUsersOnly ? '只显示有评价记录的用户' : '显示所有用户');
+    
     // 重新加载统计数据和用户列表
     loadStats();
+    loadUsers();
 }
 
 // 更新排行榜

@@ -2108,7 +2108,14 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             
             // 获取用户排名
             if (endpoint === 'rankings' && method === 'GET') {
-                const rankings = await levelService.getRankings('level', 20, false);
+                const url = new URL(req.url, `http://${req.headers.host}`);
+                const includeInactive = url.searchParams.get('includeInactive') === 'true';
+                const limit = parseInt(url.searchParams.get('limit')) || 20;
+                const type = url.searchParams.get('type') || 'level';
+                
+                console.log('🏆 获取用户排名参数:', { type, limit, includeInactive });
+                
+                const rankings = await levelService.getRankings(type, limit, includeInactive);
                 return {
                     success: true,
                     data: rankings

@@ -1,0 +1,11 @@
+Telegram Bot项目特定规范：
+1. Telegram API响应格式是标准的，不得随意修改
+2. 数据库存储格式要与Telegram数据结构保持一致
+3. 前端展示要适配Telegram的数据格式
+4. 群组、用户、消息等数据结构以Telegram官方为准
+
+调试重点：
+1. 检查Telegram webhook接收的原始数据
+2. 确认数据库存储格式是否正确
+3. 前端展示是否正确解析Telegram数据格式
+4. 消息发送状态要以Telegram API返回为准 

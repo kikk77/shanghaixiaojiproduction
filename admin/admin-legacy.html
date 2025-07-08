@@ -533,8 +533,31 @@
                             </div>
                         </div>
 
-                        <!-- 描述信息 -->
+                        <!-- 模板类型选择 -->
                         <div class="card" style="margin-bottom: 20px;">
+                            <h4>📄 信息模板类型</h4>
+                            <div class="form-group">
+                                <label>选择模板类型：</label>
+                                <select id="editTemplateType" onchange="handleTemplateTypeChange()" required>
+                                    <option value="1">模板1：标准模板（优点、缺点、价格、基本功）</option>
+                                    <option value="2">模板2：自定义内容模板</option>
+                                </select>
+                                <small>选择不同的模板类型来适应不同类型的商家需求</small>
+                            </div>
+                        </div>
+
+                        <!-- 自定义内容区域 -->
+                        <div id="customContentSection" class="card" style="margin-bottom: 20px; display: none;">
+                            <h4>✏️ 自定义内容</h4>
+                            <div class="form-group">
+                                <label>自定义内容：</label>
+                                <textarea id="editCustomContent" rows="8" placeholder="请输入完全自定义的商家信息内容，支持文字、空格、emoji。&#10;&#10;示例格式：&#10;地区：#xx              艺名：#mogujie&#10;&#10;这里可以写任何您想要的内容...&#10;&#10;联系：@username&#10;频道链接：https://t.me/channelname"></textarea>
+                                <small>此内容将完全替代标准模板格式，您可以自由编写任何内容</small>
+                            </div>
+                        </div>
+
+                        <!-- 描述信息 -->
+                        <div class="card standard-template-section" style="margin-bottom: 20px;">
                             <h4>📝 描述信息</h4>
                             <div class="form-group">
                                 <label>优点：</label>
@@ -547,7 +570,7 @@
                         </div>
 
                         <!-- 价格信息 -->
-                        <div class="card" style="margin-bottom: 20px;">
+                        <div class="card standard-template-section" style="margin-bottom: 20px;">
                             <h4>💰 价格信息</h4>
                             <div class="form-row">
                                 <div class="form-group">
@@ -626,7 +649,7 @@
                         </div>
 
                         <!-- 基本功信息 -->
-                        <div class="card" style="margin-bottom: 20px;">
+                        <div class="card standard-template-section" style="margin-bottom: 20px;">
                             <h4>💃 老师自填基本功</h4>
                             <div class="form-row">
                                 <div class="form-group">
@@ -1800,6 +1823,14 @@
             document.getElementById('editDo').value = merchant.skill_do || '';
             document.getElementById('editKiss').value = merchant.skill_kiss || '';
             
+            // 填充模板类型和自定义内容
+            const templateType = merchant.template_type || 1;
+            document.getElementById('editTemplateType').value = templateType;
+            document.getElementById('editCustomContent').value = merchant.custom_content || '';
+            
+            // 根据模板类型显示/隐藏相应区域
+            handleTemplateTypeChange();
+            
             // 更新地区选择框
             const regionSelect = document.getElementById('editRegionId');
             regionSelect.innerHTML = '<option value="">选择地区</option>' + 
@@ -1977,23 +2008,32 @@
 
         // 预览商家信息
         function previewMerchantInfo() {
-            const regionSelect = document.getElementById('editRegionId');
-            const selectedRegion = regions.find(r => r.id == regionSelect.value);
-            const regionName = selectedRegion ? selectedRegion.name : 'xx';
-            
-            const teacherName = document.getElementById('editTeacherName').value || '未填写';
-            const advantages = document.getElementById('editAdvantages').value || '未填写';
-            const disadvantages = document.getElementById('editDisadvantages').value || '未填写';
-            const price1 = document.getElementById('editPrice1').value || '未填写';
-            const price2 = document.getElementById('editPrice2').value || '未填写';
-            const contact = document.getElementById('editContact').value || '未填写';
-            const skillWash = document.getElementById('editWash').value || '未填写';
-            const skillBlow = document.getElementById('editBlow').value || '未填写';
-            const skillDo = document.getElementById('editDo').value || '未填写';
-            const skillKiss = document.getElementById('editKiss').value || '未填写';
+            const templateType = document.getElementById('editTemplateType').value;
             const imageData = window.currentMerchantImageData;
-
-            const preview = `地区：#${regionName}              艺名：#${teacherName}
+            let preview = '';
+            
+            if (templateType === '2') {
+                // 自定义模板：直接使用自定义内容
+                const customContent = document.getElementById('editCustomContent').value || '请输入自定义内容';
+                preview = customContent;
+            } else {
+                // 标准模板：按原有格式组装
+                const regionSelect = document.getElementById('editRegionId');
+                const selectedRegion = regions.find(r => r.id == regionSelect.value);
+                const regionName = selectedRegion ? selectedRegion.name : 'xx';
+                
+                const teacherName = document.getElementById('editTeacherName').value || '未填写';
+                const advantages = document.getElementById('editAdvantages').value || '未填写';
+                const disadvantages = document.getElementById('editDisadvantages').value || '未填写';
+                const price1 = document.getElementById('editPrice1').value || '未填写';
+                const price2 = document.getElementById('editPrice2').value || '未填写';
+                const contact = document.getElementById('editContact').value || '未填写';
+                const skillWash = document.getElementById('editWash').value || '未填写';
+                const skillBlow = document.getElementById('editBlow').value || '未填写';
+                const skillDo = document.getElementById('editDo').value || '未填写';
+                const skillKiss = document.getElementById('editKiss').value || '未填写';
+                
+                preview = `地区：#${regionName}              艺名：#${teacherName}
 优点：${advantages}
 缺点：${disadvantages}
 价格：${price1}p              ${price2}pp
@@ -2004,6 +2044,7 @@
 👄吹:${skillBlow}
 ❤️做:${skillDo}
 🐍吻:${skillKiss}`;
+            }
 
             const previewContainer = document.getElementById('merchantInfoPreview');
             
@@ -2039,6 +2080,8 @@
             const skillDo = document.getElementById('editDo').value;
             const skillKiss = document.getElementById('editKiss').value;
             const imageData = window.currentMerchantImageData;
+            const templateType = parseInt(document.getElementById('editTemplateType').value);
+            const customContent = document.getElementById('editCustomContent').value;
 
             try {
                 showLoading();
@@ -2056,7 +2099,9 @@
                     skillBlow,
                     skillDo,
                     skillKiss,
-                    imageData
+                    imageData,
+                    templateType,
+                    customContent
                 });
                 showAlert('商家信息模板更新成功');
                 closeMerchantEditModal();
@@ -3334,6 +3379,29 @@
             loadAllData();
             setupImageDragDrop();
         });
+
+        // 处理模板类型切换
+        function handleTemplateTypeChange() {
+            const templateType = document.getElementById('editTemplateType').value;
+            const customContentSection = document.getElementById('customContentSection');
+            
+            // 使用CSS类名来标识需要隐藏的标准模板区域
+            const standardSections = document.querySelectorAll('.standard-template-section');
+            
+            if (templateType === '2') {
+                // 自定义模板：显示自定义内容区域，隐藏标准模板相关区域
+                customContentSection.style.display = 'block';
+                standardSections.forEach(section => {
+                    section.style.display = 'none';
+                });
+            } else {
+                // 标准模板：隐藏自定义内容区域，显示标准模板相关区域
+                customContentSection.style.display = 'none';
+                standardSections.forEach(section => {
+                    section.style.display = 'block';
+                });
+            }
+        }
     </script>
 </body>
 </html> 

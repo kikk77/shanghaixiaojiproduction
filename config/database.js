@@ -228,6 +228,8 @@ class DatabaseManager {
                 channel_link TEXT,
                 channel_clicks INTEGER DEFAULT 0,
                 image_url TEXT,
+                template_type INTEGER DEFAULT 1,
+                custom_content TEXT,
                 FOREIGN KEY (region_id) REFERENCES regions (id)
             );
         `);
@@ -458,17 +460,27 @@ class DatabaseManager {
             const tableInfo = this.db.prepare("PRAGMA table_info(merchants)").all();
             const columnNames = tableInfo.map(col => col.name);
             
-            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url'];
+            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url', 'template_type', 'custom_content'];
             
             for (const column of requiredColumns) {
                 if (!columnNames.includes(column)) {
                     console.log(`添加字段 ${column} 到 merchants 表`);
-                    if (column.startsWith('price') || column === 'channel_clicks') {
-                        this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);
+                    if (column.startsWith('price') || column === 'channel_clicks' || column === 'template_type') {
+                        if (column === 'template_type') {
+                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
+                        } else {
+                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);
+                        }
                     } else {
                         this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} TEXT`);
                     }
                 }
+            }
+            
+            // 确保现有商家的template_type都设为1（标准模板）
+            const updateResult = this.db.prepare('UPDATE merchants SET template_type = 1 WHERE template_type IS NULL').run();
+            if (updateResult.changes > 0) {
+                console.log(`✅ 已为 ${updateResult.changes} 个现有商家设置默认模板类型`);
             }
         } catch (error) {
             console.error('迁移merchants表失败:', error);

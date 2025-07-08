@@ -532,7 +532,9 @@ const dbOperations = {
                     skill_blow = ?, 
                     skill_do = ?, 
                     skill_kiss = ?,
-                    image_url = ?
+                    image_url = ?,
+                    template_type = ?,
+                    custom_content = ?
                 WHERE id = ?
             `);
             
@@ -550,6 +552,8 @@ const dbOperations = {
                 data.skillDo, 
                 data.skillKiss, 
                 data.imageData,
+                data.templateType || 1,
+                data.customContent || null,
                 id
             );
             

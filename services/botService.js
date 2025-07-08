@@ -5033,21 +5033,15 @@ async function handleRankingCommand(userId, chatId) {
             return;
         }
         
-        const levelDbManager = require('../level/config/levelDatabase').getInstance();
-        const db = levelDbManager.getDatabase();
+        const levelService = require('../level/services/levelService').getInstance();
         
-        if (!db) {
+        if (!levelService.enabled) {
             bot.sendMessage(chatId, '❌ 等级系统暂时不可用');
             return;
         }
         
-        // 获取前10名用户（不按群组区分）
-        const topUsers = db.prepare(`
-            SELECT user_id, display_name, level, total_exp, user_eval_count
-            FROM user_levels
-            ORDER BY level DESC, total_exp DESC
-            LIMIT 10
-        `).all();
+        // 使用 levelService 获取排行榜，默认只显示有评价记录的用户
+        const topUsers = await levelService.getRankings('level', 10, false);
         
         if (topUsers.length === 0) {
             bot.sendMessage(chatId, '📊 暂无排行榜数据');
@@ -5064,24 +5058,37 @@ async function handleRankingCommand(userId, chatId) {
             message += `   Lv.${user.level} | ${user.total_exp} 经验 | ${user.user_eval_count} 次评价\n\n`;
         });
         
-        // 获取当前用户的排名
-        const currentUser = db.prepare(`
-            SELECT * FROM user_levels
-            WHERE user_id = ?
-        `).get(userId);
+        // 获取当前用户的排名（只在有评价记录的用户中计算）
+        const levelDbManager = require('../level/config/levelDatabase').getInstance();
+        const db = levelDbManager.getDatabase();
         
-        let userRank = null;
-        if (currentUser) {
-            userRank = db.prepare(`
-                SELECT COUNT(*) + 1 as rank
-                FROM user_levels
-                WHERE level > ? OR (level = ? AND total_exp > ?)
-            `).get(currentUser.level, currentUser.level, currentUser.total_exp);
-        }
-        
-        if (currentUser && userRank) {
-            message += `\n📍 **我的排名**\n`;
-            message += `第 ${userRank.rank} 名 | Lv.${currentUser.level} | ${currentUser.total_exp} 经验\n`;
+        if (db) {
+            const currentUser = db.prepare(`
+                SELECT * FROM user_levels
+                WHERE user_id = ?
+            `).get(userId);
+            
+            let userRank = null;
+            if (currentUser) {
+                // 只在有评价记录的用户中计算排名
+                userRank = db.prepare(`
+                    SELECT COUNT(*) + 1 as rank
+                    FROM user_levels
+                    WHERE user_id >= 1000000 
+                    AND user_eval_count > 0
+                    AND (level > ? OR (level = ? AND total_exp > ?))
+                `).get(currentUser.level, currentUser.level, currentUser.total_exp);
+                
+                if (currentUser && userRank) {
+                    message += `\n📍 **我的排名**\n`;
+                    if (currentUser.user_eval_count > 0) {
+                        message += `第 ${userRank.rank} 名 | Lv.${currentUser.level} | ${currentUser.total_exp} 经验\n`;
+                    } else {
+                        message += `暂无排名 | Lv.${currentUser.level} | ${currentUser.total_exp} 经验\n`;
+                        message += `💡 完成评价后即可加入排行榜！\n`;
+                    }
+                }
+            }
         }
         
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });

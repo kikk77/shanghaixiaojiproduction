@@ -78,6 +78,7 @@ class LevelSystemInitializer {
         // 检查并添加username字段（兼容性升级）
         try {
             db.exec(`ALTER TABLE user_levels ADD COLUMN username TEXT`);
+            console.log('✅ 添加username字段成功');
         } catch (error) {
             // 字段已存在，忽略错误
             if (!error.message.includes('duplicate column name')) {

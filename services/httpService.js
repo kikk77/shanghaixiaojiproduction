@@ -110,6 +110,30 @@ function handleRoutes(req, res, pathname, method) {
         return;
     }
 
+    // 等级系统管理页面静态资源服务
+    if (pathname.startsWith('/level/admin/')) {
+        const path = require('path');
+        const filePath = path.join(__dirname, '..', pathname);
+        const ext = path.extname(filePath);
+        
+        let contentType = 'text/plain';
+        if (ext === '.css') contentType = 'text/css';
+        else if (ext === '.js') contentType = 'application/javascript';
+        else if (ext === '.html') contentType = 'text/html';
+        
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                console.error(`等级系统管理页面文件读取失败: ${filePath}`, err);
+                res.writeHead(404);
+                res.end('Level system admin file not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
+
     // 上传的图片静态服务
     if (pathname.startsWith('/uploads/')) {
         const path = require('path');
@@ -2016,6 +2040,79 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
         }
     }
 
+    // 等级系统API路由
+    if (pathname.startsWith('/api/level/')) {
+        try {
+            // 延迟加载等级系统服务以避免启动时的依赖问题
+            const levelService = require('../level/services/levelService').getInstance();
+            const pathParts = pathname.split('/');
+            const endpoint = pathParts[3]; // /api/level/{endpoint}
+            
+            // 检查服务是否可用
+            if (!levelService.isAvailable()) {
+                return {
+                    success: false,
+                    error: '等级系统服务不可用'
+                };
+            }
+            
+            // 获取等级配置
+            if (endpoint === 'config' && method === 'GET') {
+                const config = await levelService.getLevelConfig();
+                return {
+                    success: true,
+                    data: config
+                };
+            }
+            
+            // 获取用户排名
+            if (endpoint === 'rankings' && method === 'GET') {
+                const rankings = await levelService.getRankings('level', 20, false);
+                return {
+                    success: true,
+                    data: rankings
+                };
+            }
+            
+            // 获取等级统计
+            if (endpoint === 'stats' && method === 'GET') {
+                const healthStatus = levelService.getHealthStatus();
+                return {
+                    success: true,
+                    data: healthStatus
+                };
+            }
+            
+            // 获取用户等级信息
+            if (endpoint === 'user' && method === 'GET') {
+                const userId = pathParts[4];
+                if (!userId) {
+                    return {
+                        success: false,
+                        error: '缺少用户ID'
+                    };
+                }
+                const userInfo = await levelService.getUserLevelInfo(userId);
+                return {
+                    success: true,
+                    data: userInfo
+                };
+            }
+            
+            return {
+                success: false,
+                error: '等级系统API路径不存在'
+            };
+            
+        } catch (error) {
+            console.error('等级系统API处理失败:', error);
+            return {
+                success: false,
+                error: error.message || '等级系统服务不可用'
+            };
+        }
+    }
+
     // API路由不存在
     console.log(`❌ API路径不存在: ${pathname} (${method})`);
     return { 
@@ -2032,7 +2129,11 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             'GET /api/charts/*',
             'GET /api/daily-hot-teachers',
             'GET /api/daily-hot-message',
-            'GET /api/bot-username'
+            'GET /api/bot-username',
+            'GET /api/level/config',
+            'GET /api/level/rankings',
+            'GET /api/level/stats',
+            'GET /api/level/user/{userId}'
         ]
     };
 }

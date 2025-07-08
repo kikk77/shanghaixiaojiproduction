@@ -12,92 +12,54 @@ const ChannelBroadcastService = require('./channelBroadcastService');
 // 环境变量
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-// 强制清理任何现有的webhook设置，确保使用polling模式
-async function ensurePollingMode() {
-    if (!BOT_TOKEN) {
-        console.log('⚠️ 未找到BOT_TOKEN，跳过Bot初始化');
-        return false;
-    }
-    
-    try {
-        console.log('🔧 强制清理webhook设置，确保polling模式...');
-        
-        // 创建临时Bot实例来清理webhook
-        const TelegramBot = require('node-telegram-bot-api');
-        const tempBot = new TelegramBot(BOT_TOKEN, { polling: false });
-        
-        // 删除任何现有的webhook
-        await tempBot.deleteWebHook();
-        console.log('✅ Webhook已清理，准备使用polling模式');
-        
-        return true;
-    } catch (error) {
-        console.log('⚠️ 清理webhook失败，但继续启动:', error.message);
-        return true; // 继续启动，即使清理失败
-    }
-}
-
 // 初始化Telegram Bot
 let bot;
-async function initializeBot() {
-    // 确保使用polling模式
-    const canInitialize = await ensurePollingMode();
-    if (!canInitialize) {
-        return;
-    }
+try {
+    // 配置Bot选项，避免IP连接问题
+    const botOptions = { 
+        polling: true,
+        // 添加请求选项来提高连接稳定性
+        request: {
+            // 增加超时时间
+            timeout: 60000,
+            // 启用keep-alive
+            forever: true,
+            // 允许重试
+            pool: {
+                maxSockets: 10
+            }
+        }
+    };
     
-    try {
-        console.log(`🤖 Bot配置: 使用Polling模式（适合等级系统和商家管理）`);
-        
-        // 配置Bot选项，避免IP连接问题
-        const botOptions = { 
-            polling: true,
-            // 添加请求选项来提高连接稳定性
-            request: {
-                // 增加超时时间
-                timeout: 60000,
-                // 启用keep-alive
-                forever: true,
-                // 允许重试
-                pool: {
-                    maxSockets: 10
-                }
-            }
-        };
-        
-        bot = new TelegramBot(BOT_TOKEN, botOptions);
-        console.log('✅ Telegram Bot初始化成功');
-        
-        // 添加错误事件监听
-        bot.on('error', (error) => {
-            console.error('❌ Telegram Bot错误:', error.message);
-            if (error.code === 'EFATAL') {
-                console.log('⚠️ 检测到致命错误，但Bot将继续运行');
-            }
-        });
-        
-        bot.on('polling_error', (error) => {
-            console.error('❌ Telegram Bot轮询错误:', error.message);
-            if (error.message.includes('ENOTFOUND')) {
-                console.log('⚠️ 网络连接问题，Bot将自动重试连接');
-            } else if (error.message.includes('ETIMEDOUT')) {
-                console.log('⚠️ 连接超时，Bot将自动重试连接');
-            } else if (error.message.includes('409 Conflict')) {
-                console.log('⚠️ 检测到409冲突，可能有多个实例在运行');
-                console.log('💡 建议：检查是否有其他Bot实例在运行，或等待旧实例完全关闭');
-            }
-        });
-        
-    } catch (error) {
-        console.log('⚠️ Telegram Bot初始化失败，但应用将继续运行:', error.message);
-        // 创建一个假的bot对象，避免后续代码报错
-        bot = {
-            on: () => {},
-            sendMessage: () => Promise.reject(new Error('Bot未初始化')),
-            sendPhoto: () => Promise.reject(new Error('Bot未初始化')),
-            answerCallbackQuery: () => Promise.reject(new Error('Bot未初始化'))
-        };
-    }
+    bot = new TelegramBot(BOT_TOKEN, botOptions);
+    console.log('✅ Telegram Bot初始化成功');
+    
+    // 添加错误事件监听
+    bot.on('error', (error) => {
+        console.error('❌ Telegram Bot错误:', error.message);
+        if (error.code === 'EFATAL') {
+            console.log('⚠️ 检测到致命错误，但Bot将继续运行');
+        }
+    });
+    
+    bot.on('polling_error', (error) => {
+        console.error('❌ Telegram Bot轮询错误:', error.message);
+        if (error.message.includes('ENOTFOUND')) {
+            console.log('⚠️ 网络连接问题，Bot将自动重试连接');
+        } else if (error.message.includes('ETIMEDOUT')) {
+            console.log('⚠️ 连接超时，Bot将自动重试连接');
+        }
+    });
+    
+} catch (error) {
+    console.log('⚠️ Telegram Bot初始化失败，但应用将继续运行:', error.message);
+    // 创建一个假的bot对象，避免后续代码报错
+    bot = {
+        on: () => {},
+        sendMessage: () => Promise.reject(new Error('Bot未初始化')),
+        sendPhoto: () => Promise.reject(new Error('Bot未初始化')),
+        answerCallbackQuery: () => Promise.reject(new Error('Bot未初始化'))
+    };
 }
 
 // 全局变量 - 优化内存管理
@@ -5147,7 +5109,6 @@ async function handleRankingCommand(userId, chatId) {
 
 module.exports = {
     bot,
-    initializeBot,
     loadCacheData,
     sendMessageTemplate,
     checkTriggerWords,

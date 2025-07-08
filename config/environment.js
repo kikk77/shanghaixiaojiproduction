@@ -228,34 +228,32 @@ async function startApp() {
         if (hasRequiredVars && process.env.BOT_TOKEN) {
             console.log('🤖 启动Telegram Bot相关功能...');
             
-            const botService = require('../services/botService');
+            const { loadCacheData, initBotHandlers, bot, getBotUsername } = require('../services/botService');
             const { initScheduler } = require('../services/schedulerService');
             
-            // 首先初始化Bot实例（包含webhook清理）
-            await botService.initializeBot();
-            
             // 加载缓存数据
-            await botService.loadCacheData();
+            await loadCacheData();
             
             // 初始化Bot事件监听
-            botService.initBotHandlers();
+            initBotHandlers();
             
             // 预先获取Bot用户名并缓存
             try {
-                const botUsername = await botService.getBotUsername();
+                const botUsername = await getBotUsername();
                 console.log(`✅ Bot用户名预获取成功: @${botUsername}`);
             } catch (error) {
                 console.warn('⚠️ Bot用户名预获取失败:', error.message);
             }
             
             // 设置全局Bot服务实例，供HTTP API使用
-            global.botService = { bot: botService.bot, getBotUsername: botService.getBotUsername };
+            global.botService = { bot, getBotUsername };
             
             // 启动定时任务调度器
             initScheduler();
             
             // 初始化频道克隆服务（如果启用）
-            await botService.initializeChannelServices();
+            const { initializeChannelServices } = require('../services/botService');
+            await initializeChannelServices();
             
             console.log('✅ 完整功能启动完成！');
             console.log('🎯 Bot功能列表:');

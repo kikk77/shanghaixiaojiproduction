@@ -9,6 +9,7 @@ let allBadges = [];
 let currentUserId = null;
 let currentGroupId = 'default';
 let groupConfigs = {};
+let showActiveUsersOnly = true; // 默认只显示有评价记录的用户
 
 // ==================== 管理员密码验证系统 ====================
 
@@ -139,6 +140,9 @@ function deleteGroup(groupId) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🏆 等级系统管理界面初始化开始...');
     
+    // 应用假前端修复
+    applyFakeFrontendFixes();
+    
     // 检查等级系统是否启用
     checkLevelSystemStatus();
     
@@ -167,6 +171,104 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('✅ 等级系统管理界面初始化完成');
 });
+
+// 应用假前端修复
+function applyFakeFrontendFixes() {
+    console.log('🔧 应用假前端修复...');
+    
+    // 禁用未实现的功能
+    const disabledFeatures = {
+        // 数据导出功能
+        exportAllData: async function() {
+            showMessage('数据导出功能正在开发中，预计下个版本上线', 'warning');
+        },
+        exportUserData: async function() {
+            showMessage('数据导出功能正在开发中，预计下个版本上线', 'warning');
+        },
+        exportConfig: async function() {
+            showMessage('数据导出功能正在开发中，预计下个版本上线', 'warning');
+        },
+        // 数据导入功能
+        importData: async function() {
+            showMessage('数据导入功能正在开发中，预计下个版本上线', 'warning');
+        },
+        // 测试播报
+        testBroadcast: async function() {
+            try {
+                showMessage('正在发送测试播报...', 'info');
+                
+                const response = await fetch('/api/level/broadcast/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'level_up',
+                        testData: {
+                            user_name: '@测试用户',
+                            old_level: 1,
+                            new_level: 2,
+                            level_name: '初级勇士 🔵',
+                            level_up_points: 50
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess('测试播报发送成功！请检查群组消息');
+                } else {
+                    showError('测试播报失败：' + result.error);
+                }
+            } catch (error) {
+                showError('测试播报失败：' + error.message);
+            }
+        },
+        // 授予勋章
+        awardBadge: async function() {
+            showMessage('勋章授予功能即将上线', 'warning');
+        },
+        // 调整用户数据
+        adjustUserData: async function() {
+            showMessage('用户数据调整功能即将上线', 'warning');
+        },
+        // 群组迁移
+        migrateGroup: async function() {
+            showMessage('数据迁移功能正在开发中，预计下个版本上线', 'warning');
+        },
+        // 数据库管理
+        loadDataManagement: async function() {
+            showMessage('数据库管理功能正在开发中', 'warning');
+            // 显示基础信息
+            const container = document.getElementById('data-tab');
+            if (container) {
+                container.innerHTML = `
+                    <div class="info-box" style="margin: 20px; padding: 20px; background: #e8f4fd; border: 1px solid #b3d4fc; border-radius: 8px;">
+                        <h3>📊 数据库信息</h3>
+                        <p>数据库类型：SQLite</p>
+                        <p>数据库文件：level_system.db</p>
+                        <p>数据库位置：独立于主系统</p>
+                        <p class="warning" style="color: #f57c00; margin-top: 15px;">⚠️ 高级管理功能正在开发中...</p>
+                    </div>
+                `;
+            }
+        },
+        // 统计功能
+        loadDetailedStats: async function() {
+            showMessage('高级统计功能正在开发中', 'warning');
+        },
+        // 系统切换
+        toggleLevelSystem: async function() {
+            showMessage('系统状态切换功能暂未实现', 'warning');
+        }
+    };
+    
+    // 替换全局函数
+    for (const [funcName, func] of Object.entries(disabledFeatures)) {
+        window[funcName] = func;
+    }
+    
+    console.log('✅ 假前端修复应用完成');
+}
 
 // 检查等级系统状态
 async function checkLevelSystemStatus() {
@@ -927,16 +1029,31 @@ function renderConfig(configs) {
     container.innerHTML = html;
 }
 
+// 切换用户筛选
+function toggleUserFilter() {
+    const checkbox = document.getElementById('showActiveUsersOnly');
+    showActiveUsersOnly = checkbox.checked;
+    
+    // 重新加载统计数据和用户列表
+    loadStats();
+}
+
 // 更新排行榜
 function updateRanking(topUsers) {
     const tbody = document.getElementById('userRankingBody');
     
-    if (topUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">暂无数据</td></tr>';
+    // 根据筛选条件过滤用户
+    let filteredUsers = topUsers;
+    if (showActiveUsersOnly) {
+        filteredUsers = topUsers.filter(user => user.user_eval_count > 0);
+    }
+    
+    if (filteredUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">暂无数据</td></tr>';
         return;
     }
     
-    tbody.innerHTML = topUsers.map((user, index) => {
+    tbody.innerHTML = filteredUsers.map((user, index) => {
         const rank = index + 1;
         const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
         
@@ -953,6 +1070,7 @@ function updateRanking(topUsers) {
                 <td><span class="level-badge level-${user.level}">Lv.${user.level}</span></td>
                 <td>${user.total_exp}</td>
                 <td>${user.available_points}</td>
+                <td>${user.user_eval_count || 0}</td>
                 <td>
                     <div class="action-buttons">
                         <button class="btn btn-sm btn-primary" onclick="viewUserDetails('${user.user_id}')" title="查看详情">
@@ -1046,6 +1164,9 @@ window.showImportModal = showImportModal;
 window.importData = importData;
 window.showMigrateModal = showMigrateModal;
 window.migrateData = migrateData;
+
+// 导出新增的用户筛选函数
+window.toggleUserFilter = toggleUserFilter;
 
   // 导出其他缺失的函数
   window.toggleLevelSystem = toggleLevelSystem;

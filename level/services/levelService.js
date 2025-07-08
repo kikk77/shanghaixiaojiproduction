@@ -388,85 +388,26 @@ class LevelService {
     }
     
     /**
-     * 播报升级消息（复用现有Bot服务）
+     * 播报升级消息（使用专门的播报服务）
      */
     async broadcastLevelUp(userId, sourceGroupId, levelUpResult) {
         if (!this.enabled) return;
         
         try {
-            // 获取用户信息
-            const userInfo = await this.getUserDisplayInfo(userId);
+            const broadcastService = require('./broadcastService').getInstance();
+            const result = await broadcastService.broadcastLevelUp(userId, sourceGroupId, levelUpResult);
             
-            // 构建升级消息
-            const message = `🎉 恭喜升级！🎉\n\n` +
-                `🧑‍🚀 ${userInfo.displayName}\n` +
-                `⭐ Lv.${levelUpResult.oldLevel} → Lv.${levelUpResult.newLevel} ${levelUpResult.newLevelInfo.name}\n` +
-                `💎 升级奖励：50积分\n\n` +
-                `继续努力，成为传说勇士！💪`;
-            
-            // 获取播报目标群组
-            const targetGroups = await this.getBroadcastTargetGroups();
-            
-            if (targetGroups.length === 0) {
-                console.log('没有配置播报群组，跳过升级播报');
-                return;
-            }
-            
-            // 向所有配置的群组播报
-            for (const targetGroupId of targetGroups) {
-                try {
-                    if (this.botService.bot) {
-                        const sentMessage = await this.botService.bot.telegram.sendMessage(targetGroupId, message, {
-                            parse_mode: 'Markdown'
-                        });
-                        
-                        // 尝试置顶消息
-                        try {
-                            await this.botService.bot.telegram.pinChatMessage(targetGroupId, sentMessage.message_id);
-                            // 5秒后取消置顶
-                            setTimeout(async () => {
-                                try {
-                                    await this.botService.bot.telegram.unpinChatMessage(targetGroupId, sentMessage.message_id);
-                                } catch (err) {
-                                    // 忽略取消置顶的错误
-                                }
-                            }, 5000);
-                        } catch (pinError) {
-                            console.log(`群组 ${targetGroupId} 置顶消息失败:`, pinError.message);
-                        }
-                        
-                        console.log(`升级播报成功发送到群组: ${targetGroupId}`);
-                    }
-                } catch (error) {
-                    console.error(`向群组 ${targetGroupId} 播报升级失败:`, error);
-                }
+            if (!result.success) {
+                console.log(`升级播报未发送: ${result.error}`);
+            } else {
+                console.log(`升级播报完成，成功发送到 ${result.results.filter(r => r.success).length} 个群组`);
             }
         } catch (error) {
-            console.error('等级系统播报失败:', error);
+            console.error('调用播报服务失败:', error);
         }
     }
     
-    /**
-     * 获取播报目标群组
-     */
-    async getBroadcastTargetGroups() {
-        const db = this.levelDb.getDatabase();
-        if (!db) return [];
-        
-        try {
-            const stmt = db.prepare(`
-                SELECT group_id FROM group_configs 
-                WHERE status = 'active' 
-                AND broadcast_enabled = 1
-                AND group_id != 'global'
-            `);
-            const groups = stmt.all();
-            return groups.map(g => g.group_id);
-        } catch (error) {
-            console.error('获取播报目标群组失败:', error);
-            return [];
-        }
-    }
+
     
     /**
      * 检查勋章解锁
@@ -551,7 +492,7 @@ class LevelService {
     /**
      * 获取排行榜 - 简化版本
      */
-    async getRankings(type = 'level', limit = 10) {
+    async getRankings(type = 'level', limit = 10, includeInactive = false) {
         const db = this.levelDb.getDatabase();
         if (!db) return [];
         
@@ -571,10 +512,16 @@ class LevelService {
                     orderBy = 'level DESC, total_exp DESC';
             }
             
+            // 根据 includeInactive 参数决定是否过滤无评价的用户
+            const whereClause = includeInactive ? 
+                'WHERE user_id >= 1000000' : // 只过滤真实用户ID
+                'WHERE user_id >= 1000000 AND user_eval_count > 0'; // 过滤有评价记录的真实用户
+            
             const stmt = db.prepare(`
-                SELECT user_id, level, total_exp, available_points, total_points_earned, display_name
+                SELECT user_id, level, total_exp, available_points, total_points_earned, 
+                       display_name, user_eval_count, username
                 FROM user_levels 
-                WHERE level > 0
+                ${whereClause}
                 ORDER BY ${orderBy}
                 LIMIT ?
             `);

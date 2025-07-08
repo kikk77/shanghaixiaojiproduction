@@ -349,6 +349,15 @@
             
             <div class="form-section">
                 <h2>📊 用户排行榜</h2>
+                <div style="margin-bottom: 15px;">
+                    <label>
+                        <input type="checkbox" id="showActiveUsersOnly" checked onchange="toggleUserFilter()">
+                        只显示有评价记录的用户
+                    </label>
+                    <span style="margin-left: 10px; color: #666; font-size: 14px;">
+                        （取消勾选将显示所有用户）
+                    </span>
+                </div>
                 <table class="config-table">
                     <thead>
                         <tr>
@@ -359,11 +368,12 @@
                             <th>等级</th>
                             <th>经验值</th>
                             <th>积分</th>
+                            <th>评价数</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="userRankingBody">
-                        <tr><td colspan="8" style="text-align: center;">加载中...</td></tr>
+                        <tr><td colspan="9" style="text-align: center;">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -594,49 +604,49 @@
                     <div class="loading-text">正在加载详细统计信息...</div>
                 </div>
                 
-                <h3>📤 数据导出</h3>
+                <h3>📤 数据导出 <span style="color: #ff9800; font-size: 14px;">(功能开发中)</span></h3>
                 <div class="form-grid">
-                    <button class="btn btn-primary" onclick="exportAllData()">📤 导出完整数据</button>
-                    <button class="btn btn-primary" onclick="exportUserData()">👥 导出用户数据</button>
-                    <button class="btn btn-primary" onclick="exportConfig()">⚙️ 导出配置</button>
+                    <button class="btn btn-primary" onclick="exportAllData()" style="opacity: 0.8;" title="功能开发中">📤 导出完整数据</button>
+                    <button class="btn btn-primary" onclick="exportUserData()" style="opacity: 0.8;" title="功能开发中">👥 导出用户数据</button>
+                    <button class="btn btn-primary" onclick="exportConfig()" style="opacity: 0.8;" title="功能开发中">⚙️ 导出配置</button>
                 </div>
                 
-                <h3>📥 数据导入</h3>
+                <h3>📥 数据导入 <span style="color: #ff9800; font-size: 14px;">(功能开发中)</span></h3>
                 <div class="warning-box">
                     ⚠️ 导入数据会覆盖现有数据，请谨慎操作！
                 </div>
                 <div class="form-grid">
-                    <input type="file" id="importFile" accept=".json">
-                    <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                    <input type="file" id="importFile" accept=".json" disabled>
+                    <button class="btn btn-warning" onclick="importData()" style="opacity: 0.8;" title="功能开发中">📥 导入数据</button>
                 </div>
                 
-                <h3>🔄 群组迁移</h3>
+                <h3>🔄 群组迁移 <span style="color: #ff9800; font-size: 14px;">(功能开发中)</span></h3>
                 <div class="form-grid">
                     <div class="form-group">
                         <label>源群组：</label>
-                        <select id="sourceGroup">
+                        <select id="sourceGroup" disabled>
                             <option value="">选择源群组</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>目标群组ID：</label>
-                        <input type="text" id="targetGroupId" placeholder="-1001234567890">
+                        <input type="text" id="targetGroupId" placeholder="-1001234567890" disabled>
                     </div>
                 </div>
-                <button class="btn btn-warning" onclick="migrateGroup()">🔄 迁移群组</button>
+                <button class="btn btn-warning" onclick="migrateGroup()" style="opacity: 0.8;" title="功能开发中">🔄 迁移群组</button>
                 
-                <h3>🛠️ 数据库维护</h3>
+                <h3>🛠️ 数据库维护 <span style="color: #ff9800; font-size: 14px;">(功能开发中)</span></h3>
                 <div class="form-grid">
-                    <button class="btn btn-info" onclick="cleanupData()">🧹 清理无效数据</button>
-                    <button class="btn btn-success" onclick="optimizeDatabase()">⚡ 优化数据库</button>
+                    <button class="btn btn-info" onclick="cleanupData()" style="opacity: 0.8;" title="功能开发中">🧹 清理无效数据</button>
+                    <button class="btn btn-success" onclick="optimizeDatabase()" style="opacity: 0.8;" title="功能开发中">⚡ 优化数据库</button>
                 </div>
                 
-                <h3>💾 数据库备份</h3>
+                <h3>💾 数据库备份 <span style="color: #ff9800; font-size: 14px;">(功能开发中)</span></h3>
                 <div class="form-grid">
-                    <button class="btn btn-primary" onclick="createBackup()">💾 创建备份</button>
+                    <button class="btn btn-primary" onclick="createBackup()" style="opacity: 0.8;" title="功能开发中">💾 创建备份</button>
                     <div class="form-group">
-                        <input type="file" id="backupFile" accept=".db,.sqlite,.sqlite3">
-                        <button class="btn btn-danger" onclick="restoreBackup()">🔄 恢复备份</button>
+                        <input type="file" id="backupFile" accept=".db,.sqlite,.sqlite3" disabled>
+                        <button class="btn btn-danger" onclick="restoreBackup()" style="opacity: 0.8;" title="功能开发中">🔄 恢复备份</button>
                     </div>
                 </div>
                 
@@ -829,14 +839,14 @@
                 <label>调整原因：</label>
                 <input type="text" id="adjustReason" placeholder="请输入调整原因">
             </div>
-            <button class="btn btn-warning" onclick="adjustUserData()">执行调整</button>
+            <button class="btn btn-warning" onclick="adjustUserData()" style="opacity: 0.8;" title="功能即将上线">执行调整 <span style="color: #ff9800; font-size: 12px;">(即将上线)</span></button>
             
-            <h3>授予勋章</h3>
+            <h3>授予勋章 <span style="color: #ff9800; font-size: 14px;">(即将上线)</span></h3>
             <div class="form-group">
-                <select id="awardBadgeSelect">
+                <select id="awardBadgeSelect" disabled>
                     <option value="">选择勋章</option>
                 </select>
-                <button class="btn btn-success" onclick="awardBadge()">授予勋章</button>
+                <button class="btn btn-success" onclick="awardBadge()" style="opacity: 0.8;" title="功能即将上线">授予勋章</button>
             </div>
         </div>
     </div>

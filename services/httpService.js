@@ -3347,6 +3347,34 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
         }
         
+        // 测试播报API
+        if (endpoint === 'broadcast' && pathParts[4] === 'test' && method === 'POST') {
+            const { type = 'level_up', testData = {} } = data;
+            
+            try {
+                console.log('🏆 [API] 测试播报:', type, testData);
+                
+                const broadcastService = require('../level/services/broadcastService').getInstance();
+                const result = await broadcastService.testBroadcast(type, testData);
+                
+                if (result.success) {
+                    return { 
+                        success: true, 
+                        message: '播报测试成功',
+                        results: result.results 
+                    };
+                } else {
+                    return { 
+                        success: false, 
+                        error: result.error || '播报测试失败' 
+                    };
+                }
+            } catch (error) {
+                console.error('测试播报失败:', error);
+                return { success: false, error: '测试播报失败: ' + error.message };
+            }
+        }
+        
 
         
         // 数据导出API

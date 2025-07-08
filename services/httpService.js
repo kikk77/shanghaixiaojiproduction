@@ -134,6 +134,30 @@ function handleRoutes(req, res, pathname, method) {
         return;
     }
 
+    // 等级系统管理页面静态资源服务
+    if (pathname.startsWith('/level/admin/')) {
+        const path = require('path');
+        const filePath = path.join(__dirname, '..', pathname);
+        const ext = path.extname(filePath);
+        
+        let contentType = 'text/plain';
+        if (ext === '.css') contentType = 'text/css';
+        else if (ext === '.js') contentType = 'application/javascript';
+        else if (ext === '.html') contentType = 'text/html';
+        
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                console.error(`等级系统管理页面文件读取失败: ${filePath}`, err);
+                res.writeHead(404);
+                res.end('Level system admin file not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
+
     // 上传的图片静态服务
     if (pathname.startsWith('/uploads/')) {
         const path = require('path');

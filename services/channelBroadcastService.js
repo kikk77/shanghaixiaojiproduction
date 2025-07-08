@@ -492,14 +492,20 @@ class ChannelBroadcastService {
                     }
                 };
                 
-                await this.configService.createConfig(configData);
+                const result = await this.configService.saveConfig(configData);
+                if (!result.success) {
+                    throw new Error(result.errors?.join(', ') || 'Failed to save config');
+                }
                 console.log(`✅ 创建播报配置成功`);
             } else {
                 // 更新现有配置
                 config.settings.broadcastEnabled = true;
                 config.settings.broadcastTargetGroups = targetGroups;
                 
-                await this.configService.updateConfig(config.name, config);
+                const result = await this.configService.saveConfig(config);
+                if (!result.success) {
+                    throw new Error(result.errors?.join(', ') || 'Failed to update config');
+                }
                 console.log(`✅ 更新播报配置成功`);
             }
             

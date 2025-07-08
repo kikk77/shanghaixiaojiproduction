@@ -182,17 +182,17 @@ class PerformanceMonitor {
         return `${seconds}秒`;
     }
     
-    // 开始定期收集性能数据
+    // 开始定期收集性能数据（优化频率）
     startPeriodicCollection() {
-        // 每分钟收集一次内存使用情况
+        // 每5分钟收集一次内存使用情况（从1分钟改为5分钟）
         setInterval(() => {
             this.recordMemoryUsage();
-        }, 60 * 1000);
+        }, 5 * 60 * 1000);
         
-        // 每10分钟清理过期的性能数据
+        // 每30分钟清理过期的性能数据（从10分钟改为30分钟）
         setInterval(() => {
             this.cleanupOldMetrics();
-        }, 10 * 60 * 1000);
+        }, 30 * 60 * 1000);
     }
     
     // 清理旧的性能数据

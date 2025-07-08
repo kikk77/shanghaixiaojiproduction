@@ -100,7 +100,8 @@ const bookingCooldowns = new Map(); // 预约冷却时间管理
 const MEMORY_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30分钟清理一次
 const MAX_USER_HISTORY = 20; // 每用户最多保存20条消息历史
 
-// 定期清理过期的内存数据
+// 定期清理过期的内存数据（优化频率：从30分钟改为60分钟）
+const OPTIMIZED_CLEANUP_INTERVAL = 60 * 60 * 1000; // 60分钟清理一次
 setInterval(() => {
     const now = Date.now();
     
@@ -126,7 +127,7 @@ setInterval(() => {
     }
     
     console.log(`内存清理完成 - 消息历史大小: ${userMessageHistory.size}, 预约冷却大小: ${bookingCooldowns.size}`);
-}, MEMORY_CLEANUP_INTERVAL);
+}, OPTIMIZED_CLEANUP_INTERVAL);
 
 // 绑定步骤枚举已移除（绑定流程已简化）
 

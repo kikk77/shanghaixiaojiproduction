@@ -130,13 +130,13 @@ class LevelService {
     }
     
     /**
-     * 启动缓存清理定时器（修改为保存定时器引用）
+     * 启动缓存清理定时器（优化：减少清理频率）
      */
     startCacheCleanup() {
-        // 每5分钟清理一次过期缓存
+        // 每30分钟清理一次过期缓存（从5分钟改为30分钟）
         this.cacheCleanupTimer = setInterval(() => {
             this.cleanExpiredCache();
-        }, 5 * 60 * 1000);
+        }, 30 * 60 * 1000);
     }
     
     /**

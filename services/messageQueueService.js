@@ -15,9 +15,9 @@ class MessageQueueService {
         this.isRunning = false;
         this.cronJob = null;
         
-        // 队列处理配置
+        // 队列处理配置（优化：减少处理频率）
         this.config = {
-            processingInterval: 30, // 秒
+            processingInterval: 60, // 秒（从30秒改为60秒）
             batchSize: 10, // 每次处理的任务数量
             maxRetries: 3,
             retryDelayMultiplier: 2 // 指数退避倍数

@@ -18,7 +18,7 @@ class ApiService {
         this.requestCache = new Map();
         this.cacheTimeout = 2 * 60 * 1000; // 2分钟缓存
         
-        // 定期清理过期缓存
+        // 定期清理过期缓存（优化：减少清理频率）
         setInterval(() => {
             const now = Date.now();
             for (const [key, data] of this.requestCache.entries()) {
@@ -26,7 +26,7 @@ class ApiService {
                     this.requestCache.delete(key);
                 }
             }
-        }, 60 * 1000); // 每分钟清理一次
+        }, 10 * 60 * 1000); // 每10分钟清理一次（从1分钟改为10分钟）
         
         // 延迟加载服务
         this.dataImportService = null;

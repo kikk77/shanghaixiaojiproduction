@@ -3118,7 +3118,6 @@ async function handleLevelApiRequest(pathname, method, data) {
                     SELECT user_id, display_name, username, level, total_exp, available_points, user_eval_count
                     FROM user_levels
                     ORDER BY level DESC, total_exp DESC
-                    LIMIT 10
                 `).all()
             };
             

@@ -5,6 +5,7 @@
 
 const path = require('path');
 const Database = require('better-sqlite3');
+const fs = require('fs');
 
 // 设置项目根目录
 process.chdir(path.join(__dirname, '../..'));
@@ -27,7 +28,38 @@ async function syncFromMainDatabase() {
         
         console.log('✅ 数据库连接成功');
         
-        // 3. 检查主数据库中的评价数据
+        // 3. 加载用户交互数据获取真实用户信息
+        const interactionsPath = path.join(__dirname, '../../business_data/interactions/interactions.json');
+        let userInfoMap = {};
+        
+        try {
+            if (fs.existsSync(interactionsPath)) {
+                const interactionsData = JSON.parse(fs.readFileSync(interactionsPath, 'utf8'));
+                
+                // 构建用户信息映射（取最新的用户信息）
+                interactionsData.forEach(interaction => {
+                    if (interaction.user_id) {
+                        const displayName = [interaction.first_name, interaction.last_name]
+                            .filter(name => name && name.trim())
+                            .join(' ') || `用户${interaction.user_id}`;
+                        
+                        userInfoMap[interaction.user_id] = {
+                            display_name: displayName,
+                            username: interaction.username || null
+                        };
+                    }
+                });
+                
+                console.log(`📋 从交互数据中获取 ${Object.keys(userInfoMap).length} 个用户信息`);
+            } else {
+                console.log('⚠️ 交互数据文件不存在，将使用默认用户名');
+            }
+        } catch (error) {
+            console.error('❌ 读取交互数据失败:', error);
+            console.log('⚠️ 将使用默认用户名');
+        }
+        
+        // 4. 检查主数据库中的评价数据
         const evaluationCount = mainDb.prepare(`
             SELECT COUNT(*) as count FROM evaluations
         `).get();
@@ -39,7 +71,7 @@ async function syncFromMainDatabase() {
             return;
         }
         
-        // 4. 获取所有参与评价的用户
+        // 5. 获取所有参与评价的用户
         const evaluationUsers = mainDb.prepare(`
             SELECT 
                 evaluator_id as user_id,
@@ -54,7 +86,7 @@ async function syncFromMainDatabase() {
         
         console.log(`👥 发现 ${evaluationUsers.length} 个参与评价的用户`);
         
-        // 5. 获取商家评价数据（evaluator_type = 'merchant'）
+        // 6. 获取商家评价数据（evaluator_type = 'merchant'）
         const merchantEvaluations = mainDb.prepare(`
             SELECT 
                 evaluator_id as user_id,
@@ -69,7 +101,7 @@ async function syncFromMainDatabase() {
             merchantEvalMap[row.user_id] = row.merchant_eval_count;
         });
         
-        // 6. 获取文字评价数据
+        // 7. 获取文字评价数据
         const textEvaluations = mainDb.prepare(`
             SELECT 
                 evaluator_id as user_id,
@@ -84,10 +116,10 @@ async function syncFromMainDatabase() {
             textEvalMap[row.user_id] = row.text_eval_count;
         });
         
-        // 7. 启用等级系统环境变量
+        // 8. 启用等级系统环境变量
         process.env.LEVEL_SYSTEM_ENABLED = 'true';
         
-        // 8. 获取等级服务
+        // 9. 获取等级服务
         const levelService = require('../services/levelService').getInstance();
         
         if (!levelService) {
@@ -95,7 +127,7 @@ async function syncFromMainDatabase() {
             return;
         }
         
-        // 9. 同步用户数据
+        // 10. 同步用户数据
         let syncedCount = 0;
         let skippedCount = 0;
         
@@ -111,6 +143,12 @@ async function syncFromMainDatabase() {
                     skippedCount++;
                     continue;
                 }
+                
+                // 获取用户真实信息
+                const userInfo = userInfoMap[user.user_id] || {
+                    display_name: `用户${user.user_id}`,
+                    username: null
+                };
                 
                 // 创建用户等级记录
                 const merchantEvalCount = merchantEvalMap[user.user_id] || 0;
@@ -136,8 +174,8 @@ async function syncFromMainDatabase() {
                     INSERT INTO user_levels (
                         user_id, level, total_exp, available_points, total_points_earned,
                         user_eval_count, merchant_eval_count, text_eval_count,
-                        display_name, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        display_name, username, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                     user.user_id,
                     level,
@@ -147,7 +185,8 @@ async function syncFromMainDatabase() {
                     user.evaluation_count,
                     merchantEvalCount,
                     textEvalCount,
-                    `用户${user.user_id}`, // 默认显示名称
+                    userInfo.display_name,
+                    userInfo.username,
                     user.first_evaluation,
                     user.last_evaluation
                 );
@@ -170,7 +209,7 @@ async function syncFromMainDatabase() {
                     user.last_evaluation
                 );
                 
-                console.log(`✅ 同步用户 ${user.user_id}: Lv.${level}, ${totalExp}经验, ${totalPoints}积分`);
+                console.log(`✅ 同步用户 ${userInfo.display_name} (@${userInfo.username || '未设置'}): Lv.${level}, ${totalExp}经验, ${totalPoints}积分`);
                 syncedCount++;
                 
             } catch (error) {
@@ -178,22 +217,22 @@ async function syncFromMainDatabase() {
             }
         }
         
-        // 10. 同步结果统计
+        // 11. 同步结果统计
         console.log('\n📊 同步结果统计:');
         console.log(`✅ 成功同步: ${syncedCount} 个用户`);
         console.log(`⏭️ 跳过已存在: ${skippedCount} 个用户`);
         console.log(`📈 总用户数: ${evaluationUsers.length}`);
         
-        // 11. 验证同步结果
+        // 12. 验证同步结果
         const levelUsers = levelDb.prepare(`
             SELECT COUNT(*) as count FROM user_levels
         `).get();
         
         console.log(`🎯 等级系统中现有用户数: ${levelUsers.count}`);
         
-        // 12. 显示排行榜预览
+        // 13. 显示排行榜预览
         const topUsers = levelDb.prepare(`
-            SELECT user_id, display_name, level, total_exp, available_points
+            SELECT user_id, display_name, username, level, total_exp, available_points
             FROM user_levels 
             ORDER BY total_exp DESC 
             LIMIT 10
@@ -202,11 +241,11 @@ async function syncFromMainDatabase() {
         if (topUsers.length > 0) {
             console.log('\n🏆 用户排行榜预览:');
             topUsers.forEach((user, index) => {
-                console.log(`  ${index + 1}. ${user.display_name} - Lv.${user.level} (${user.total_exp}经验, ${user.available_points}积分)`);
+                console.log(`  ${index + 1}. ${user.display_name} (@${user.username || '未设置'}) - Lv.${user.level} (${user.total_exp}经验, ${user.available_points}积分)`);
             });
         }
         
-        // 13. 关闭数据库连接
+        // 14. 关闭数据库连接
         mainDb.close();
         levelDb.close();
         

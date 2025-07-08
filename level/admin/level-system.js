@@ -554,26 +554,34 @@ function renderUserTable(users) {
     const tbody = document.getElementById('userTableBody');
     
     if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">暂无数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">暂无数据</td></tr>';
         return;
     }
     
-    tbody.innerHTML = users.map(user => `
+    tbody.innerHTML = users.map(user => {
+        const displayName = user.display_name || `用户${user.user_id}`;
+        const username = user.username ? `@${user.username}` : '@未设置';
+        
+        return `
         <tr>
             <td>${user.user_id}</td>
-            <td>${user.display_name}</td>
+            <td>${displayName}</td>
+            <td>${username}</td>
             <td><span class="level-badge level-${user.level}">Lv.${user.level}</span></td>
             <td>${user.total_exp}</td>
             <td>${user.available_points}</td>
             <td>${user.user_eval_count}</td>
             <td>
                 <div class="action-buttons">
-                    <button class="btn-sm btn-primary" onclick="editUser('${user.user_id}')">编辑</button>
-                    <button class="btn-sm btn-success" onclick="viewUserBadges('${user.user_id}')">勋章</button>
+                    <button class="btn-sm btn-info" onclick="viewUserDetails('${user.user_id}')" title="查看详情">详情</button>
+                    <button class="btn-sm btn-success" onclick="adjustUserPoints('${user.user_id}')" title="调整积分">💎 积分</button>
+                    <button class="btn-sm btn-warning" onclick="adjustUserExp('${user.user_id}')" title="调整经验">⚡ 经验</button>
+                    <button class="btn-sm btn-primary" onclick="adjustUserLevel('${user.user_id}')" title="调整等级">⭐ 等级</button>
                 </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // 渲染分页

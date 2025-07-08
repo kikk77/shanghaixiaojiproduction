@@ -2140,6 +2140,15 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
                 };
             }
             
+            // 同步数据端点
+            if (endpoint === 'sync-data' && method === 'POST') {
+                const syncResult = await syncDataFromMainDatabase();
+                return {
+                    success: true,
+                    data: syncResult
+                };
+            }
+            
             return {
                 success: false,
                 error: '等级系统API路径不存在'
@@ -2233,6 +2242,109 @@ function checkDatabaseConnection() {
             connected: false,
             error: error.message
         };
+    }
+}
+
+// 从主数据库同步数据到等级系统
+async function syncDataFromMainDatabase() {
+    console.log('🔄 开始从主数据库同步数据到等级系统...');
+    
+    try {
+        const { db } = require('../config/database');
+        const levelService = require('../level/services/levelService').getInstance();
+        
+        if (!levelService.isAvailable()) {
+            throw new Error('等级系统服务不可用');
+        }
+        
+        // 获取所有有评价记录的用户
+        const evaluationUsers = db.prepare(`
+            SELECT 
+                evaluator_id as user_id,
+                COUNT(*) as evaluation_count,
+                MIN(created_at) as first_evaluation,
+                MAX(created_at) as last_evaluation
+            FROM evaluations 
+            WHERE evaluator_id IS NOT NULL 
+            GROUP BY evaluator_id
+            ORDER BY evaluation_count DESC
+        `).all();
+        
+        console.log(`👥 发现 ${evaluationUsers.length} 个参与评价的用户`);
+        
+        if (evaluationUsers.length === 0) {
+            return {
+                message: '主数据库中没有评价数据',
+                syncedUsers: 0,
+                skippedUsers: 0
+            };
+        }
+        
+        // 获取等级系统数据库
+        const levelDb = require('../level/config/levelDatabase').getInstance().getDatabase();
+        
+        let syncedCount = 0;
+        let skippedCount = 0;
+        
+        for (const user of evaluationUsers.slice(0, 10)) { // 限制同步前10个用户
+            try {
+                // 检查用户是否已存在
+                const existingUser = levelDb.prepare(`
+                    SELECT user_id FROM user_levels WHERE user_id = ?
+                `).get(user.user_id);
+                
+                if (existingUser) {
+                    skippedCount++;
+                    continue;
+                }
+                
+                // 计算等级和积分
+                const totalExp = user.evaluation_count * 30; // 每次评价30经验
+                const totalPoints = Math.floor(totalExp * 0.8); // 积分约为经验的80%
+                
+                let level = 1;
+                if (totalExp >= 1000) level = 5;
+                else if (totalExp >= 500) level = 4;
+                else if (totalExp >= 200) level = 3;
+                else if (totalExp >= 100) level = 2;
+                
+                // 创建用户记录
+                levelDb.prepare(`
+                    INSERT INTO user_levels (
+                        user_id, level, total_exp, available_points, total_points_earned,
+                        user_eval_count, display_name, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    user.user_id,
+                    level,
+                    totalExp,
+                    totalPoints,
+                    totalPoints,
+                    user.evaluation_count,
+                    `用户${user.user_id}`,
+                    user.first_evaluation,
+                    user.last_evaluation
+                );
+                
+                syncedCount++;
+                
+            } catch (error) {
+                console.error(`同步用户 ${user.user_id} 失败:`, error);
+            }
+        }
+        
+        console.log(`✅ 数据同步完成：新增 ${syncedCount} 个用户，跳过 ${skippedCount} 个用户`);
+        
+        return {
+            message: '数据同步完成',
+            syncedUsers: syncedCount,
+            skippedUsers: skippedCount,
+            totalUsers: evaluationUsers.length
+        };
+        
+    } catch (error) {
+        console.error('❌ 数据同步失败:', error);
+        throw error;
     }
 }
 

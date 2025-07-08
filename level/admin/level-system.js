@@ -514,35 +514,9 @@ async function loadInitialData() {
 // 加载用户列表
 async function loadUsers(page = 1) {
     try {
-        // 首先检查是否有群组配置
-        const groupsResponse = await fetch('/api/level/groups');
-        const groupsResult = await groupsResponse.json();
-        
-        if (!groupsResult.success || groupsResult.data.length === 0) {
-            // 没有群组配置，显示提示信息
-            const tbody = document.getElementById('userTableBody');
-            if (tbody) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" style="text-align: center; padding: 40px;">
-                            <div style="background: #e8f4fd; border: 1px solid #b3d4fc; border-radius: 8px; padding: 20px; margin: 10px;">
-                                <h4 style="color: #1565c0; margin-bottom: 10px;">🎮 开始使用等级系统</h4>
-                                <p style="color: #1565c0; margin: 5px 0;">请先在群组管理页面添加您的群组配置</p>
-                                <button onclick="switchTab('groups')" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
-                                    📝 前往群组管理
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-            return;
-        }
-        
-        // 使用第一个群组的ID来获取用户列表
-        const firstGroup = groupsResult.data[0];
+        // 直接获取用户列表，不依赖群组配置
         const offset = (page - 1) * pageSize;
-        const response = await fetch(`/api/level/users?limit=${pageSize}&offset=${offset}&groupId=${firstGroup.group_id}`);
+        const response = await fetch(`/api/level/users?limit=${pageSize}&offset=${offset}&groupId=global`);
         const result = await response.json();
         
         if (result.success) {
@@ -550,12 +524,28 @@ async function loadUsers(page = 1) {
             renderUserTable(allUsers);
             renderPagination(result.data.total, page);
         } else {
-            showError('加载用户列表失败：' + result.error);
-            renderUserTable([]); // 显示空表格
+            // 如果API失败，尝试备用方案
+            console.warn('主API失败，尝试备用方案:', result.error);
+            
+            // 尝试获取统计数据中的用户列表
+            const statsResponse = await fetch('/api/level/stats?groupId=global');
+            const statsResult = await statsResponse.json();
+            
+            if (statsResult.success && statsResult.data.topUsers) {
+                allUsers = statsResult.data.topUsers;
+                renderUserTable(allUsers);
+                
+                // 更新排行榜
+                updateRanking(allUsers);
+            } else {
+                showError('加载用户列表失败：' + result.error);
+                renderUserTable([]); // 显示空表格
+            }
         }
     } catch (error) {
         console.error('加载用户列表失败:', error);
         showError('加载用户列表失败');
+        renderUserTable([]); // 显示空表格
     }
 }
 

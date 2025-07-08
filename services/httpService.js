@@ -2506,8 +2506,8 @@ async function handleLevelApiRequest(pathname, method, data) {
                 const offset = parseInt(data.offset) || 0;
                 const search = data.search || '';
                 
-                // 检查是否有有效的群组ID
-                if (!groupId) {
+                // 检查是否有有效的群组ID（允许global作为全局查询）
+                if (!groupId || (groupId !== 'global' && groupId.length === 0)) {
                     return { 
                         success: false, 
                         error: '请提供groupId参数，或通过管理员面板选择群组' 
@@ -3070,7 +3070,7 @@ async function handleLevelApiRequest(pathname, method, data) {
             // 从URL查询参数中获取groupId
             const groupId = data.groupId;
             
-            // 检查是否有有效的群组ID
+            // 检查是否有有效的群组ID（允许global作为全局查询）
             if (!groupId) {
                 return { 
                     success: false, 

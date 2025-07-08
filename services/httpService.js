@@ -2108,10 +2108,10 @@ ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
             
             // 获取用户排名
             if (endpoint === 'rankings' && method === 'GET') {
-                const url = new URL(req.url, `http://${req.headers.host}`);
-                const includeInactive = url.searchParams.get('includeInactive') === 'true';
-                const limit = parseInt(url.searchParams.get('limit')) || 20;
-                const type = url.searchParams.get('type') || 'level';
+                // 从data参数中获取查询参数（GET请求的参数通过data传递）
+                const includeInactive = data.includeInactive === 'true';
+                const limit = parseInt(data.limit) || 20;
+                const type = data.type || 'level';
                 
                 console.log('🏆 获取用户排名参数:', { type, limit, includeInactive });
                 

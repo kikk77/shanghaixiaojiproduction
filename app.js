@@ -84,33 +84,65 @@ async function startFullApplication() {
         // 自动修复和初始化等级系统
         if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
             console.log(`🏆 启动等级系统...`);
-            try {
-                // 1. 先执行自动修复检查
-                const AutoFixOnStartup = require('./level/scripts/auto-fix-on-startup');
-                await AutoFixOnStartup.fix();
-                
-                // 2. 然后初始化等级系统
-                const LevelSystemInitializer = require('./level/scripts/init-level-system');
-                const initializer = new LevelSystemInitializer();
-                await initializer.initialize();
-                
-                // 3. 更新用户数据（生产环境）
-                const nodeEnv = process.env.NODE_ENV || process.env.RAILWAY_ENVIRONMENT_NAME || 'development';
-                if (nodeEnv === 'production' || nodeEnv === 'staging') {
-                    console.log(`🔄 更新生产环境用户数据...`);
-                    try {
-                        require('./scripts/update-production-user-data');
-                        await new Promise(resolve => setTimeout(resolve, 3000)); // 等待更新完成
-                        console.log('✅ 用户数据更新完成');
-                    } catch (error) {
-                        console.warn('⚠️ 用户数据更新失败:', error.message);
+            
+            // 使用Promise.race来设置超时，避免等级系统启动过慢影响主系统
+            const levelSystemPromise = (async () => {
+                try {
+                    // 1. 先执行自动修复检查
+                    console.log('🔧 执行等级系统自动修复检查...');
+                    const AutoFixOnStartup = require('./level/scripts/auto-fix-on-startup');
+                    await AutoFixOnStartup.fix();
+                    
+                    // 2. 然后初始化等级系统
+                    console.log('🏗️ 初始化等级系统...');
+                    const LevelSystemInitializer = require('./level/scripts/init-level-system');
+                    const initializer = new LevelSystemInitializer();
+                    await initializer.initialize();
+                    
+                    // 3. 更新用户数据（生产环境）
+                    const nodeEnv = process.env.NODE_ENV || process.env.RAILWAY_ENVIRONMENT_NAME || 'development';
+                    if (nodeEnv === 'production' || nodeEnv === 'staging') {
+                        console.log(`🔄 更新生产环境用户数据...`);
+                        try {
+                            require('./scripts/update-production-user-data');
+                            await new Promise(resolve => setTimeout(resolve, 3000)); // 等待更新完成
+                            console.log('✅ 用户数据更新完成');
+                        } catch (error) {
+                            console.warn('⚠️ 用户数据更新失败:', error.message);
+                        }
                     }
+                    
+                    console.log('✅ 等级系统启动完成');
+                    return true;
+                } catch (error) {
+                    console.error('❌ 等级系统启动失败:', error.message);
+                    // 将环境变量设置为false，禁用等级系统
+                    process.env.LEVEL_SYSTEM_ENABLED = 'false';
+                    return false;
                 }
+            })();
+            
+            // 设置15秒超时
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => {
+                    console.warn('⏰ 等级系统启动超时，将在后台继续初始化');
+                    resolve(false);
+                }, 15000);
+            });
+            
+            try {
+                // 等待等级系统启动完成或超时
+                const result = await Promise.race([levelSystemPromise, timeoutPromise]);
                 
-                console.log('✅ 等级系统启动完成');
+                if (result) {
+                    console.log('✅ 等级系统启动成功');
+                } else {
+                    console.log('⚠️ 等级系统启动超时或失败，主系统将继续运行');
+                }
             } catch (error) {
-                console.error('❌ 等级系统启动失败:', error.message);
-                // 等级系统启动失败不影响主系统运行
+                console.error('❌ 等级系统启动异常:', error.message);
+                // 禁用等级系统
+                process.env.LEVEL_SYSTEM_ENABLED = 'false';
             }
         } else {
             console.log('🏆 等级系统未启用');
@@ -157,12 +189,40 @@ async function startFullApplication() {
 }
 
 // 优雅关闭处理
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully...');
+    
+    // 优雅关闭等级系统
+    if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+        try {
+            const { getInstance } = require('./level/services/levelService');
+            const levelService = getInstance();
+            if (levelService) {
+                await levelService.gracefulDisable();
+            }
+        } catch (error) {
+            console.error('关闭等级系统时出错:', error);
+        }
+    }
+    
     process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('SIGINT received, shutting down gracefully...');
+    
+    // 优雅关闭等级系统
+    if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
+        try {
+            const { getInstance } = require('./level/services/levelService');
+            const levelService = getInstance();
+            if (levelService) {
+                await levelService.gracefulDisable();
+            }
+        } catch (error) {
+            console.error('关闭等级系统时出错:', error);
+        }
+    }
+    
     process.exit(0);
 });

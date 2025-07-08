@@ -118,8 +118,14 @@ class EvaluationService {
                     
                     // 集成等级系统钩子
                     if (process.env.LEVEL_SYSTEM_ENABLED === 'true') {
-                        this.triggerLevelSystemHook(evaluationId).catch(error => {
-                            console.error('等级系统钩子执行失败:', error);
+                        // 使用异步方式调用等级系统钩子，确保不会阻塞评价流程
+                        setImmediate(async () => {
+                            try {
+                                await this.triggerLevelSystemHook(evaluationId);
+                            } catch (error) {
+                                console.error('等级系统钩子执行失败（不影响评价流程）:', error);
+                                // 错误不向上抛出，确保不影响评价系统
+                            }
                         });
                     }
                 }
@@ -506,16 +512,39 @@ class EvaluationService {
     
     // 触发等级系统钩子
     async triggerLevelSystemHook(evaluationId) {
+        // 双重检查等级系统是否启用
+        if (process.env.LEVEL_SYSTEM_ENABLED !== 'true') {
+            return;
+        }
+        
         try {
             // 获取评价详情
             const evaluation = this.getEvaluation(evaluationId);
             if (!evaluation) {
-                console.error('评价不存在:', evaluationId);
+                console.error('等级系统钩子：评价不存在:', evaluationId);
+                return;
+            }
+            
+            // 检查评价是否完成
+            if (evaluation.status !== 'completed') {
+                console.log('等级系统钩子：评价未完成，跳过奖励处理');
                 return;
             }
             
             // 延迟加载等级系统钩子，避免循环依赖
-            const levelServiceHook = require('../level/services/levelServiceHook');
+            let levelServiceHook;
+            try {
+                levelServiceHook = require('../level/services/levelServiceHook');
+            } catch (error) {
+                console.error('等级系统钩子：无法加载等级系统服务:', error.message);
+                return;
+            }
+            
+            // 检查等级系统钩子是否可用
+            if (!levelServiceHook || typeof levelServiceHook.onEvaluationComplete !== 'function') {
+                console.error('等级系统钩子：服务不可用或方法不存在');
+                return;
+            }
             
             // 准备钩子数据（不依赖环境变量）
             const hookData = {
@@ -527,14 +556,18 @@ class EvaluationService {
                 action_type: evaluation.evaluator_type === 'user' ? 'evaluate_merchant' : 'evaluate_user'
             };
             
-            // 调用等级系统钩子
+            // 调用等级系统钩子（使用异步方式，不阻塞评价流程）
             await levelServiceHook.onEvaluationComplete(hookData);
             
-            console.log('等级系统钩子触发成功:', hookData);
+            console.log('等级系统钩子触发成功:', {
+                evaluationId,
+                userId: hookData.user_id,
+                actionType: hookData.action_type
+            });
             
         } catch (error) {
-            console.error('触发等级系统钩子失败:', error);
-            throw error;
+            console.error('等级系统钩子执行失败（不影响评价系统）:', error);
+            // 错误被捕获，不会影响评价系统的正常运行
         }
     }
 }

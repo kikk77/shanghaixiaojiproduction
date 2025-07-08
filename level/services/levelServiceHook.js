@@ -5,8 +5,41 @@
 
 class LevelServiceHook {
     constructor() {
-        this.levelService = require('./levelService').getInstance();
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
+        this.levelService = null;
+        this.initializationError = null;
+        
+        if (!this.enabled) {
+            console.log('🏆 等级系统钩子已禁用');
+            return;
+        }
+        
+        try {
+            this.levelService = require('./levelService').getInstance();
+            if (!this.levelService || !this.levelService.isAvailable()) {
+                throw new Error('等级系统服务不可用');
+            }
+        } catch (error) {
+            this.initializationError = error;
+            this.enabled = false;
+            console.error('❌ 等级系统钩子初始化失败:', error.message);
+        }
+    }
+    
+    /**
+     * 安全执行钩子操作
+     */
+    async safeExecuteHook(hookName, operation, ...args) {
+        if (!this.enabled || this.initializationError) {
+            return;
+        }
+        
+        try {
+            await operation.apply(this, args);
+        } catch (error) {
+            console.error(`等级系统钩子 ${hookName} 执行失败:`, error);
+            // 记录错误但不抛出，确保不影响主系统
+        }
     }
     
     /**
@@ -14,41 +47,41 @@ class LevelServiceHook {
      * 由evaluationService在评价完成后调用
      */
     async onEvaluationComplete(evaluationData) {
-        if (!this.enabled) return;
+        return await this.safeExecuteHook('onEvaluationComplete', this._onEvaluationCompleteInternal, evaluationData);
+    }
+    
+    /**
+     * 内部评价完成钩子处理
+     */
+    async _onEvaluationCompleteInternal(evaluationData) {
+        const { user_id, group_id, evaluation_id, action_type } = evaluationData;
         
-        try {
-            const { user_id, group_id, evaluation_id, action_type } = evaluationData;
-            
-            // 确定动作类型
-            let levelActionType = 'evaluation_complete';
-            
-            // 根据评价类型细分
-            if (evaluationData.evaluation_type === 'merchant') {
-                levelActionType = 'evaluate_merchant';
-            } else if (evaluationData.evaluation_type === 'user') {
-                levelActionType = 'evaluate_user';
-            }
-            
-            // 处理奖励（不依赖群组ID）
+        // 确定动作类型
+        let levelActionType = 'evaluation_complete';
+        
+        // 根据评价类型细分
+        if (evaluationData.evaluation_type === 'merchant') {
+            levelActionType = 'evaluate_merchant';
+        } else if (evaluationData.evaluation_type === 'user') {
+            levelActionType = 'evaluate_user';
+        }
+        
+        // 处理奖励（不依赖群组ID）
+        await this.levelService.processEvaluationReward(
+            user_id,
+            group_id, // 可以为null
+            evaluation_id,
+            levelActionType
+        );
+        
+        // 如果是商家被评价，也给商家奖励
+        if (evaluationData.merchant_id && evaluationData.merchant_id !== user_id) {
             await this.levelService.processEvaluationReward(
-                user_id,
+                evaluationData.merchant_id,
                 group_id, // 可以为null
                 evaluation_id,
-                levelActionType
+                'be_evaluated'
             );
-            
-            // 如果是商家被评价，也给商家奖励
-            if (evaluationData.merchant_id && evaluationData.merchant_id !== user_id) {
-                await this.levelService.processEvaluationReward(
-                    evaluationData.merchant_id,
-                    group_id, // 可以为null
-                    evaluation_id,
-                    'be_evaluated'
-                );
-            }
-            
-        } catch (error) {
-            console.error('等级系统评价钩子失败:', error);
         }
     }
     

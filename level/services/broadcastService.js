@@ -5,9 +5,27 @@
 
 class BroadcastService {
     constructor() {
-        const levelDbManager = require('../config/levelDatabase');
-        this.levelDb = levelDbManager.getInstance();
         this.enabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
+        this.levelDb = null;
+        this.initializationError = null;
+        
+        if (!this.enabled) {
+            console.log('🏆 等级系统播报服务已禁用');
+            return;
+        }
+        
+        try {
+            const levelDbManager = require('../config/levelDatabase');
+            this.levelDb = levelDbManager.getInstance();
+            
+            if (!this.levelDb || !this.levelDb.enabled) {
+                throw new Error('等级系统数据库不可用');
+            }
+        } catch (error) {
+            this.initializationError = error;
+            this.enabled = false;
+            console.error('❌ 等级系统播报服务初始化失败:', error.message);
+        }
         
         // 获取Bot服务
         this.getBotService = () => {
@@ -61,176 +79,196 @@ class BroadcastService {
     }
     
     /**
+     * 检查服务是否可用
+     */
+    isAvailable() {
+        return this.enabled && !this.initializationError && this.levelDb && this.levelDb.getDatabase();
+    }
+    
+    /**
+     * 安全执行播报操作
+     */
+    async safeBroadcast(broadcastType, operation, ...args) {
+        if (!this.isAvailable()) {
+            return { success: false, error: '播报服务不可用' };
+        }
+        
+        try {
+            return await operation.apply(this, args);
+        } catch (error) {
+            console.error(`等级系统播报 ${broadcastType} 失败:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    /**
      * 播报等级提升
      */
     async broadcastLevelUp(userId, sourceGroupId, levelUpResult) {
-        if (!this.enabled) return { success: false, error: '等级系统未启用' };
+        return await this.safeBroadcast('levelUp', this._broadcastLevelUpInternal, userId, sourceGroupId, levelUpResult);
+    }
+    
+    /**
+     * 内部播报等级提升方法
+     */
+    async _broadcastLevelUpInternal(userId, sourceGroupId, levelUpResult) {
+        // 获取用户信息
+        const levelService = require('./levelService').getInstance();
+        const userInfo = await levelService.getUserDisplayInfo(userId);
         
-        try {
-            // 获取用户信息
-            const levelService = require('./levelService').getInstance();
-            const userInfo = await levelService.getUserDisplayInfo(userId);
-            
-            // 获取播报配置
-            const broadcastConfig = await this.getBroadcastConfig();
-            if (!broadcastConfig || !broadcastConfig.level_up) {
-                console.log('等级提升播报未启用');
-                return { success: false, error: '播报未启用' };
-            }
-            
-            // 获取播报模板
-            const template = await this.getBroadcastTemplate('level_up');
-            
-            // 准备模板数据
-            const templateData = {
-                user_name: userInfo.displayName,
-                old_level: levelUpResult.oldLevel,
-                new_level: levelUpResult.newLevel,
-                level_name: levelUpResult.newLevelInfo.name,
-                level_up_points: 50 // TODO: 从配置中获取
-            };
-            
-            // 渲染消息
-            const message = this.renderTemplate(template.template, templateData);
-            
-            // 获取播报目标群组
-            const targetGroups = await this.getBroadcastTargetGroups();
-            
-            if (targetGroups.length === 0) {
-                console.log('没有配置播报群组');
-                return { success: false, error: '无播报群组' };
-            }
-            
-            // 播报到所有群组
-            const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
-            
-            // 记录播报日志
-            await this.logBroadcast('level_up', userId, sourceGroupId, results);
-            
-            return {
-                success: true,
-                results: results
-            };
-            
-        } catch (error) {
-            console.error('等级提升播报失败:', error);
-            return { success: false, error: error.message };
+        // 获取播报配置
+        const broadcastConfig = await this.getBroadcastConfig();
+        if (!broadcastConfig || !broadcastConfig.level_up) {
+            console.log('等级提升播报未启用');
+            return { success: false, error: '播报未启用' };
         }
+        
+        // 获取播报模板
+        const template = await this.getBroadcastTemplate('level_up');
+        
+        // 准备模板数据
+        const templateData = {
+            user_name: userInfo.displayName,
+            old_level: levelUpResult.oldLevel,
+            new_level: levelUpResult.newLevel,
+            level_name: levelUpResult.newLevelInfo.name,
+            level_up_points: 50 // TODO: 从配置中获取
+        };
+        
+        // 渲染消息
+        const message = this.renderTemplate(template.template, templateData);
+        
+        // 获取播报目标群组
+        const targetGroups = await this.getBroadcastTargetGroups();
+        
+        if (targetGroups.length === 0) {
+            console.log('没有配置播报群组');
+            return { success: false, error: '无播报群组' };
+        }
+        
+        // 播报到所有群组
+        const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
+        
+        // 记录播报日志
+        await this.logBroadcast('level_up', userId, sourceGroupId, results);
+        
+        return {
+            success: true,
+            results: results
+        };
     }
     
     /**
      * 播报勋章解锁
      */
     async broadcastBadgeUnlock(userId, badgeInfo) {
-        if (!this.enabled) return { success: false, error: '等级系统未启用' };
+        return await this.safeBroadcast('badgeUnlock', this._broadcastBadgeUnlockInternal, userId, badgeInfo);
+    }
+    
+    /**
+     * 内部播报勋章解锁方法
+     */
+    async _broadcastBadgeUnlockInternal(userId, badgeInfo) {
+        // 获取用户信息
+        const levelService = require('./levelService').getInstance();
+        const userInfo = await levelService.getUserDisplayInfo(userId);
         
-        try {
-            // 获取用户信息
-            const levelService = require('./levelService').getInstance();
-            const userInfo = await levelService.getUserDisplayInfo(userId);
-            
-            // 获取播报配置
-            const broadcastConfig = await this.getBroadcastConfig();
-            if (!broadcastConfig || !broadcastConfig.badge_unlock) {
-                console.log('勋章解锁播报未启用');
-                return { success: false, error: '播报未启用' };
-            }
-            
-            // 获取播报模板
-            const template = await this.getBroadcastTemplate('badge_unlock');
-            
-            // 准备模板数据
-            const templateData = {
-                user_name: userInfo.displayName,
-                badge_emoji: badgeInfo.badge_emoji,
-                badge_name: badgeInfo.badge_name,
-                badge_desc: badgeInfo.badge_desc
-            };
-            
-            // 渲染消息
-            const message = this.renderTemplate(template.template, templateData);
-            
-            // 获取播报目标群组
-            const targetGroups = await this.getBroadcastTargetGroups();
-            
-            if (targetGroups.length === 0) {
-                return { success: false, error: '无播报群组' };
-            }
-            
-            // 播报到所有群组
-            const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
-            
-            // 记录播报日志
-            await this.logBroadcast('badge_unlock', userId, null, results);
-            
-            return {
-                success: true,
-                results: results
-            };
-            
-        } catch (error) {
-            console.error('勋章解锁播报失败:', error);
-            return { success: false, error: error.message };
+        // 获取播报配置
+        const broadcastConfig = await this.getBroadcastConfig();
+        if (!broadcastConfig || !broadcastConfig.badge_unlock) {
+            console.log('勋章解锁播报未启用');
+            return { success: false, error: '播报未启用' };
         }
+        
+        // 获取播报模板
+        const template = await this.getBroadcastTemplate('badge_unlock');
+        
+        // 准备模板数据
+        const templateData = {
+            user_name: userInfo.displayName,
+            badge_emoji: badgeInfo.badge_emoji,
+            badge_name: badgeInfo.badge_name,
+            badge_desc: badgeInfo.badge_desc
+        };
+        
+        // 渲染消息
+        const message = this.renderTemplate(template.template, templateData);
+        
+        // 获取播报目标群组
+        const targetGroups = await this.getBroadcastTargetGroups();
+        
+        if (targetGroups.length === 0) {
+            return { success: false, error: '无播报群组' };
+        }
+        
+        // 播报到所有群组
+        const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
+        
+        // 记录播报日志
+        await this.logBroadcast('badge_unlock', userId, null, results);
+        
+        return {
+            success: true,
+            results: results
+        };
     }
     
     /**
      * 播报里程碑达成
      */
     async broadcastMilestone(userId, groupId, milestoneData) {
-        if (!this.enabled) return { success: false, error: '等级系统未启用' };
+        return await this.safeBroadcast('milestone', this._broadcastMilestoneInternal, userId, groupId, milestoneData);
+    }
+    
+    /**
+     * 内部播报里程碑方法
+     */
+    async _broadcastMilestoneInternal(userId, groupId, milestoneData) {
+        // 获取用户信息
+        const levelService = require('./levelService').getInstance();
+        const userInfo = await levelService.getUserDisplayInfo(userId);
         
-        try {
-            // 获取用户信息
-            const levelService = require('./levelService').getInstance();
-            const userInfo = await levelService.getUserDisplayInfo(userId);
-            
-            // 获取播报配置
-            const broadcastConfig = await this.getBroadcastConfig();
-            if (!broadcastConfig || !broadcastConfig.milestone) {
-                console.log('里程碑播报未启用');
-                return { success: false, error: '播报未启用' };
-            }
-            
-            // 获取播报模板
-            const template = await this.getBroadcastTemplate('milestone');
-            
-            // 准备模板数据
-            const milestone = milestoneData.milestone;
-            const templateData = {
-                user_name: milestoneData.user_name || userInfo.displayName,
-                milestone_icon: milestone.icon,
-                milestone_name: milestone.name,
-                milestone_description: milestone.description,
-                reward_description: milestone.reward_description,
-                required_points: milestone.required_points
-            };
-            
-            // 渲染消息
-            const message = this.renderTemplate(template.template, templateData);
-            
-            // 获取播报目标群组
-            const targetGroups = await this.getBroadcastTargetGroups();
-            
-            if (targetGroups.length === 0) {
-                return { success: false, error: '无播报群组' };
-            }
-            
-            // 播报到所有群组
-            const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
-            
-            // 记录播报日志
-            await this.logBroadcast('milestone', userId, groupId, results);
-            
-            return {
-                success: true,
-                results: results
-            };
-            
-        } catch (error) {
-            console.error('里程碑播报失败:', error);
-            return { success: false, error: error.message };
+        // 获取播报配置
+        const broadcastConfig = await this.getBroadcastConfig();
+        if (!broadcastConfig || !broadcastConfig.milestone) {
+            console.log('里程碑播报未启用');
+            return { success: false, error: '播报未启用' };
         }
+        
+        // 获取播报模板
+        const template = await this.getBroadcastTemplate('milestone');
+        
+        // 准备模板数据
+        const milestone = milestoneData.milestone;
+        const templateData = {
+            user_name: milestoneData.user_name || userInfo.displayName,
+            milestone_icon: milestone.icon,
+            milestone_name: milestone.name,
+            milestone_description: milestone.description,
+            reward_description: milestone.reward_description,
+            required_points: milestone.required_points
+        };
+        
+        // 渲染消息
+        const message = this.renderTemplate(template.template, templateData);
+        
+        // 获取播报目标群组
+        const targetGroups = await this.getBroadcastTargetGroups();
+        
+        if (targetGroups.length === 0) {
+            return { success: false, error: '无播报群组' };
+        }
+        
+        // 播报到所有群组
+        const results = await this.sendToGroups(targetGroups, message, template.enablePin, template.pinDuration);
+        
+        // 记录播报日志
+        await this.logBroadcast('milestone', userId, groupId, results);
+        
+        return {
+            success: true,
+            results: results
+        };
     }
     
     /**
@@ -341,52 +379,91 @@ class BroadcastService {
             }];
         }
         
-        for (const groupId of groupIds) {
-            try {
-                // 发送消息
-                const sentMessage = await botService.bot.sendMessage(groupId, message, {
-                    parse_mode: 'HTML'
-                });
-                
-                // 置顶消息
-                if (enablePin) {
-                    try {
-                        await botService.bot.pinChatMessage(groupId, sentMessage.message_id);
-                        
-                        // 设置定时取消置顶
-                        if (pinDuration > 0) {
-                            setTimeout(async () => {
-                                try {
-                                    await botService.bot.unpinChatMessage(groupId, sentMessage.message_id);
-                                } catch (err) {
-                                    // 忽略取消置顶的错误
-                                }
-                            }, pinDuration);
-                        }
-                    } catch (pinError) {
-                        console.log(`群组 ${groupId} 置顶消息失败:`, pinError.message);
-                    }
+        // 限制并发发送，避免触发Telegram限制
+        const maxConcurrent = 3;
+        const chunks = [];
+        for (let i = 0; i < groupIds.length; i += maxConcurrent) {
+            chunks.push(groupIds.slice(i, i + maxConcurrent));
+        }
+        
+        for (const chunk of chunks) {
+            const promises = chunk.map(groupId => this.sendToSingleGroup(botService.bot, groupId, message, enablePin, pinDuration));
+            const chunkResults = await Promise.allSettled(promises);
+            
+            chunkResults.forEach((result, index) => {
+                const groupId = chunk[index];
+                if (result.status === 'fulfilled') {
+                    results.push(result.value);
+                } else {
+                    results.push({
+                        groupId: groupId,
+                        success: false,
+                        error: result.reason?.message || '未知错误'
+                    });
                 }
-                
-                results.push({
-                    groupId: groupId,
-                    success: true,
-                    messageId: sentMessage.message_id
-                });
-                
-                console.log(`✅ 播报成功发送到群组: ${groupId}`);
-                
-            } catch (error) {
-                console.error(`❌ 向群组 ${groupId} 播报失败:`, error);
-                results.push({
-                    groupId: groupId,
-                    success: false,
-                    error: error.message
-                });
+            });
+            
+            // 在批次之间添加短暂延迟
+            if (chunks.indexOf(chunk) < chunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
         
         return results;
+    }
+    
+    /**
+     * 发送消息到单个群组
+     */
+    async sendToSingleGroup(bot, groupId, message, enablePin = false, pinDuration = 5000) {
+        try {
+            // 设置发送超时
+            const sendPromise = bot.sendMessage(groupId, message, {
+                parse_mode: 'HTML'
+            });
+            
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('发送超时')), 10000);
+            });
+            
+            const sentMessage = await Promise.race([sendPromise, timeoutPromise]);
+            
+            // 置顶消息
+            if (enablePin) {
+                try {
+                    await bot.pinChatMessage(groupId, sentMessage.message_id);
+                    
+                    // 设置定时取消置顶
+                    if (pinDuration > 0) {
+                        setTimeout(async () => {
+                            try {
+                                await bot.unpinChatMessage(groupId, sentMessage.message_id);
+                            } catch (err) {
+                                // 忽略取消置顶的错误
+                            }
+                        }, pinDuration);
+                    }
+                } catch (pinError) {
+                    console.log(`群组 ${groupId} 置顶消息失败:`, pinError.message);
+                }
+            }
+            
+            console.log(`✅ 播报成功发送到群组: ${groupId}`);
+            
+            return {
+                groupId: groupId,
+                success: true,
+                messageId: sentMessage.message_id
+            };
+            
+        } catch (error) {
+            console.error(`❌ 向群组 ${groupId} 播报失败:`, error);
+            return {
+                groupId: groupId,
+                success: false,
+                error: error.message
+            };
+        }
     }
     
     /**

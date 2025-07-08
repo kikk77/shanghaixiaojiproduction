@@ -49,39 +49,39 @@ class LevelServiceHook {
     async onEvaluationComplete(evaluationData) {
         return await this.safeExecuteHook('onEvaluationComplete', this._onEvaluationCompleteInternal, evaluationData);
     }
-    
+        
     /**
      * 内部评价完成钩子处理
      */
     async _onEvaluationCompleteInternal(evaluationData) {
-        const { user_id, group_id, evaluation_id, action_type } = evaluationData;
-        
-        // 确定动作类型
-        let levelActionType = 'evaluation_complete';
-        
-        // 根据评价类型细分
-        if (evaluationData.evaluation_type === 'merchant') {
-            levelActionType = 'evaluate_merchant';
-        } else if (evaluationData.evaluation_type === 'user') {
-            levelActionType = 'evaluate_user';
-        }
-        
-        // 处理奖励（不依赖群组ID）
-        await this.levelService.processEvaluationReward(
-            user_id,
-            group_id, // 可以为null
-            evaluation_id,
-            levelActionType
-        );
-        
-        // 如果是商家被评价，也给商家奖励
-        if (evaluationData.merchant_id && evaluationData.merchant_id !== user_id) {
+            const { user_id, group_id, evaluation_id, action_type } = evaluationData;
+            
+            // 确定动作类型
+            let levelActionType = 'evaluation_complete';
+            
+            // 根据评价类型细分
+            if (evaluationData.evaluation_type === 'merchant') {
+                levelActionType = 'evaluate_merchant';
+            } else if (evaluationData.evaluation_type === 'user') {
+                levelActionType = 'evaluate_user';
+            }
+            
+            // 处理奖励（不依赖群组ID）
             await this.levelService.processEvaluationReward(
-                evaluationData.merchant_id,
+                user_id,
                 group_id, // 可以为null
                 evaluation_id,
-                'be_evaluated'
+                levelActionType
             );
+            
+            // 如果是商家被评价，也给商家奖励
+            if (evaluationData.merchant_id && evaluationData.merchant_id !== user_id) {
+                await this.levelService.processEvaluationReward(
+                    evaluationData.merchant_id,
+                    group_id, // 可以为null
+                    evaluation_id,
+                    'be_evaluated'
+                );
         }
     }
     

@@ -62,7 +62,7 @@ class BadgeService {
     async checkAndUnlockBadges(userId, userProfile) {
         return await this.safeExecute(this._checkAndUnlockBadgesInternal, userId, userProfile);
     }
-    
+        
     /**
      * 内部检查并解锁勋章方法
      */
@@ -70,41 +70,41 @@ class BadgeService {
         const db = this.levelDb.getDatabase();
         if (!db) return;
         
-        // 获取所有可用的勋章定义（包括全局和群组勋章）
-        const badgeDefinitions = db.prepare(`
-            SELECT * FROM badge_definitions 
-            WHERE status = 'active' 
-            AND badge_type = 'auto'
-            ORDER BY group_id, rarity DESC
-        `).all();
-        
-        if (badgeDefinitions.length === 0) {
-            console.log('没有找到可用的勋章定义');
-            return;
-        }
-        
-        // 获取用户已有的勋章
-        const userBadges = db.prepare(`
-            SELECT badge_id FROM user_badges 
-            WHERE user_id = ?
-        `).all(userId);
-        
-        const existingBadgeIds = new Set(userBadges.map(b => b.badge_id));
-        
-        // 检查每个勋章是否满足解锁条件
-        for (const badgeDef of badgeDefinitions) {
-            // 跳过已解锁的勋章
-            if (existingBadgeIds.has(badgeDef.badge_id)) {
-                continue;
+            // 获取所有可用的勋章定义（包括全局和群组勋章）
+            const badgeDefinitions = db.prepare(`
+                SELECT * FROM badge_definitions 
+                WHERE status = 'active' 
+                AND badge_type = 'auto'
+                ORDER BY group_id, rarity DESC
+            `).all();
+            
+            if (badgeDefinitions.length === 0) {
+                console.log('没有找到可用的勋章定义');
+                return;
             }
             
-            // 检查解锁条件
-            const shouldUnlock = await this.checkUnlockCondition(badgeDef, userProfile);
+            // 获取用户已有的勋章
+            const userBadges = db.prepare(`
+                SELECT badge_id FROM user_badges 
+                WHERE user_id = ?
+            `).all(userId);
             
-            if (shouldUnlock) {
-                await this.unlockBadge(userId, badgeDef.badge_id, 'system', '自动解锁');
-                console.log(`🏅 用户 ${userId} 解锁勋章: ${badgeDef.badge_name}`);
-            }
+            const existingBadgeIds = new Set(userBadges.map(b => b.badge_id));
+            
+            // 检查每个勋章是否满足解锁条件
+            for (const badgeDef of badgeDefinitions) {
+                // 跳过已解锁的勋章
+                if (existingBadgeIds.has(badgeDef.badge_id)) {
+                    continue;
+                }
+                
+                // 检查解锁条件
+                const shouldUnlock = await this.checkUnlockCondition(badgeDef, userProfile);
+                
+                if (shouldUnlock) {
+                    await this.unlockBadge(userId, badgeDef.badge_id, 'system', '自动解锁');
+                    console.log(`🏅 用户 ${userId} 解锁勋章: ${badgeDef.badge_name}`);
+                }
         }
     }
     
@@ -283,44 +283,44 @@ class BadgeService {
      * 内部播报勋章解锁方法
      */
     async _broadcastBadgeUnlockInternal(userId, badgeDef) {
-        const botService = require('../../services/botService');
+            const botService = require('../../services/botService');
         
         // 检查bot服务是否可用
         if (!botService || !botService.bot) {
             console.log('Bot服务不可用，跳过勋章播报');
             return;
         }
-        
-        // 获取用户信息
-        const levelService = require('./levelService').getInstance();
-        const userInfo = await levelService.getUserDisplayInfo(userId);
-        
-        // 构建解锁消息
-        const rarityDisplay = this.getRarityDisplay(badgeDef.rarity);
-        const message = `🏅 勋章解锁！\n\n` +
-            `🧑‍🚀 ${userInfo.displayName}\n` +
-            `${badgeDef.badge_emoji} ${badgeDef.badge_name}\n` +
-            `${rarityDisplay}\n` +
-            `📝 ${badgeDef.badge_desc}\n\n` +
-            `恭喜解锁新成就！🎉`;
-        
-        // 获取播报目标群组
-        const targetGroups = await this.getBroadcastTargetGroups();
-        
-        if (targetGroups.length === 0) {
-            console.log('没有配置播报群组，跳过勋章播报');
-            return;
-        }
-        
-        // 向所有配置的群组播报
-        for (const targetGroupId of targetGroups) {
-            try {
-                await botService.bot.telegram.sendMessage(targetGroupId, message, {
-                    parse_mode: 'Markdown'
-                });
-                console.log(`勋章解锁播报成功发送到群组: ${targetGroupId}`);
-            } catch (error) {
-                console.error(`向群组 ${targetGroupId} 播报勋章解锁失败:`, error);
+            
+            // 获取用户信息
+            const levelService = require('./levelService').getInstance();
+            const userInfo = await levelService.getUserDisplayInfo(userId);
+            
+            // 构建解锁消息
+            const rarityDisplay = this.getRarityDisplay(badgeDef.rarity);
+            const message = `🏅 勋章解锁！\n\n` +
+                `🧑‍🚀 ${userInfo.displayName}\n` +
+                `${badgeDef.badge_emoji} ${badgeDef.badge_name}\n` +
+                `${rarityDisplay}\n` +
+                `📝 ${badgeDef.badge_desc}\n\n` +
+                `恭喜解锁新成就！🎉`;
+            
+            // 获取播报目标群组
+            const targetGroups = await this.getBroadcastTargetGroups();
+            
+            if (targetGroups.length === 0) {
+                console.log('没有配置播报群组，跳过勋章播报');
+                return;
+            }
+            
+            // 向所有配置的群组播报
+            for (const targetGroupId of targetGroups) {
+                try {
+                        await botService.bot.telegram.sendMessage(targetGroupId, message, {
+                            parse_mode: 'Markdown'
+                        });
+                        console.log(`勋章解锁播报成功发送到群组: ${targetGroupId}`);
+                } catch (error) {
+                    console.error(`向群组 ${targetGroupId} 播报勋章解锁失败:`, error);
                 // 继续尝试其他群组
             }
         }

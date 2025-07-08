@@ -259,7 +259,7 @@ class LevelService {
     async processEvaluationReward(userId, sourceGroupId, evaluationId, actionType) {
         return await this.safeExecute(this._processEvaluationRewardInternal, userId, sourceGroupId, evaluationId, actionType);
     }
-    
+        
     /**
      * 内部处理评价奖励方法
      */
@@ -267,67 +267,67 @@ class LevelService {
         const db = this.levelDb.getDatabase();
         if (!db) return;
         
-        console.log(`🏆 处理用户 ${userId} 的评价奖励，动作类型: ${actionType}`);
-        
-        // 获取或创建用户档案
-        let userProfile = await this.getUserProfile(userId);
-        if (!userProfile) {
-            userProfile = await this.createUserProfile(userId);
+            console.log(`🏆 处理用户 ${userId} 的评价奖励，动作类型: ${actionType}`);
+            
+            // 获取或创建用户档案
+            let userProfile = await this.getUserProfile(userId);
             if (!userProfile) {
-                console.error('创建用户档案失败');
+                userProfile = await this.createUserProfile(userId);
+                if (!userProfile) {
+                    console.error('创建用户档案失败');
+                    return;
+                }
+            }
+            
+            // 获取奖励配置（使用全局配置或指定群组配置）
+            const rewardConfig = await this.getRewardConfig(sourceGroupId);
+            if (!rewardConfig) {
+                console.error('获取奖励配置失败');
                 return;
             }
-        }
-        
-        // 获取奖励配置（使用全局配置或指定群组配置）
-        const rewardConfig = await this.getRewardConfig(sourceGroupId);
-        if (!rewardConfig) {
-            console.error('获取奖励配置失败');
-            return;
-        }
-        
-        // 计算奖励
-        const reward = this.calculateReward(actionType, rewardConfig);
-        if (!reward) {
-            console.log(`未找到动作类型 ${actionType} 的奖励配置`);
-            return;
-        }
-        
-        console.log(`计算奖励: ${reward.desc}, 经验值+${reward.exp}, 积分+${reward.points}`);
-        
-        // 记录升级前的等级
-        const oldProfile = { ...userProfile };
-        
-        // 更新用户奖励
-        const updatedProfile = await this.updateUserRewards(
-            userId, 
-            sourceGroupId,
-            reward.exp, 
-            reward.points, 
-            actionType, 
-            reward.desc
-        );
-        
-        if (!updatedProfile) {
-            console.error('更新用户奖励失败');
-            return;
-        }
-        
-        // 检查升级
-        const levelUpResult = await this.checkLevelUp(oldProfile, updatedProfile);
-        if (levelUpResult.leveledUp) {
-            await this.handleLevelUp(userId, sourceGroupId, levelUpResult);
-        }
-        
+            
+            // 计算奖励
+            const reward = this.calculateReward(actionType, rewardConfig);
+            if (!reward) {
+                console.log(`未找到动作类型 ${actionType} 的奖励配置`);
+                return;
+            }
+            
+            console.log(`计算奖励: ${reward.desc}, 经验值+${reward.exp}, 积分+${reward.points}`);
+            
+            // 记录升级前的等级
+            const oldProfile = { ...userProfile };
+            
+            // 更新用户奖励
+            const updatedProfile = await this.updateUserRewards(
+                userId, 
+                sourceGroupId,
+                reward.exp, 
+                reward.points, 
+                actionType, 
+                reward.desc
+            );
+            
+            if (!updatedProfile) {
+                console.error('更新用户奖励失败');
+                return;
+            }
+            
+            // 检查升级
+            const levelUpResult = await this.checkLevelUp(oldProfile, updatedProfile);
+            if (levelUpResult.leveledUp) {
+                await this.handleLevelUp(userId, sourceGroupId, levelUpResult);
+            }
+            
         // 异步检查勋章解锁（使用安全执行）
         setImmediate(async () => {
             await this.safeExecute(this.checkBadgeUnlock, userId, updatedProfile);
-        });
-        
+            });
+            
         // 异步检查里程碑达成（使用安全执行）
         setImmediate(async () => {
             await this.safeExecute(this.checkMilestoneAchievement, userId, sourceGroupId, updatedProfile);
-        });
+            });
     }
     
     /**
@@ -408,7 +408,7 @@ class LevelService {
             let userRecord = null;
             try {
                 userRecord = this.dbOperations.getUserRecord ? 
-                    this.dbOperations.getUserRecord(userId) : null;
+                this.dbOperations.getUserRecord(userId) : null;
             } catch (error) {
                 console.warn('⚠️ 获取用户记录失败，使用默认信息:', error.message);
             }

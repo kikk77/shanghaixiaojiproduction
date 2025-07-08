@@ -3,8 +3,11 @@
  * 基于真实后端API数据构建
  */
 
+console.log('🚀 等级系统管理界面脚本开始加载...');
+
 class LevelSystemManager {
     constructor() {
+        console.log('🏗️ 构造LevelSystemManager实例');
         this.currentRankingType = 'level';
         this.currentRankingLimit = 20;
         this.includeInactive = false;
@@ -20,13 +23,20 @@ class LevelSystemManager {
     async init() {
         console.log('🏆 初始化等级系统管理界面...');
         
-        // 绑定事件监听器
-        this.bindEventListeners();
-        
-        // 加载初始数据
-        await this.loadInitialData();
-        
-        console.log('✅ 等级系统管理界面初始化完成');
+        try {
+            // 绑定事件监听器
+            console.log('🔗 绑定事件监听器...');
+            this.bindEventListeners();
+            
+            // 加载初始数据
+            console.log('📊 加载初始数据...');
+            await this.loadInitialData();
+            
+            console.log('✅ 等级系统管理界面初始化完成');
+        } catch (error) {
+            console.error('❌ 初始化失败:', error);
+            this.showError('系统初始化失败: ' + error.message);
+        }
     }
 
     /**
@@ -744,6 +754,8 @@ class LevelSystemManager {
      * API请求封装
      */
     async apiRequest(url, options = {}) {
+        console.log('🌐 发送API请求:', url);
+        
         try {
             const response = await fetch(url, {
                 method: 'GET',
@@ -755,13 +767,18 @@ class LevelSystemManager {
                 ...options
             });
             
+            console.log('📡 API响应状态:', response.status, response.statusText);
+            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            return await response.json();
+            const data = await response.json();
+            console.log('📦 API响应数据:', data);
+            
+            return data;
         } catch (error) {
-            console.error('API请求失败:', error);
+            console.error('❌ API请求失败:', error);
             throw error;
         }
     }
@@ -859,5 +876,14 @@ class LevelSystemManager {
 // 初始化系统
 let levelSystemManager;
 document.addEventListener('DOMContentLoaded', () => {
-    levelSystemManager = new LevelSystemManager();
-}); 
+    console.log('🎯 DOM加载完成，开始初始化系统...');
+    try {
+        levelSystemManager = new LevelSystemManager();
+        console.log('✅ 系统初始化完成');
+    } catch (error) {
+        console.error('❌ 系统初始化失败:', error);
+        alert('系统初始化失败: ' + error.message);
+    }
+});
+
+console.log('📝 等级系统管理脚本加载完成'); 

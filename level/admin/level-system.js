@@ -2717,3 +2717,299 @@ async function confirmUserAdjustment() {
         showError('调整失败');
     }
 }
+
+// ==================== 增强排行榜功能 ====================
+
+// 加载增强排行榜
+async function loadEnhancedRankings(type = 'level', limit = 10, includeInactive = false) {
+    try {
+        const response = await fetch(`/api/level/enhanced-rankings?type=${type}&limit=${limit}&includeInactive=${includeInactive}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            renderEnhancedRankings(result.data);
+            return result.data;
+        } else {
+            showError('加载增强排行榜失败：' + result.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('加载增强排行榜失败:', error);
+        showError('加载增强排行榜失败');
+        return [];
+    }
+}
+
+// 渲染增强排行榜
+function renderEnhancedRankings(rankings) {
+    const container = document.getElementById('enhanced-ranking-list');
+    if (!container) {
+        console.warn('找不到增强排行榜容器');
+        return;
+    }
+    
+    if (!rankings || rankings.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #666;">
+                暂无增强排行榜数据
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = rankings.map((user, index) => {
+        const position = index + 1;
+        let positionIcon = '';
+        
+        switch(position) {
+            case 1: positionIcon = '🥇'; break;
+            case 2: positionIcon = '🥈'; break;
+            case 3: positionIcon = '🥉'; break;
+            default: positionIcon = `${position}.`;
+        }
+        
+        const evalStats = user.evaluation_stats;
+        const activityScore = user.evaluation_activity_score || 0;
+        const qualityScore = user.evaluation_quality_score || 0;
+        
+        return `
+            <div class="enhanced-ranking-item" onclick="viewUserEvaluationReport(${user.user_id})" style="
+                border: 1px solid #ddd; 
+                padding: 15px; 
+                margin: 10px 0; 
+                border-radius: 8px; 
+                cursor: pointer;
+                transition: all 0.3s ease;
+                background: white;
+            " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #1976d2; min-width: 50px;">
+                            ${positionIcon}
+                        </div>
+                        <div>
+                            <div style="font-weight: bold; font-size: 16px; color: #333;">
+                                ${user.display_name || `用户${user.user_id}`}
+                            </div>
+                            <div style="color: #666; font-size: 14px; margin: 5px 0;">
+                                Lv.${user.level} | ${user.total_exp} EXP | ${user.available_points} 积分
+                            </div>
+                            <div style="color: #888; font-size: 12px;">
+                                📝 评价: 给出${evalStats?.totalEvaluationsGiven || 0} 收到${evalStats?.totalEvaluationsReceived || 0} |
+                                🔥 活跃度: ${activityScore} | 
+                                ⭐ 质量: ${qualityScore}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <button onclick="event.stopPropagation(); viewUserEvaluationReport(${user.user_id})" 
+                                style="padding: 5px 10px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            详细报告
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 查看用户评价报告
+async function viewUserEvaluationReport(userId) {
+    try {
+        const response = await fetch(`/api/level/user-evaluation-report?userId=${userId}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            showUserEvaluationReportModal(result.data);
+        } else {
+            showError('获取用户评价报告失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error('获取用户评价报告失败:', error);
+        showError('获取用户评价报告失败');
+    }
+}
+
+// 显示用户评价报告模态框
+function showUserEvaluationReportModal(reportData) {
+    let modal = document.getElementById('userEvaluationReportModal');
+    if (!modal) {
+        // 创建模态框
+        const modalHtml = `
+            <div id="userEvaluationReportModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+                    <span class="close" onclick="closeModal('userEvaluationReportModal')" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+                    <h2 style="color: #1976d2; margin-bottom: 20px;">📊 用户评价详细报告</h2>
+                    <div id="evaluationReportContent"></div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('userEvaluationReportModal');
+    }
+    
+    // 渲染报告内容
+    const content = document.getElementById('evaluationReportContent');
+    const profile = reportData.user_level_info?.profile;
+    const evalStats = reportData.evaluation_stats;
+    const pointsHistory = reportData.points_history || [];
+    
+    content.innerHTML = `
+        <div style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h3 style="color: #1976d2; margin-bottom: 15px;">👤 用户基本信息</h3>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                <div><strong>用户ID:</strong> ${profile?.user_id || 'N/A'}</div>
+                <div><strong>显示名称:</strong> ${profile?.display_name || 'N/A'}</div>
+                <div><strong>等级:</strong> Lv.${profile?.level || 0}</div>
+                <div><strong>总经验:</strong> ${profile?.total_exp || 0}</div>
+                <div><strong>可用积分:</strong> ${profile?.available_points || 0}</div>
+                <div><strong>评价次数:</strong> ${profile?.user_eval_count || 0}</div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h3 style="color: #1976d2; margin-bottom: 15px;">📝 评价统计</h3>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <h4 style="margin: 0 0 10px 0; color: #4caf50;">给出评价</h4>
+                    <div style="font-size: 24px; font-weight: bold; color: #333; margin-bottom: 10px;">
+                        ${evalStats?.totalEvaluationsGiven || 0}
+                    </div>
+                    ${evalStats?.givenStats ? `
+                        <div style="font-size: 12px; color: #666;">
+                            平均评分: ${evalStats.givenStats.averageOverallScore?.toFixed(2) || 'N/A'}<br>
+                            有评论: ${evalStats.givenStats.commentStats?.withComments || 0}<br>
+                            评论率: ${evalStats.givenStats.count > 0 ? ((evalStats.givenStats.commentStats?.withComments || 0) / evalStats.givenStats.count * 100).toFixed(1) : 0}%
+                        </div>
+                    ` : ''}
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
+                    <h4 style="margin: 0 0 10px 0; color: #2196f3;">收到评价</h4>
+                    <div style="font-size: 24px; font-weight: bold; color: #333; margin-bottom: 10px;">
+                        ${evalStats?.totalEvaluationsReceived || 0}
+                    </div>
+                    ${evalStats?.receivedStats ? `
+                        <div style="font-size: 12px; color: #666;">
+                            平均评分: ${evalStats.receivedStats.averageOverallScore?.toFixed(2) || 'N/A'}<br>
+                            有评论: ${evalStats.receivedStats.commentStats?.withComments || 0}<br>
+                            评论率: ${evalStats.receivedStats.count > 0 ? ((evalStats.receivedStats.commentStats?.withComments || 0) / evalStats.receivedStats.count * 100).toFixed(1) : 0}%
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px;">
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;">
+                    <h4 style="margin: 0 0 10px 0; color: #ff9800;">活跃度分数</h4>
+                    <div style="font-size: 24px; font-weight: bold; color: #333;">
+                        ${reportData.activity_score || 0}
+                    </div>
+                    <div style="font-size: 12px; color: #666;">评价活跃程度</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #9c27b0;">
+                    <h4 style="margin: 0 0 10px 0; color: #9c27b0;">质量分数</h4>
+                    <div style="font-size: 24px; font-weight: bold; color: #333;">
+                        ${reportData.quality_score || 0}
+                    </div>
+                    <div style="font-size: 12px; color: #666;">评价质量水平</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h3 style="color: #1976d2; margin-bottom: 15px;">💰 积分历史 (最近10条)</h3>
+            <div style="max-height: 300px; overflow-y: auto;">
+                ${pointsHistory.slice(0, 10).map(log => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; margin: 5px 0; background: white; border-radius: 5px; border-left: 3px solid #1976d2;">
+                        <div>
+                            <div style="font-weight: bold;">${log.description || log.action_type}</div>
+                            <div style="font-size: 12px; color: #666;">${new Date(log.timestamp * 1000).toLocaleString()}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            ${log.exp_change > 0 ? `<div style="color: #4caf50;">+${log.exp_change} EXP</div>` : ''}
+                            ${log.points_change > 0 ? `<div style="color: #2196f3;">+${log.points_change} 积分</div>` : log.points_change < 0 ? `<div style="color: #f44336;">${log.points_change} 积分</div>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+                ${pointsHistory.length === 0 ? '<div style="text-align: center; color: #666; padding: 20px;">暂无积分历史记录</div>' : ''}
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+            <h3 style="color: #1976d2; margin-bottom: 10px;">ℹ️ 报告信息</h3>
+            <p style="margin: 0; color: #666;">生成时间: ${new Date(reportData.report_generated_at).toLocaleString()}</p>
+        </div>
+    `;
+    
+    // 显示模态框
+    modal.style.display = 'block';
+}
+
+// 加载评价趋势
+async function loadEvaluationTrends() {
+    try {
+        const response = await fetch('/api/level/evaluation-trends');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            displayEvaluationTrends(result.data);
+        } else {
+            showError('获取评价趋势失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error('获取评价趋势失败:', error);
+        showError('获取评价趋势失败');
+    }
+}
+
+// 显示评价趋势
+function displayEvaluationTrends(trends) {
+    const container = document.getElementById('evaluation-trends');
+    if (!container) {
+        console.warn('找不到评价趋势容器');
+        return;
+    }
+    
+    container.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #1976d2; margin-bottom: 20px;">📈 评价趋势分析</h3>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px;">
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #4caf50;">${trends.weekly_total}</div>
+                    <div style="color: #666;">本周评价总数</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #2196f3;">${trends.monthly_total}</div>
+                    <div style="color: #666;">本月评价总数</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #ff9800;">${trends.active_users_weekly}</div>
+                    <div style="color: #666;">本周活跃用户</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #9c27b0;">${((trends.weekly_total / Math.max(trends.active_users_weekly, 1)) || 0).toFixed(1)}</div>
+                    <div style="color: #666;">人均评价数</div>
+                </div>
+            </div>
+            <h4 style="color: #1976d2; margin-bottom: 15px;">🏆 本周评价排行榜</h4>
+            <div>
+                ${trends.top_evaluators_weekly.map((user, index) => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; margin: 5px 0; background: #f8f9fa; border-radius: 5px;">
+                        <div>
+                            <span style="font-weight: bold; margin-right: 10px;">${index + 1}.</span>
+                            用户${user.user_id}
+                        </div>
+                        <div style="color: #666;">
+                            给出${user.evaluations_given} | 收到${user.evaluations_received}
+                        </div>
+                    </div>
+                `).join('')}
+                ${trends.top_evaluators_weekly.length === 0 ? '<div style="text-align: center; color: #666; padding: 20px;">暂无数据</div>' : ''}
+            </div>
+        </div>
+    `;
+}
+
+// 导出增强排行榜函数到全局作用域
+window.loadEnhancedRankings = loadEnhancedRankings;
+window.viewUserEvaluationReport = viewUserEvaluationReport;
+window.loadEvaluationTrends = loadEvaluationTrends;

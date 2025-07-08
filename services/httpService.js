@@ -3945,6 +3945,104 @@ async function handleLevelApiRequest(pathname, method, data) {
             }
         }
         
+        // 增强排行榜API
+        if (endpoint === 'enhanced-rankings' && method === 'GET') {
+            const type = data.type || 'level';
+            const limit = parseInt(data.limit) || 10;
+            const includeInactive = data.includeInactive === 'true';
+            
+            try {
+                const enhancedRankingService = require('../level/services/enhancedRankingService').getInstance();
+                const rankings = await enhancedRankingService.getEnhancedRankings(type, limit, includeInactive);
+                
+                return {
+                    success: true,
+                    data: rankings
+                };
+            } catch (error) {
+                console.error('获取增强排行榜失败:', error);
+                return {
+                    success: false,
+                    error: '获取增强排行榜失败: ' + error.message
+                };
+            }
+        }
+
+        // 用户评价报告API
+        if (endpoint === 'user-evaluation-report' && method === 'GET') {
+            const userId = parseInt(data.userId);
+            
+            if (!userId) {
+                return {
+                    success: false,
+                    error: '用户ID不能为空'
+                };
+            }
+            
+            try {
+                const enhancedRankingService = require('../level/services/enhancedRankingService').getInstance();
+                const report = await enhancedRankingService.getUserEvaluationReport(userId);
+                
+                return {
+                    success: true,
+                    data: report
+                };
+            } catch (error) {
+                console.error('获取用户评价报告失败:', error);
+                return {
+                    success: false,
+                    error: '获取用户评价报告失败: ' + error.message
+                };
+            }
+        }
+
+        // 评价趋势分析API
+        if (endpoint === 'evaluation-trends' && method === 'GET') {
+            try {
+                const enhancedRankingService = require('../level/services/enhancedRankingService').getInstance();
+                const trends = enhancedRankingService.getEvaluationTrends();
+                
+                return {
+                    success: true,
+                    data: trends
+                };
+            } catch (error) {
+                console.error('获取评价趋势失败:', error);
+                return {
+                    success: false,
+                    error: '获取评价趋势失败: ' + error.message
+                };
+            }
+        }
+
+        // 用户评价统计API
+        if (endpoint === 'user-evaluation-stats' && method === 'GET') {
+            const userId = parseInt(data.userId);
+            
+            if (!userId) {
+                return {
+                    success: false,
+                    error: '用户ID不能为空'
+                };
+            }
+            
+            try {
+                const enhancedRankingService = require('../level/services/enhancedRankingService').getInstance();
+                const stats = enhancedRankingService.getUserEvaluationStats(userId);
+                
+                return {
+                    success: true,
+                    data: stats
+                };
+            } catch (error) {
+                console.error('获取用户评价统计失败:', error);
+                return {
+                    success: false,
+                    error: '获取用户评价统计失败: ' + error.message
+                };
+            }
+        }
+        
         // 404 - 未找到的API端点
         return { success: false, error: 'API端点不存在', status: 404 };
         

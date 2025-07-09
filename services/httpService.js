@@ -1596,7 +1596,7 @@ async function processApiRequest(pathname, method, data) {
                 }
                 
                         // 添加"返回榜单"按钮
-        buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]);
+        buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji779' }]);
                 
                 sendOptions.reply_markup = {
                     inline_keyboard: buttons

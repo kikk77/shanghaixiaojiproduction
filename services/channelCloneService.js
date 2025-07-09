@@ -137,6 +137,24 @@ class ChannelCloneService {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
             
+            // 🔥 关键修复：跳过私聊消息，频道克隆服务只处理频道消息
+            if (message.chat.type === 'private') {
+                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过私聊消息: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
+            // 🔥 关键修复：跳过群组消息，频道克隆服务只处理频道消息
+            if (message.chat.type === 'group' || message.chat.type === 'supergroup') {
+                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过群组消息: ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
+            // 只处理频道消息
+            if (message.chat.type !== 'channel') {
+                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过非频道消息 (${message.chat.type}): ${chatId} - ${message.message_id}`);
+                return;
+            }
+            
             // 🔥 修复Bug2: 检查是否为Bot自己发送的消息，避免无限循环
             if (message.from && message.from.id === this.bot.options.botId) {
                 console.log(`📺 [${this.instanceId}] 跳过Bot自己发送的消息: ${chatId} - ${message.message_id}`);

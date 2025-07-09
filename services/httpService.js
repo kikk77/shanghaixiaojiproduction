@@ -1595,8 +1595,8 @@ async function processApiRequest(pathname, method, data) {
                     buttons.push([{ text: '关注老师频道', url: `https://t.me/${botUsername}?start=merchant_${merchantId}` }]);
                 }
                 
-                // 添加"返回榜单"按钮
-                buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]);
+                        // 添加"返回榜单"按钮
+        buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji779' }]);
                 
                 sendOptions.reply_markup = {
                     inline_keyboard: buttons

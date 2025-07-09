@@ -1023,6 +1023,7 @@ class ApiService {
             const processedOrder = {
                 id: order.id,
                 order_number: order.order_number || order.id,
+                user_id: order.user_id,
                 user_name: order.user_name || '未知用户',
                 user_username: order.user_username,
                 merchant_id: order.merchant_id,

@@ -172,9 +172,9 @@ class LevelSystemManager {
                             <span class="visually-hidden">加载中...</span>
                         </div>
                         <div class="mt-2">正在加载排行榜数据...</div>
-                </div>
-            </td>
-        </tr>
+                    </div>
+                </td>
+            </tr>
         `;
 
         try {

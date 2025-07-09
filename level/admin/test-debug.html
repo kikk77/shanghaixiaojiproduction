@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>等级系统调试测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>等级系统调试测试</h1>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>API测试</h5>
+                    </div>
+                    <div class="card-body">
+                        <button id="testRankings" class="btn btn-primary me-2">测试排行榜API</button>
+                        <button id="testStats" class="btn btn-success me-2">测试统计API</button>
+                        <button id="testConfig" class="btn btn-info">测试配置API</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>DOM测试</h5>
+                    </div>
+                    <div class="card-body">
+                        <button id="testDom" class="btn btn-warning">测试DOM元素</button>
+                        <div id="domResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>测试结果</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="testResults" style="max-height: 400px; overflow-y: auto;">
+                            <p class="text-muted">点击上方按钮开始测试...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        console.log('🚀 调试测试页面开始加载...');
+        
+        function logResult(message, type = 'info') {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-info';
+            
+            results.innerHTML += `
+                <div class="${color}">
+                    <strong>[${timestamp}]</strong> ${message}
+                </div>
+            `;
+            results.scrollTop = results.scrollHeight;
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        async function testAPI(url, name) {
+            logResult(`🌐 开始测试 ${name} API: ${url}`);
+            
+            try {
+                const response = await fetch(url);
+                logResult(`📡 ${name} API响应状态: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                logResult(`📦 ${name} API响应数据: ${JSON.stringify(data, null, 2)}`, 'success');
+                
+                return data;
+            } catch (error) {
+                logResult(`❌ ${name} API测试失败: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        function testDOMElements() {
+            logResult('🔍 开始测试DOM元素...');
+            
+            const elements = [
+                'rankingTableBody', 'systemStatus', 'totalUsers', 'activeUsers', 'avgLevel',
+                'rankingType', 'rankingLimit', 'includeInactive', 'refreshRanking',
+                'searchUsers', 'userSearch', 'levelConfigContainer'
+            ];
+            
+            let foundElements = 0;
+            let missingElements = [];
+            
+            elements.forEach(elementId => {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    foundElements++;
+                    logResult(`✅ 找到DOM元素: ${elementId}`, 'success');
+                } else {
+                    missingElements.push(elementId);
+                    logResult(`❌ 找不到DOM元素: ${elementId}`, 'error');
+                }
+            });
+            
+            const domResults = document.getElementById('domResults');
+            domResults.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>DOM测试结果:</strong><br>
+                    找到: ${foundElements}/${elements.length} 个元素<br>
+                    缺失: ${missingElements.join(', ')}
+                </div>
+            `;
+            
+            logResult(`📊 DOM测试完成: ${foundElements}/${elements.length} 个元素正常`);
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            logResult('🎯 DOM加载完成');
+            
+            // 绑定测试按钮事件
+            document.getElementById('testRankings').addEventListener('click', () => {
+                testAPI('/api/level/rankings', '排行榜');
+            });
+            
+            document.getElementById('testStats').addEventListener('click', () => {
+                testAPI('/api/level/stats', '统计');
+            });
+            
+            document.getElementById('testConfig').addEventListener('click', () => {
+                testAPI('/api/level/config', '配置');
+            });
+            
+            document.getElementById('testDom').addEventListener('click', () => {
+                testDOMElements();
+            });
+            
+            logResult('✅ 调试测试页面初始化完成');
+        });
+        
+        console.log('📝 调试测试脚本加载完成');
+    </script>
+</body>
+</html> 

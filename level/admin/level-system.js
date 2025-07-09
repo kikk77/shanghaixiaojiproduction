@@ -33,7 +33,7 @@ class LevelSystemManager {
             await this.loadInitialData();
             
             console.log('✅ 等级系统管理界面初始化完成');
-        } catch (error) {
+    } catch (error) {
             console.error('❌ 初始化失败:', error);
             this.showError('系统初始化失败: ' + error.message);
         }
@@ -97,7 +97,7 @@ class LevelSystemManager {
                 this.loadRankingData(),
                 this.loadLevelConfig()
             ]);
-        } catch (error) {
+    } catch (error) {
             console.error('加载初始数据失败:', error);
             this.showError('加载数据失败，请刷新页面重试');
         }
@@ -111,10 +111,10 @@ class LevelSystemManager {
             const response = await this.apiRequest('/api/level/stats');
             if (response.success) {
                 this.updateSystemStats(response.data);
-            } else {
+        } else {
                 console.error('获取系统统计失败:', response.error);
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('加载系统统计失败:', error);
         }
     }
@@ -151,8 +151,8 @@ class LevelSystemManager {
                 document.getElementById('totalUsers').textContent = allUsers.length;
                 document.getElementById('activeUsers').textContent = activeUsers.length;
                 document.getElementById('avgLevel').textContent = `Lv.${avgLevel}`;
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('计算统计信息失败:', error);
         }
     }
@@ -172,9 +172,9 @@ class LevelSystemManager {
                             <span class="visually-hidden">加载中...</span>
                         </div>
                         <div class="mt-2">正在加载排行榜数据...</div>
-                    </div>
-                </td>
-            </tr>
+                </div>
+            </td>
+        </tr>
         `;
 
         try {
@@ -184,9 +184,9 @@ class LevelSystemManager {
             const cachedData = this.getFromCache(cacheKey);
             if (cachedData) {
                 this.renderRankingTable(cachedData);
-                return;
-            }
-
+        return;
+    }
+    
             // 构建API请求URL
             const params = new URLSearchParams({
                 type: this.currentRankingType,
@@ -203,22 +203,22 @@ class LevelSystemManager {
                 
                 // 更新统计信息
                 this.calculateStatsFromRanking();
-            } else {
+        } else {
                 throw new Error(response.error || '获取排行榜数据失败');
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('加载排行榜失败:', error);
             tableBody.innerHTML = `
                 <tr>
                     <td colspan="8" class="text-center">
-                        <div class="empty-state">
+            <div class="empty-state">
                             <i class="fas fa-exclamation-triangle text-warning"></i>
                             <h5>加载失败</h5>
                             <p>${error.message}</p>
                             <button class="btn btn-primary" onclick="levelSystemManager.loadRankingData()">
                                 <i class="fas fa-redo me-1"></i>重试
                             </button>
-                        </div>
+                </div>
                     </td>
                 </tr>
             `;
@@ -239,22 +239,22 @@ class LevelSystemManager {
                             <i class="fas fa-users"></i>
                             <h5>暂无数据</h5>
                             <p>当前筛选条件下没有找到用户数据</p>
-                        </div>
+                </div>
                     </td>
                 </tr>
             `;
-            return;
-        }
-
+        return;
+    }
+    
         const rows = data.map((user, index) => {
-            const rank = index + 1;
+        const rank = index + 1;
             const rankMedal = this.getRankMedal(rank);
             const levelBadge = this.getLevelBadge(user.level);
             const displayName = user.display_name || `用户${user.user_id}`;
             const username = user.username ? `@${user.username}` : '@未设置';
-            
-            return `
-                <tr>
+        
+        return `
+            <tr>
                     <td>
                         ${rankMedal}
                         <span class="fw-bold">${rank}</span>
@@ -289,18 +289,18 @@ class LevelSystemManager {
                         <div class="btn-group" role="group">
                             <button class="btn btn-sm btn-outline-primary" onclick="levelSystemManager.viewUserDetail('${user.user_id}')" title="查看详情">
                                 <i class="fas fa-eye"></i>
-                            </button>
+                        </button>
                             <button class="btn btn-sm btn-outline-success" onclick="levelSystemManager.adjustUserPoints('${user.user_id}')" title="调整积分">
                                 <i class="fas fa-coins"></i>
-                            </button>
+                        </button>
                             <button class="btn btn-sm btn-outline-info" onclick="levelSystemManager.viewUserHistory('${user.user_id}')" title="查看历史">
                                 <i class="fas fa-history"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 
         tableBody.innerHTML = rows;
     }
@@ -362,16 +362,16 @@ class LevelSystemManager {
             
             if (response.success) {
                 this.renderUserDetail(response.data);
-            } else {
+        } else {
                 throw new Error(response.error || '获取用户详情失败');
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('获取用户详情失败:', error);
             content.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     ${error.message}
-                </div>
+                            </div>
             `;
         }
     }
@@ -422,46 +422,46 @@ class LevelSystemManager {
                                     <span class="badge bg-warning">${user.user_eval_count || 0}</span>
                                 </dd>
                             </dl>
-                        </div>
-                    </div>
+                </div>
+                </div>
                 </div>
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
                             <h6 class="card-title">等级进度</h6>
-                        </div>
+                </div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
                                     <span>当前等级</span>
                                     <span>Lv.${user.level}</span>
-                                </div>
+                </div>
                                 <div class="progress mb-2">
                                     <div class="progress-bar" style="width: ${this.calculateExpProgress(user)}%"></div>
-                                </div>
+            </div>
                                 <small class="text-muted">经验值: ${user.total_exp || 0}</small>
-                            </div>
+            </div>
                             
                             <div class="row text-center">
                                 <div class="col-4">
                                     <div class="border rounded p-2">
                                         <div class="h5 mb-0 text-primary">${user.level || 1}</div>
                                         <small class="text-muted">当前等级</small>
-                                    </div>
-                                </div>
+            </div>
+                        </div>
                                 <div class="col-4">
                                     <div class="border rounded p-2">
                                         <div class="h5 mb-0 text-success">${user.available_points || 0}</div>
                                         <small class="text-muted">可用积分</small>
-                                    </div>
-                                </div>
+                        </div>
+                        </div>
                                 <div class="col-4">
                                     <div class="border rounded p-2">
                                         <div class="h5 mb-0 text-warning">${user.user_eval_count || 0}</div>
                                         <small class="text-muted">评价次数</small>
-                                    </div>
-                                </div>
-                            </div>
+                        </div>
+                        </div>
+                        </div>
                         </div>
                     </div>
                     
@@ -474,10 +474,10 @@ class LevelSystemManager {
                             <i class="fas fa-history me-1"></i>
                             查看历史
                         </button>
-                    </div>
+                            </div>
+                            </div>
                 </div>
-            </div>
-        `;
+            `;
     }
 
     /**
@@ -538,10 +538,10 @@ class LevelSystemManager {
                 }
                 
                 this.renderUserManagement(users);
-            } else {
+        } else {
                 throw new Error(response.error || '搜索失败');
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('搜索用户失败:', error);
             content.innerHTML = `
                 <div class="alert alert-danger">
@@ -564,24 +564,24 @@ class LevelSystemManager {
                     <i class="fas fa-users"></i>
                     <h5>未找到用户</h5>
                     <p>没有找到符合条件的用户</p>
-                </div>
-            `;
-            return;
-        }
-        
+            </div>
+        `;
+        return;
+    }
+    
         const userCards = users.map(user => {
             const displayName = user.display_name || `用户${user.user_id}`;
             const username = user.username ? `@${user.username}` : '@未设置';
-            
-            return `
+        
+        return `
                 <div class="col-md-6 col-lg-4 mb-3">
                     <div class="card h-100">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div>
+                        <div>
                                     <h6 class="card-title mb-1">${this.escapeHtml(displayName)}</h6>
                                     <small class="text-muted">${this.escapeHtml(username)}</small>
-                                </div>
+                            </div>
                                 ${this.getLevelBadge(user.level)}
                             </div>
                             
@@ -591,24 +591,24 @@ class LevelSystemManager {
                                         <strong>${user.total_exp || 0}</strong>
                                         <br>
                                         <small>经验值</small>
-                                    </div>
-                                </div>
+                </div>
+            </div>
                                 <div class="col-4">
                                     <div class="text-success">
                                         <strong>${user.available_points || 0}</strong>
                                         <br>
                                         <small>积分</small>
-                                    </div>
-                                </div>
+            </div>
+        </div>
                                 <div class="col-4">
                                     <div class="text-warning">
                                         <strong>${user.user_eval_count || 0}</strong>
                                         <br>
                                         <small>评价</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
+                    </div>
+            </div>
+        </div>
+        
                             <div class="d-flex gap-1">
                                 <button class="btn btn-sm btn-outline-primary flex-fill" onclick="levelSystemManager.viewUserDetail('${user.user_id}')">
                                     <i class="fas fa-eye"></i>
@@ -619,18 +619,18 @@ class LevelSystemManager {
                                 <button class="btn btn-sm btn-outline-info flex-fill" onclick="levelSystemManager.viewUserHistory('${user.user_id}')">
                                     <i class="fas fa-history"></i>
                                 </button>
-                            </div>
+                        </div>
                         </div>
                     </div>
-                </div>
+            </div>
             `;
         }).join('');
         
         content.innerHTML = `
             <div class="row">
                 ${userCards}
-            </div>
-        `;
+        </div>
+    `;
     }
 
     /**
@@ -642,10 +642,10 @@ class LevelSystemManager {
             
             if (response.success) {
                 this.renderLevelConfig(response.data);
-            } else {
+        } else {
                 console.error('获取等级配置失败:', response.error);
-            }
-        } catch (error) {
+        }
+    } catch (error) {
             console.error('加载等级配置失败:', error);
         }
     }
@@ -661,8 +661,8 @@ class LevelSystemManager {
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     等级配置不可用
-                </div>
-            `;
+        </div>
+    `;
             return;
         }
         
@@ -697,8 +697,8 @@ class LevelSystemManager {
                         </tbody>
                     </table>
                 </div>
-            </div>
-        `;
+                </div>
+            `;
     }
 
     /**
@@ -777,7 +777,7 @@ class LevelSystemManager {
             console.log('📦 API响应数据:', data);
             
             return data;
-        } catch (error) {
+    } catch (error) {
             console.error('❌ API请求失败:', error);
             throw error;
         }

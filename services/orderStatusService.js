@@ -72,22 +72,22 @@ class OrderStatusService {
             if (hasStatusUpdatedAt && hasStatusUpdatedBy) {
                 // 完整版本 - 包含状态更新字段
                 updateStmt = this.db.prepare(`
-                    UPDATE orders 
-                    SET status = ?, 
-                        status_updated_at = strftime('%s', 'now'),
-                        status_updated_by = ?,
-                        updated_at = strftime('%s', 'now')
-                    WHERE id = ?
-                `);
-                const result = updateStmt.run(newStatus, updatedBy, orderId);
+                UPDATE orders 
+                SET status = ?, 
+                    status_updated_at = strftime('%s', 'now'),
+                    status_updated_by = ?,
+                    updated_at = strftime('%s', 'now')
+                WHERE id = ?
+            `);
+            const result = updateStmt.run(newStatus, updatedBy, orderId);
+            
+            if (result.changes > 0) {
+                // 记录状态变更日志
+                this.logStatusChange(orderId, currentStatus, newStatus, updatedBy);
                 
-                if (result.changes > 0) {
-                    // 记录状态变更日志
-                    this.logStatusChange(orderId, currentStatus, newStatus, updatedBy);
-                    
-                    // 触发状态变更通知
-                    this.handleStatusChangeNotification(orderId, currentStatus, newStatus);
-                    
+                // 触发状态变更通知
+                this.handleStatusChangeNotification(orderId, currentStatus, newStatus);
+                
                     console.log(`✅ 订单状态更新成功: ${orderId} ${currentStatus} -> ${newStatus}`);
                     return true;
                 }
@@ -109,7 +109,7 @@ class OrderStatusService {
                     this.handleStatusChangeNotification(orderId, currentStatus, newStatus);
                     
                     console.log(`✅ 订单状态更新成功: ${orderId} ${currentStatus} -> ${newStatus}`);
-                    return true;
+                return true;
                 }
             }
             
@@ -211,12 +211,12 @@ class OrderStatusService {
             
             if (tablesResult) {
                 // 表存在，记录状态变更日志
-                const logStmt = this.db.prepare(`
-                    INSERT INTO order_status_logs 
-                    (order_id, from_status, to_status, updated_by, created_at) 
-                    VALUES (?, ?, ?, ?, strftime('%s', 'now'))
-                `);
-                logStmt.run(orderId, fromStatus, toStatus, updatedBy);
+            const logStmt = this.db.prepare(`
+                INSERT INTO order_status_logs 
+                (order_id, from_status, to_status, updated_by, created_at) 
+                VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+            `);
+            logStmt.run(orderId, fromStatus, toStatus, updatedBy);
                 console.log(`✅ 状态变更日志已记录: 订单 ${orderId} ${fromStatus} -> ${toStatus}`);
             } else {
                 // 表不存在，仅记录到控制台

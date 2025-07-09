@@ -711,8 +711,12 @@ function initBotHandlers() {
                     let merchantInfo;
                     
                     if (merchant.template_type === 2 && merchant.custom_content) {
-                        // 自定义模板：直接使用自定义内容
-                        merchantInfo = merchant.custom_content;
+                        // 自定义模板：包含基本信息 + 自定义内容替换基本功
+                        merchantInfo = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}\n` +
+                                     `优点：${merchant.advantages || '未填写'}\n` +
+                                     `缺点：${merchant.disadvantages || '未填写'}\n` +
+                                     `价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp\n\n` +
+                                     merchant.custom_content;
                     } else {
                         // 标准模板：使用原有格式
                         merchantInfo = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}\n` +

@@ -2012,34 +2012,39 @@
             const imageData = window.currentMerchantImageData;
             let preview = '';
             
-            if (templateType === '2') {
-                // 自定义模板：直接使用自定义内容
-                const customContent = document.getElementById('editCustomContent').value || '请输入自定义内容';
-                preview = customContent;
-            } else {
-                // 标准模板：按原有格式组装
-                const regionSelect = document.getElementById('editRegionId');
-                const selectedRegion = regions.find(r => r.id == regionSelect.value);
-                const regionName = selectedRegion ? selectedRegion.name : 'xx';
-                
-                const teacherName = document.getElementById('editTeacherName').value || '未填写';
-                const advantages = document.getElementById('editAdvantages').value || '未填写';
-                const disadvantages = document.getElementById('editDisadvantages').value || '未填写';
-                const price1 = document.getElementById('editPrice1').value || '未填写';
-                const price2 = document.getElementById('editPrice2').value || '未填写';
-                const contact = document.getElementById('editContact').value || '未填写';
-                const skillWash = document.getElementById('editWash').value || '未填写';
-                const skillBlow = document.getElementById('editBlow').value || '未填写';
-                const skillDo = document.getElementById('editDo').value || '未填写';
-                const skillKiss = document.getElementById('editKiss').value || '未填写';
-                
-                preview = `地区：#${regionName}              艺名：#${teacherName}
+            // 获取基本信息字段
+            const regionSelect = document.getElementById('editRegionId');
+            const selectedRegion = regions.find(r => r.id == regionSelect.value);
+            const regionName = selectedRegion ? selectedRegion.name : 'xx';
+            
+            const teacherName = document.getElementById('editTeacherName').value || '未填写';
+            const advantages = document.getElementById('editAdvantages').value || '未填写';
+            const disadvantages = document.getElementById('editDisadvantages').value || '未填写';
+            const price1 = document.getElementById('editPrice1').value || '未填写';
+            const price2 = document.getElementById('editPrice2').value || '未填写';
+            const contact = document.getElementById('editContact').value || '未填写';
+            
+            // 基本信息部分（两种模板都包含）
+            const basicInfo = `地区：#${regionName}              艺名：#${teacherName}
 优点：${advantages}
 缺点：${disadvantages}
 价格：${price1}p              ${price2}pp
 联系：${contact}
 
-老师💃自填基本功：
+`;
+            
+            if (templateType === '2') {
+                // 自定义模板：基本信息 + 自定义内容替换基本功
+                const customContent = document.getElementById('editCustomContent').value || '请输入自定义内容';
+                preview = basicInfo + customContent;
+            } else {
+                // 标准模板：基本信息 + 基本功
+                const skillWash = document.getElementById('editWash').value || '未填写';
+                const skillBlow = document.getElementById('editBlow').value || '未填写';
+                const skillDo = document.getElementById('editDo').value || '未填写';
+                const skillKiss = document.getElementById('editKiss').value || '未填写';
+                
+                preview = basicInfo + `老师💃自填基本功：
 💦洗:${skillWash}
 👄吹:${skillBlow}
 ❤️做:${skillDo}

@@ -241,7 +241,18 @@ class MerchantService {
             const region = dbOperations.getRegionById(merchant.region_id);
             const regionName = region ? region.name : 'xx';
             
-            return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
+            if (merchant.template_type === 2 && merchant.custom_content) {
+                // 自定义模板：包含基本信息 + 自定义内容替换基本功
+                return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
+优点：${merchant.advantages || '未填写'}
+缺点：${merchant.disadvantages || '未填写'}
+价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
+联系：${merchant.contact || '未填写'}
+
+${merchant.custom_content}`;
+            } else {
+                // 标准模板：使用原有格式
+                return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
@@ -252,6 +263,7 @@ class MerchantService {
 👄吹:${merchant.skill_blow || '未填写'}
 ❤️做:${merchant.skill_do || '未填写'}
 🐍吻:${merchant.skill_kiss || '未填写'}`;
+            }
             
         } catch (error) {
             console.error('获取商家信息模板失败:', error);

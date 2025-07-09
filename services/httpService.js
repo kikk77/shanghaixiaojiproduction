@@ -1560,13 +1560,24 @@ async function processApiRequest(pathname, method, data) {
                 }
 
                 // 构建商家信息消息，使用正确的数据库字段名
-                messageContent = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
+                if (merchant.template_type === 2 && merchant.custom_content) {
+                    // 自定义模板：包含基本信息 + 自定义内容替换基本功
+                    messageContent = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
+优点：${merchant.advantages || '未填写'}
+缺点：${merchant.disadvantages || '未填写'}
+价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
+
+${merchant.custom_content}`;
+                } else {
+                    // 标准模板：使用原有格式
+                    messageContent = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
 
 老师💃自填基本功：
 ${dbOperations.formatMerchantSkillsDisplay(merchant.id)}`;
+                }
 
                 // 添加跳转到私聊的按钮
                 let botUsername;

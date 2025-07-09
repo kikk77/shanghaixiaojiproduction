@@ -572,6 +572,16 @@
                         <!-- 价格信息 -->
                         <div class="card" style="margin-bottom: 20px;">
                             <h4>💰 价格信息</h4>
+                            
+                            <!-- 自定义模板价格显示控制 -->
+                            <div id="customPriceDisplayControl" class="form-group" style="display: none; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="showPriceInCustomTemplate" onchange="handlePriceDisplayChange()" checked>
+                                    <span>在自定义模板中显示价格信息</span>
+                                </label>
+                                <small style="color: #666; margin-left: 24px;">取消勾选后，自定义模板将不显示价格，但标准模板仍会显示</small>
+                            </div>
+                            
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>价格1：</label>
@@ -1837,6 +1847,10 @@
             document.getElementById('editTemplateType').value = templateType;
             document.getElementById('editCustomContent').value = merchant.custom_content || '';
             
+            // 填充价格显示控制状态（默认为true显示价格）
+            const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== false;
+            document.getElementById('showPriceInCustomTemplate').checked = showPriceInCustomTemplate;
+            
             // 根据模板类型显示/隐藏相应区域
             handleTemplateTypeChange();
             
@@ -2033,20 +2047,37 @@
             const price2 = document.getElementById('editPrice2').value || '未填写';
             const contact = document.getElementById('editContact').value || '未填写';
             
-            // 基本信息部分（两种模板都包含）
-            const basicInfo = `地区：#${regionName}              艺名：#${teacherName}
-优点：${advantages}
-缺点：${disadvantages}
-价格：${price1}p              ${price2}pp
-
-`;
-            
             if (templateType === '2') {
                 // 自定义模板：基本信息 + 自定义内容替换基本功
+                const showPriceInCustomTemplate = document.getElementById('showPriceInCustomTemplate').checked;
+                
+                let basicInfo = `地区：#${regionName}              艺名：#${teacherName}
+优点：${advantages}
+缺点：${disadvantages}`;
+                
+                // 根据设置决定是否显示价格
+                if (showPriceInCustomTemplate) {
+                    basicInfo += `
+价格：${price1}p              ${price2}pp`;
+                }
+                
+                basicInfo += `
+联系：${contact}
+
+`;
+                
                 const customContent = document.getElementById('editCustomContent').value || '请输入自定义内容';
                 preview = basicInfo + customContent;
             } else {
-                // 标准模板：基本信息 + 基本功
+                // 标准模板：基本信息 + 基本功（始终显示价格）
+                const basicInfo = `地区：#${regionName}              艺名：#${teacherName}
+优点：${advantages}
+缺点：${disadvantages}
+价格：${price1}p              ${price2}pp
+联系：${contact}
+
+`;
+                
                 const skillWash = document.getElementById('editWash').value || '未填写';
                 const skillBlow = document.getElementById('editBlow').value || '未填写';
                 const skillDo = document.getElementById('editDo').value || '未填写';
@@ -2095,6 +2126,7 @@
             const imageData = window.currentMerchantImageData;
             const templateType = parseInt(document.getElementById('editTemplateType').value);
             const customContent = document.getElementById('editCustomContent').value;
+            const showPriceInCustomTemplate = document.getElementById('showPriceInCustomTemplate').checked;
 
             try {
                 showLoading();
@@ -2114,7 +2146,8 @@
                     skillKiss,
                     imageData,
                     templateType,
-                    customContent
+                    customContent,
+                    showPriceInCustomTemplate
                 });
                 showAlert('商家信息模板更新成功');
                 closeMerchantEditModal();
@@ -3397,24 +3430,33 @@
         function handleTemplateTypeChange() {
             const templateType = document.getElementById('editTemplateType').value;
             const customContentSection = document.getElementById('customContentSection');
+            const customPriceDisplayControl = document.getElementById('customPriceDisplayControl');
             
             // 使用CSS类名来标识需要隐藏的标准模板区域
             const standardSections = document.querySelectorAll('.standard-template-section');
             
             if (templateType === '2') {
-                // 自定义模板：显示自定义内容区域，隐藏标准模板相关区域（只有基本功）
+                // 自定义模板：显示自定义内容区域和价格控制选项，隐藏标准模板相关区域（只有基本功）
                 customContentSection.style.display = 'block';
+                customPriceDisplayControl.style.display = 'block';
                 standardSections.forEach(section => {
                     section.style.display = 'none';
                 });
             } else {
-                // 标准模板：隐藏自定义内容区域，显示标准模板相关区域
+                // 标准模板：隐藏自定义内容区域和价格控制选项，显示标准模板相关区域
                 customContentSection.style.display = 'none';
+                customPriceDisplayControl.style.display = 'none';
                 standardSections.forEach(section => {
                     section.style.display = 'block';
                 });
             }
             
+            // 实时更新预览
+            previewMerchantInfo();
+        }
+
+        // 处理价格显示控制变化
+        function handlePriceDisplayChange() {
             // 实时更新预览
             previewMerchantInfo();
         }

@@ -243,15 +243,25 @@ class MerchantService {
             
             if (merchant.template_type === 2 && merchant.custom_content) {
                 // 自定义模板：包含基本信息 + 自定义内容替换基本功
-                return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
+                let template = `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
-缺点：${merchant.disadvantages || '未填写'}
-价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
+缺点：${merchant.disadvantages || '未填写'}`;
+                
+                // 检查是否在自定义模板中显示价格（默认显示）
+                const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== false;
+                if (showPriceInCustomTemplate) {
+                    template += `
+价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp`;
+                }
+                
+                template += `
 联系：${merchant.contact || '未填写'}
 
 ${merchant.custom_content}`;
+                
+                return template;
             } else {
-                // 标准模板：使用原有格式
+                // 标准模板：使用原有格式，始终显示价格
                 return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}

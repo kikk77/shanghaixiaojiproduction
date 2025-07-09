@@ -534,7 +534,8 @@ const dbOperations = {
                     skill_kiss = ?,
                     image_url = ?,
                     template_type = ?,
-                    custom_content = ?
+                    custom_content = ?,
+                    show_price_in_custom_template = ?
                 WHERE id = ?
             `);
             
@@ -554,6 +555,7 @@ const dbOperations = {
                 data.imageData,
                 data.templateType || 1,
                 data.customContent || null,
+                data.showPriceInCustomTemplate !== undefined ? (data.showPriceInCustomTemplate ? 1 : 0) : 1,
                 id
             );
             

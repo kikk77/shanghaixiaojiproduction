@@ -143,12 +143,26 @@ class EvaluationService {
     // 获取评价详情
     getEvaluation(evaluationId) {
         try {
-            return dbOperations.db.prepare(`
-                SELECT e.*, o.order_number, o.teacher_name, o.user_name
-                FROM evaluations e
-                LEFT JOIN orders o ON e.order_id = o.id
-                WHERE e.id = ?
-            `).get(evaluationId);
+            // 检查 evaluations 表是否有 order_id 字段
+            const tableInfo = dbOperations.db.prepare(`PRAGMA table_info(evaluations)`).all();
+            const hasOrderId = tableInfo.some(column => column.name === 'order_id');
+            
+            if (hasOrderId) {
+                // 如果有 order_id 字段，使用 JOIN 查询
+                return dbOperations.db.prepare(`
+                    SELECT e.*, o.order_number, o.teacher_name, o.user_name
+                    FROM evaluations e
+                    LEFT JOIN orders o ON e.order_id = o.id
+                    WHERE e.id = ?
+                `).get(evaluationId);
+            } else {
+                // 如果没有 order_id 字段，只查询 evaluations 表
+                return dbOperations.db.prepare(`
+                    SELECT e.*
+                    FROM evaluations e
+                    WHERE e.id = ?
+                `).get(evaluationId);
+            }
         } catch (error) {
             console.error('获取评价详情失败:', error);
             return null;
@@ -160,13 +174,28 @@ class EvaluationService {
         try {
             const field = type === 'received' ? 'target_id' : 'evaluator_id';
             
-            return dbOperations.db.prepare(`
-                SELECT e.*, o.order_number, o.teacher_name, o.user_name
-                FROM evaluations e
-                LEFT JOIN orders o ON e.order_id = o.id
-                WHERE e.${field} = ?
-                ORDER BY e.created_at DESC
-            `).all(userId);
+            // 检查 evaluations 表是否有 order_id 字段
+            const tableInfo = dbOperations.db.prepare(`PRAGMA table_info(evaluations)`).all();
+            const hasOrderId = tableInfo.some(column => column.name === 'order_id');
+            
+            if (hasOrderId) {
+                // 如果有 order_id 字段，使用 JOIN 查询
+                return dbOperations.db.prepare(`
+                    SELECT e.*, o.order_number, o.teacher_name, o.user_name
+                    FROM evaluations e
+                    LEFT JOIN orders o ON e.order_id = o.id
+                    WHERE e.${field} = ?
+                    ORDER BY e.created_at DESC
+                `).all(userId);
+            } else {
+                // 如果没有 order_id 字段，只查询 evaluations 表
+                return dbOperations.db.prepare(`
+                    SELECT e.*
+                    FROM evaluations e
+                    WHERE e.${field} = ?
+                    ORDER BY e.created_at DESC
+                `).all(userId);
+            }
         } catch (error) {
             console.error('获取用户评价失败:', error);
             return [];
@@ -178,13 +207,28 @@ class EvaluationService {
         try {
             const field = type === 'received' ? 'target_id' : 'evaluator_id';
             
-            return dbOperations.db.prepare(`
-                SELECT e.*, o.order_number, o.teacher_name, o.user_name
-                FROM evaluations e
-                LEFT JOIN orders o ON e.order_id = o.id
-                WHERE e.${field} = ? AND e.evaluator_type = 'user'
-                ORDER BY e.created_at DESC
-            `).all(merchantUserId);
+            // 检查 evaluations 表是否有 order_id 字段
+            const tableInfo = dbOperations.db.prepare(`PRAGMA table_info(evaluations)`).all();
+            const hasOrderId = tableInfo.some(column => column.name === 'order_id');
+            
+            if (hasOrderId) {
+                // 如果有 order_id 字段，使用 JOIN 查询
+                return dbOperations.db.prepare(`
+                    SELECT e.*, o.order_number, o.teacher_name, o.user_name
+                    FROM evaluations e
+                    LEFT JOIN orders o ON e.order_id = o.id
+                    WHERE e.${field} = ? AND e.evaluator_type = 'user'
+                    ORDER BY e.created_at DESC
+                `).all(merchantUserId);
+            } else {
+                // 如果没有 order_id 字段，只查询 evaluations 表
+                return dbOperations.db.prepare(`
+                    SELECT e.*
+                    FROM evaluations e
+                    WHERE e.${field} = ? AND e.evaluator_type = 'user'
+                    ORDER BY e.created_at DESC
+                `).all(merchantUserId);
+            }
         } catch (error) {
             console.error('获取商家评价失败:', error);
             return [];

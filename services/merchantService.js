@@ -248,14 +248,13 @@ class MerchantService {
 缺点：${merchant.disadvantages || '未填写'}`;
                 
                 // 检查是否在自定义模板中显示价格（默认显示）
-                const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== false;
+                const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== 0;
                 if (showPriceInCustomTemplate) {
                     template += `
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp`;
                 }
                 
                 template += `
-联系：${merchant.contact || '未填写'}
 
 ${merchant.custom_content}`;
                 
@@ -266,7 +265,6 @@ ${merchant.custom_content}`;
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
-联系：${merchant.contact || '未填写'}
 
 老师💃自填基本功：
 💦洗:${merchant.skill_wash || '未填写'}

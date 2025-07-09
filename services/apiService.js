@@ -745,7 +745,7 @@ class ApiService {
                     END as real_status
                 FROM orders o
                 LEFT JOIN merchants m ON o.merchant_id = m.id
-                LEFT JOIN regions r ON o.region_id = r.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE ${whereClause}
                 ORDER BY o.created_at DESC
@@ -797,7 +797,7 @@ class ApiService {
                 SELECT COUNT(*) as count 
                 FROM orders o
                 LEFT JOIN merchants m ON o.merchant_id = m.id
-                LEFT JOIN regions r ON o.region_id = r.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE ${whereClause}
             `).get(...params);
@@ -904,7 +904,7 @@ class ApiService {
                     bs.updated_at as completion_time
                 FROM orders o
                 LEFT JOIN merchants m ON o.merchant_id = m.id
-                LEFT JOIN regions r ON o.region_id = r.id
+                LEFT JOIN regions r ON m.region_id = r.id
                 LEFT JOIN booking_sessions bs ON o.booking_session_id = bs.id
                 WHERE o.id = ?
             `).get(orderId);

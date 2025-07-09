@@ -74,37 +74,22 @@ class ChannelCloneService {
         // 标记监听器为活跃状态
         global.channelCloneListenerActive = this.instanceId;
 
-        // 监听新消息（群组、私聊等，排除频道）
-        this.bot.on('message', (msg) => {
-            // 跳过频道消息，由channel_post处理
-            if (msg.chat.type === 'channel') {
-                return;
-            }
-            this.handleNewMessage(msg);
-        });
-
-        // 监听消息编辑（群组、私聊等，排除频道）
-        this.bot.on('edited_message', (msg) => {
-            // 跳过频道消息，由edited_channel_post处理
-            if (msg.chat.type === 'channel') {
-                return;
-            }
-            this.handleEditedMessage(msg);
-        });
-
-        // 🔥 关键修复：监听频道消息
+        // 🔥 禁用群组消息监听 - 克隆服务只处理频道消息
+        // 不再监听 'message' 和 'edited_message' 事件，避免处理群组消息
+        
+        // 只监听频道消息
         this.bot.on('channel_post', (msg) => {
             console.log(`📺 [克隆服务] [${this.instanceId}] 收到频道消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleNewMessage(msg);
         });
 
-        // 🔥 关键修复：监听频道编辑消息
+        // 只监听频道编辑消息
         this.bot.on('edited_channel_post', (msg) => {
             console.log(`📺 [克隆服务] [${this.instanceId}] 收到频道编辑消息: ${msg.chat.id} - ${msg.message_id}`);
             this.handleEditedMessage(msg);
         });
 
-        console.log(`📺 [${this.instanceId}] 频道克隆消息监听器已初始化（包含频道消息监听）`);
+        console.log(`📺 [${this.instanceId}] 频道克隆消息监听器已初始化（仅监听频道消息，已禁用群组消息监听）`);
     }
 
     /**
@@ -137,21 +122,10 @@ class ChannelCloneService {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
             
-            // 🔥 关键修复：跳过私聊消息，频道克隆服务只处理频道消息
-            if (message.chat.type === 'private') {
-                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过私聊消息: ${chatId} - ${message.message_id}`);
-                return;
-            }
-            
-            // 🔥 关键修复：跳过群组消息，频道克隆服务只处理频道消息
-            if (message.chat.type === 'group' || message.chat.type === 'supergroup') {
-                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过群组消息: ${chatId} - ${message.message_id}`);
-                return;
-            }
-            
-            // 只处理频道消息
+            // 由于现在只监听频道消息，所以不需要检查消息类型
+            // 但为了安全起见，仍然保留频道消息检查
             if (message.chat.type !== 'channel') {
-                console.log(`📺 [克隆服务] [${this.instanceId}] 跳过非频道消息 (${message.chat.type}): ${chatId} - ${message.message_id}`);
+                console.log(`📺 [克隆服务] [${this.instanceId}] 意外收到非频道消息 (${message.chat.type}): ${chatId} - ${message.message_id}`);
                 return;
             }
             
@@ -1106,8 +1080,6 @@ class ChannelCloneService {
     stop() {
         try {
             if (this.bot) {
-                this.bot.removeAllListeners('message');
-                this.bot.removeAllListeners('edited_message');
                 this.bot.removeAllListeners('channel_post');
                 this.bot.removeAllListeners('edited_channel_post');
             }

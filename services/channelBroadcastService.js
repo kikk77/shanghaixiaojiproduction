@@ -99,7 +99,10 @@ class ChannelBroadcastService {
 
         // 检查是否已有其他实例的监听器
         if (global.channelBroadcastListenerActive && global.channelBroadcastListenerActive !== this.instanceId) {
-            console.warn(`⚠️ [播报服务] [${this.instanceId}] 检测到其他活跃的播报监听器: ${global.channelBroadcastListenerActive}`);
+            // 只在调试模式下输出详细日志，减少生产环境的日志噪音
+            if (process.env.NODE_ENV === 'development') {
+                console.warn(`⚠️ [播报服务] [${this.instanceId}] 检测到其他活跃的播报监听器: ${global.channelBroadcastListenerActive}`);
+            }
             return;
         }
         

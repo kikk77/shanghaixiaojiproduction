@@ -360,6 +360,12 @@ async function initializeChannelServices() {
 
         console.log('📺 开始初始化频道克隆服务...');
 
+        // 检查是否已经初始化过，避免重复初始化
+        if (channelCloneService && global.channelCloneListenerActive) {
+            console.log('📺 频道克隆服务已存在，跳过重复初始化');
+            return;
+        }
+
         // 先重置全局状态，避免多实例冲突
         const ChannelCloneService = require('./channelCloneService');
         ChannelCloneService.resetGlobalState();

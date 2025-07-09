@@ -64,11 +64,16 @@ class ChannelCloneService {
 
         // 检查是否已有其他实例的监听器，如果有则先清理
         if (global.channelCloneListenerActive && global.channelCloneListenerActive !== this.instanceId) {
-            console.warn(`⚠️ [${this.instanceId}] 检测到其他活跃的频道克隆监听器: ${global.channelCloneListenerActive}，正在清理...`);
+            // 只在调试模式下输出详细日志，减少生产环境的日志噪音
+            if (process.env.NODE_ENV === 'development') {
+                console.warn(`⚠️ [${this.instanceId}] 检测到其他活跃的频道克隆监听器: ${global.channelCloneListenerActive}，正在清理...`);
+            }
             // 清理旧的监听器
             this.bot.removeAllListeners('channel_post');
             this.bot.removeAllListeners('edited_channel_post');
-            console.log(`🧹 [${this.instanceId}] 已清理旧的频道监听器`);
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`🧹 [${this.instanceId}] 已清理旧的频道监听器`);
+            }
         }
         
         // 标记监听器为活跃状态
@@ -1539,12 +1544,19 @@ class ChannelCloneService {
      */
     static resetGlobalState() {
         if (global.channelCloneListenerActive) {
-            console.log(`🧹 强制重置全局监听器状态: ${global.channelCloneListenerActive}`);
+            // 只在调试模式下输出详细日志
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`🧹 强制重置全局监听器状态: ${global.channelCloneListenerActive}`);
+            }
             global.channelCloneListenerActive = null;
         }
         if (global.channelCloneProcessedMessages) {
+            const messageCount = global.channelCloneProcessedMessages.size;
             global.channelCloneProcessedMessages.clear();
-            console.log(`🧹 清理全局消息去重记录`);
+            // 只在有大量消息时才输出日志
+            if (messageCount > 100 && process.env.NODE_ENV === 'development') {
+                console.log(`🧹 清理全局消息去重记录: ${messageCount} 条`);
+            }
         }
     }
 }

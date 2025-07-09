@@ -575,20 +575,26 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>价格1：</label>
-                                    <div style="display: flex; align-items: center;">
-                                        <select id="editPrice1" style="flex: 1;" onchange="previewMerchantInfo()">
-                                            <option value="">选择价格</option>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <select id="editPrice1Select" style="flex: 1;" onchange="handlePrice1SelectChange()">
+                                            <option value="">选择预设价格</option>
+                                            <option value="custom">自定义价格</option>
                                         </select>
-                                        <span style="margin-left: 5px; font-weight: bold;">p</span>
+                                        <input type="number" id="editPrice1" placeholder="输入价格" style="flex: 1; display: none;" min="0" step="1" oninput="previewMerchantInfo()">
+                                        <button type="button" id="resetPrice1Btn" onclick="resetPriceInput(1)" style="display: none; padding: 0.5rem; border: 1px solid #ccc; background: #f8f9fa; border-radius: 4px; cursor: pointer;" title="重新选择">↺</button>
+                                        <span style="font-weight: bold;">p</span>
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label>价格2：</label>
-                                    <div style="display: flex; align-items: center;">
-                                        <select id="editPrice2" style="flex: 1;" onchange="previewMerchantInfo()">
-                                            <option value="">选择价格</option>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <select id="editPrice2Select" style="flex: 1;" onchange="handlePrice2SelectChange()">
+                                            <option value="">选择预设价格</option>
+                                            <option value="custom">自定义价格</option>
                                         </select>
-                                        <span style="margin-left: 5px; font-weight: bold;">pp</span>
+                                        <input type="number" id="editPrice2" placeholder="输入价格" style="flex: 1; display: none;" min="0" step="1" oninput="previewMerchantInfo()">
+                                        <button type="button" id="resetPrice2Btn" onclick="resetPriceInput(2)" style="display: none; padding: 0.5rem; border: 1px solid #ccc; background: #f8f9fa; border-radius: 4px; cursor: pointer;" title="重新选择">↺</button>
+                                        <span style="font-weight: bold;">pp</span>
                                     </div>
                                 </div>
                             </div>
@@ -985,8 +991,8 @@
 
         // 初始化价格选择器
         function initializePriceSelectors() {
-            const price1Select = document.getElementById('editPrice1');
-            const price2Select = document.getElementById('editPrice2');
+            const price1Select = document.getElementById('editPrice1Select');
+            const price2Select = document.getElementById('editPrice2Select');
             
             // 生成价格选项，从100到5000，间隔100
             for (let price = 100; price <= 5000; price += 100) {
@@ -1816,8 +1822,11 @@
             // 填充模板信息
             document.getElementById('editAdvantages').value = merchant.advantages || '';
             document.getElementById('editDisadvantages').value = merchant.disadvantages || '';
-            document.getElementById('editPrice1').value = merchant.price1 || '';
-            document.getElementById('editPrice2').value = merchant.price2 || '';
+            
+            // 填充价格信息 - 支持新的价格输入方式
+            setupPriceInput(1, merchant.price1);
+            setupPriceInput(2, merchant.price2);
+            
             document.getElementById('editWash').value = merchant.skill_wash || '';
             document.getElementById('editBlow').value = merchant.skill_blow || '';
             document.getElementById('editDo').value = merchant.skill_do || '';
@@ -3408,6 +3417,113 @@
             
             // 实时更新预览
             previewMerchantInfo();
+        }
+
+        // 处理价格1选择变化
+        function handlePrice1SelectChange() {
+            const selectElement = document.getElementById('editPrice1Select');
+            const inputElement = document.getElementById('editPrice1');
+            const resetBtn = document.getElementById('resetPrice1Btn');
+            
+            if (selectElement.value === 'custom') {
+                // 显示自定义输入框和重置按钮
+                selectElement.style.display = 'none';
+                inputElement.style.display = 'block';
+                resetBtn.style.display = 'block';
+                inputElement.focus();
+            } else if (selectElement.value !== '') {
+                // 选择了预设价格
+                inputElement.value = selectElement.value;
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.style.display = 'block';
+            } else {
+                // 清空选择
+                inputElement.value = '';
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.style.display = 'block';
+            }
+            previewMerchantInfo();
+        }
+
+        // 处理价格2选择变化
+        function handlePrice2SelectChange() {
+            const selectElement = document.getElementById('editPrice2Select');
+            const inputElement = document.getElementById('editPrice2');
+            const resetBtn = document.getElementById('resetPrice2Btn');
+            
+            if (selectElement.value === 'custom') {
+                // 显示自定义输入框和重置按钮
+                selectElement.style.display = 'none';
+                inputElement.style.display = 'block';
+                resetBtn.style.display = 'block';
+                inputElement.focus();
+            } else if (selectElement.value !== '') {
+                // 选择了预设价格
+                inputElement.value = selectElement.value;
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.style.display = 'block';
+            } else {
+                // 清空选择
+                inputElement.value = '';
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.style.display = 'block';
+            }
+            previewMerchantInfo();
+        }
+
+        // 重置价格输入（当用户想要重新选择时）
+        function resetPriceInput(priceNumber) {
+            const selectElement = document.getElementById(`editPrice${priceNumber}Select`);
+            const inputElement = document.getElementById(`editPrice${priceNumber}`);
+            const resetBtn = document.getElementById(`resetPrice${priceNumber}Btn`);
+            
+            selectElement.style.display = 'block';
+            inputElement.style.display = 'none';
+            resetBtn.style.display = 'none';
+            selectElement.value = '';
+            inputElement.value = '';
+            previewMerchantInfo();
+        }
+
+        // 设置价格输入（支持预设价格和自定义价格）
+        function setupPriceInput(priceNumber, priceValue) {
+            const selectElement = document.getElementById(`editPrice${priceNumber}Select`);
+            const inputElement = document.getElementById(`editPrice${priceNumber}`);
+            const resetBtn = document.getElementById(`resetPrice${priceNumber}Btn`);
+            
+            if (!priceValue) {
+                // 没有价格值，重置为初始状态
+                selectElement.style.display = 'block';
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.value = '';
+                inputElement.value = '';
+                return;
+            }
+            
+            // 检查是否为预设价格（100的倍数且在100-5000范围内）
+            const price = parseInt(priceValue);
+            const isPresetPrice = price >= 100 && price <= 5000 && price % 100 === 0;
+            
+            if (isPresetPrice) {
+                // 是预设价格，选择对应的选项
+                selectElement.style.display = 'block';
+                inputElement.style.display = 'none';
+                resetBtn.style.display = 'none';
+                selectElement.value = price;
+                inputElement.value = price;
+            } else {
+                // 是自定义价格，显示输入框
+                selectElement.style.display = 'none';
+                inputElement.style.display = 'block';
+                resetBtn.style.display = 'block';
+                selectElement.value = 'custom';
+                inputElement.value = price;
+            }
         }
     </script>
 </body>

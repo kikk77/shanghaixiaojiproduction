@@ -1527,7 +1527,7 @@ class OptimizedOrdersManager {
                         </div>
                         <div class="info-item">
                             <span class="info-label">区域</span>
-                            <span class="info-value">${order.region_name || '-'}</span>
+                            <span class="info-value">${order.region || '-'}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">联系方式</span>

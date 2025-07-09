@@ -495,15 +495,23 @@ class ChannelBroadcastService {
                     }
                 };
                 
-                await this.configService.createConfig(configData);
-                console.log(`✅ 创建播报配置成功`);
+                const result = await this.configService.saveConfig(configData);
+                if (result.success) {
+                    console.log(`✅ 创建播报配置成功`);
+                } else {
+                    throw new Error(result.errors?.join(', ') || '创建配置失败');
+                }
             } else {
                 // 更新现有配置
                 config.settings.broadcastEnabled = true;
                 config.settings.broadcastTargetGroups = targetGroups;
                 
-                await this.configService.updateConfig(config.name, config);
-                console.log(`✅ 更新播报配置成功`);
+                const result = await this.configService.saveConfig(config);
+                if (result.success) {
+                    console.log(`✅ 更新播报配置成功`);
+                } else {
+                    throw new Error(result.errors?.join(', ') || '更新配置失败');
+                }
             }
             
             return { success: true };

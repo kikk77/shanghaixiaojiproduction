@@ -56,6 +56,18 @@ function isUserBlocked(chatId) {
     return blockedUsers.has(chatId.toString());
 }
 
+// 清除用户屏蔽状态（当用户重新交互时）
+function clearUserBlockedStatus(chatId) {
+    const chatIdStr = chatId.toString();
+    if (blockedUsers.has(chatIdStr)) {
+        blockedUsers.delete(chatIdStr);
+        blockCheckCache.delete(chatIdStr);
+        console.log(`🔄 用户 ${chatId} 重新交互，已清除屏蔽状态`);
+        return true;
+    }
+    return false;
+}
+
 // 清理过期的屏蔽缓存（24小时后重新尝试）
 setInterval(() => {
     const now = Date.now();
@@ -111,19 +123,23 @@ function createResilientBot(originalBot) {
     // 包装sendMessage方法
     const originalSendMessage = originalBot.sendMessage.bind(originalBot);
     resilientBot.sendMessage = async function(chatId, text, options = {}) {
-        // 检查用户是否已被屏蔽
+        // 检查用户是否已被屏蔽，但允许重新尝试
         if (isUserBlocked(chatId)) {
-            console.log(`🚫 跳过发送消息给已屏蔽用户: ${chatId}`);
-            return Promise.resolve({ 
-                message_id: 'blocked_user_' + Date.now(),
-                chat: { id: chatId },
-                text: text,
-                blocked: true 
-            });
+            console.log(`⚠️ 用户 ${chatId} 之前被标记为屏蔽，但仍尝试发送消息`);
+            // 不直接跳过，而是尝试发送，如果成功则清除屏蔽状态
         }
         
         try {
-            return await originalSendMessage(chatId, text, options);
+            const result = await originalSendMessage(chatId, text, options);
+            
+            // 如果发送成功且用户之前被屏蔽，清除屏蔽状态
+            if (isUserBlocked(chatId)) {
+                blockedUsers.delete(chatId.toString());
+                blockCheckCache.delete(chatId.toString());
+                console.log(`✅ 用户 ${chatId} 消息发送成功，已清除屏蔽状态`);
+            }
+            
+            return result;
         } catch (error) {
             // 处理用户屏蔽错误
             if (isUserBlockedError(error)) {
@@ -350,7 +366,12 @@ async function initializeBot() {
             // 处理特定错误
             if (error.code === 'ETELEGRAM') {
                 if (error.response && error.response.statusCode === 409) {
-                    console.log('⚠️ 检测到Webhook冲突，继续使用轮询模式');
+                    console.log('🚨 检测到Bot实例冲突！多个Bot实例正在运行');
+                    console.log('💡 这通常表示有多个Bot实例在同时运行polling');
+                    console.log('⚠️ 继续使用当前实例，不进行重启以避免恶化冲突');
+                    
+                    // 不要重启Bot，409冲突时重启会让情况更糟
+                    // 让当前实例继续运行，Telegram会自动处理冲突
                     return;
                 }
                 
@@ -1174,6 +1195,9 @@ function initBotHandlers() {
         if (!userId || msg.chat.type !== 'private') {
             return;
         }
+
+        // 用户发送消息时，清除屏蔽状态（表示用户重新交互）
+        clearUserBlockedStatus(userId);
 
         // 处理 /start 命令
         if (text && text.startsWith('/start')) {
@@ -5618,6 +5642,7 @@ module.exports = {
     // 用户屏蔽状态管理
     isUserBlocked,
     markUserAsBlocked,
+    clearUserBlockedStatus,
     getBlockedUsersCount: () => blockedUsers.size,
     clearBlockedUsers: () => {
         blockedUsers.clear();

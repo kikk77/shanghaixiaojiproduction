@@ -307,9 +307,11 @@ function createResilientBot(originalBot) {
 // 增强的Bot初始化函数
 async function initializeBot() {
     try {
-        // 保持原有配置，只增加错误处理
+        // 智能模式选择：根据webhook设置自动选择模式
+        const isWebhookMode = process.env.WEBHOOK_URL && process.env.NODE_ENV === 'production';
+        
         const botOptions = { 
-            polling: true,
+            polling: !isWebhookMode, // 如果有webhook设置且是生产环境，则禁用polling
             // 添加请求选项来提高连接稳定性
             request: {
                 // 保持原有的超时时间
@@ -324,6 +326,8 @@ async function initializeBot() {
                 agent: process.env.HTTPS_PROXY ? require('https-proxy-agent')(process.env.HTTPS_PROXY) : undefined
             }
         };
+        
+        console.log(`🔧 增强Bot模式: ${isWebhookMode ? 'Webhook' : 'Polling'}`);
         
         const originalBot = new TelegramBot(BOT_TOKEN, botOptions);
         console.log('✅ Telegram Bot初始化成功');
@@ -501,9 +505,11 @@ async function handleBotCrash(error) {
 
 // 初始化Bot - 保持原有逻辑
 try {
-    // 配置Bot选项，避免IP连接问题
+    // 智能模式选择：根据webhook设置自动选择模式
+    const isWebhookMode = process.env.WEBHOOK_URL && process.env.NODE_ENV === 'production';
+    
     const botOptions = { 
-        polling: true,
+        polling: !isWebhookMode, // 如果有webhook设置且是生产环境，则禁用polling
         // 添加请求选项来提高连接稳定性
         request: {
             // 增加超时时间
@@ -516,6 +522,11 @@ try {
             }
         }
     };
+    
+    console.log(`🔧 Bot模式: ${isWebhookMode ? 'Webhook' : 'Polling'}`);
+    if (isWebhookMode) {
+        console.log(`🔗 Webhook URL: ${process.env.WEBHOOK_URL}/webhook`);
+    }
     
     bot = new TelegramBot(BOT_TOKEN, botOptions);
     console.log('✅ Telegram Bot初始化成功');

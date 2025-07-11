@@ -3701,7 +3701,7 @@ async function handleBroadcastChoice(userId, data, query) {
 async function getBroadcastTargetGroups(userId) {
     try {
         // 获取等级系统数据库管理器
-        const levelDbManager = require('../level/config/levelDatabase');
+        const levelDbManager = require('../level/config/levelDatabase').getInstance();
         const db = levelDbManager.getDatabase();
         
         if (!db) {

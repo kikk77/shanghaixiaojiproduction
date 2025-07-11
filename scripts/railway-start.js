@@ -46,34 +46,54 @@ try {
     console.log('⚠️ 数据目录处理失败，但继续启动:', error.message);
 }
 
-// 立即启动主应用（确保健康检查通过）
-console.log('🎯 立即启动主应用...');
+// 启动应用的主函数
+async function startApp() {
+    // 在启动前运行修复脚本
+    console.log('🔧 运行启动前修复...');
+    try {
+        const { railwayStartupFix } = require('./railway-startup-fix');
+        await railwayStartupFix();
+    } catch (error) {
+        console.log('⚠️ 启动修复失败，但继续启动:', error.message);
+    }
 
-// 启动主应用
-const app = spawn('node', ['app.js'], {
-    stdio: 'inherit',
-    env: process.env
-});
+    // 立即启动主应用（确保健康检查通过）
+    console.log('🎯 立即启动主应用...');
 
-app.on('close', (code) => {
-    console.log(`应用进程退出，代码: ${code}`);
-    process.exit(code);
-});
+    // 启动主应用
+    const app = spawn('node', ['app.js'], {
+        stdio: 'inherit',
+        env: process.env
+    });
 
-app.on('error', (error) => {
-    console.error('应用启动失败:', error);
+    return app;
+}
+
+// 执行启动
+startApp().then(app => {
+    app.on('close', (code) => {
+        console.log(`应用进程退出，代码: ${code}`);
+        process.exit(code);
+    });
+
+    app.on('error', (error) => {
+        console.error('应用启动失败:', error);
+        process.exit(1);
+    });
+
+    // 处理进程信号
+    process.on('SIGTERM', () => {
+        console.log('收到SIGTERM信号，正在关闭...');
+        app.kill('SIGTERM');
+    });
+
+    process.on('SIGINT', () => {
+        console.log('收到SIGINT信号，正在关闭...');
+        app.kill('SIGINT');
+    });
+}).catch(error => {
+    console.error('启动应用失败:', error);
     process.exit(1);
-});
-
-// 处理进程信号
-process.on('SIGTERM', () => {
-    console.log('收到SIGTERM信号，正在关闭...');
-    app.kill('SIGTERM');
-});
-
-process.on('SIGINT', () => {
-    console.log('收到SIGINT信号，正在关闭...');
-    app.kill('SIGINT');
 });
 
 // 后台执行数据同步（不阻塞主应用启动）

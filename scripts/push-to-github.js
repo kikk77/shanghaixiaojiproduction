@@ -11,7 +11,7 @@ const fs = require('fs');
 const config = {
     branch: 'main',  // 使用main分支
     commitMessage: 'fix: 修复Telegram Bot崩溃问题 - 增强用户屏蔽错误处理和网络容错能力',
-    remote: 'shanghaixiaojiproduction'  // 上海仓库（生产环境）
+    remote: 'origin'  // 上海仓库（生产环境）- origin指向shanghaixiaojiproduction
 };
 
 // 执行Git命令

@@ -14,6 +14,471 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 
 // 初始化Telegram Bot
 let bot;
+let botInitRetries = 0;
+const MAX_BOT_INIT_RETRIES = 5;
+let botCrashCount = 0;
+const MAX_CRASH_COUNT = 10;
+
+// 用户屏蔽状态管理
+const blockedUsers = new Set();
+const blockCheckCache = new Map(); // 缓存屏蔽检查结果，避免重复检查
+
+// 检查是否为用户屏蔽错误
+function isUserBlockedError(error) {
+    return error.code === 'ETELEGRAM' && 
+           error.response && 
+           error.response.statusCode === 403 &&
+           (error.message.includes('bot was blocked by the user') ||
+            error.message.includes('user is deactivated') ||
+            error.message.includes('chat not found'));
+}
+
+// 检查是否为群组权限错误
+function isGroupPermissionError(error) {
+    return error.code === 'ETELEGRAM' && 
+           error.response && 
+           (error.response.statusCode === 403 || error.response.statusCode === 400) &&
+           (error.message.includes('not enough rights') ||
+            error.message.includes('have no rights to send a message') ||
+            error.message.includes('group chat was upgraded to a supergroup') ||
+            error.message.includes('chat not found'));
+}
+
+// 记录被屏蔽的用户
+function markUserAsBlocked(chatId) {
+    blockedUsers.add(chatId.toString());
+    blockCheckCache.set(chatId.toString(), Date.now());
+    console.log(`📝 用户 ${chatId} 已被标记为屏蔽状态`);
+}
+
+// 检查用户是否已被屏蔽
+function isUserBlocked(chatId) {
+    return blockedUsers.has(chatId.toString());
+}
+
+// 清理过期的屏蔽缓存（24小时后重新尝试）
+setInterval(() => {
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    
+    for (const [chatId, timestamp] of blockCheckCache.entries()) {
+        if (timestamp < oneDayAgo) {
+            blockedUsers.delete(chatId);
+            blockCheckCache.delete(chatId);
+            console.log(`🔄 用户 ${chatId} 的屏蔽状态已过期，将重新尝试`);
+        }
+    }
+}, 60 * 60 * 1000); // 每小时检查一次
+
+// 全局未处理Promise rejection处理器
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 未处理的Promise rejection:', reason);
+    
+    // 检查是否为用户屏蔽错误
+    if (reason && reason.code === 'ETELEGRAM' && reason.response && reason.response.statusCode === 403) {
+        if (reason.message && reason.message.includes('bot was blocked by the user')) {
+            console.log('🚫 全局捕获：用户屏蔽机器人错误，已忽略');
+            return;
+        }
+        if (reason.message && (reason.message.includes('not enough rights') || reason.message.includes('chat not found'))) {
+            console.log('🚫 全局捕获：权限不足或群组不存在错误，已忽略');
+            return;
+        }
+    }
+    
+    // 检查是否为网络错误
+    if (reason && reason.code === 'ETELEGRAM' && reason.message) {
+        if (reason.message.includes('ETIMEDOUT') || 
+            reason.message.includes('ECONNRESET') ||
+            reason.message.includes('socket hang up')) {
+            console.log('⚠️ 全局捕获：网络错误，Bot将自动处理');
+            return;
+        }
+    }
+    
+    // 其他未处理的错误
+    console.error('❌ 严重错误需要关注:', {
+        message: reason?.message || reason,
+        code: reason?.code,
+        stack: reason?.stack
+    });
+});
+
+// 包装原始Bot以增强错误处理
+function createResilientBot(originalBot) {
+    const resilientBot = Object.create(originalBot);
+    
+    // 包装sendMessage方法
+    const originalSendMessage = originalBot.sendMessage.bind(originalBot);
+    resilientBot.sendMessage = async function(chatId, text, options = {}) {
+        // 检查用户是否已被屏蔽
+        if (isUserBlocked(chatId)) {
+            console.log(`🚫 跳过发送消息给已屏蔽用户: ${chatId}`);
+            return Promise.resolve({ 
+                message_id: 'blocked_user_' + Date.now(),
+                chat: { id: chatId },
+                text: text,
+                blocked: true 
+            });
+        }
+        
+        try {
+            return await originalSendMessage(chatId, text, options);
+        } catch (error) {
+            // 处理用户屏蔽错误
+            if (isUserBlockedError(error)) {
+                console.log(`🚫 用户 ${chatId} 已屏蔽机器人，停止发送消息`);
+                markUserAsBlocked(chatId);
+                return Promise.resolve({ 
+                    message_id: 'blocked_user_' + Date.now(),
+                    chat: { id: chatId },
+                    text: text,
+                    blocked: true 
+                });
+            }
+            
+            // 处理群组权限错误
+            if (isGroupPermissionError(error)) {
+                console.log(`🚫 群组 ${chatId} 权限不足或不存在，停止发送消息`);
+                markUserAsBlocked(chatId);
+                return Promise.resolve({ 
+                    message_id: 'no_permission_' + Date.now(),
+                    chat: { id: chatId },
+                    text: text,
+                    no_permission: true 
+                });
+            }
+            
+            // 处理网络超时错误
+            if (error.code === 'ETELEGRAM' && error.message.includes('ETIMEDOUT')) {
+                console.log(`⏳ 网络超时，重试发送消息给 ${chatId}`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                try {
+                    return await originalSendMessage(chatId, text, options);
+                } catch (retryError) {
+                    console.error(`❌ sendMessage重试失败 ${chatId}:`, retryError.message);
+                    throw retryError;
+                }
+            }
+            
+            console.error(`❌ sendMessage失败 ${chatId}:`, error.message);
+            throw error;
+        }
+    };
+    
+    // 包装sendPhoto方法
+    const originalSendPhoto = originalBot.sendPhoto.bind(originalBot);
+    resilientBot.sendPhoto = async function(chatId, photo, options = {}) {
+        // 检查用户是否已被屏蔽
+        if (isUserBlocked(chatId)) {
+            console.log(`🚫 跳过发送图片给已屏蔽用户: ${chatId}`);
+            return Promise.resolve({ 
+                message_id: 'blocked_user_' + Date.now(),
+                chat: { id: chatId },
+                photo: [{ file_id: 'blocked' }],
+                blocked: true 
+            });
+        }
+        
+        try {
+            return await originalSendPhoto(chatId, photo, options);
+        } catch (error) {
+            // 处理用户屏蔽错误
+            if (isUserBlockedError(error)) {
+                console.log(`🚫 用户 ${chatId} 已屏蔽机器人，停止发送图片`);
+                markUserAsBlocked(chatId);
+                return Promise.resolve({ 
+                    message_id: 'blocked_user_' + Date.now(),
+                    chat: { id: chatId },
+                    photo: [{ file_id: 'blocked' }],
+                    blocked: true 
+                });
+            }
+            
+            // 处理群组权限错误
+            if (isGroupPermissionError(error)) {
+                console.log(`🚫 群组 ${chatId} 权限不足，停止发送图片`);
+                markUserAsBlocked(chatId);
+                return Promise.resolve({ 
+                    message_id: 'no_permission_' + Date.now(),
+                    chat: { id: chatId },
+                    photo: [{ file_id: 'no_permission' }],
+                    no_permission: true 
+                });
+            }
+            
+            // 处理网络超时错误
+            if (error.code === 'ETELEGRAM' && error.message.includes('ETIMEDOUT')) {
+                console.log(`⏳ 网络超时，重试发送图片给 ${chatId}`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                try {
+                    return await originalSendPhoto(chatId, photo, options);
+                } catch (retryError) {
+                    console.error(`❌ sendPhoto重试失败 ${chatId}:`, retryError.message);
+                    throw retryError;
+                }
+            }
+            
+            console.error(`❌ sendPhoto失败 ${chatId}:`, error.message);
+            throw error;
+        }
+    };
+    
+    // 包装answerCallbackQuery方法
+    const originalAnswerCallbackQuery = originalBot.answerCallbackQuery.bind(originalBot);
+    resilientBot.answerCallbackQuery = async function(callbackQueryId, text, showAlert = false) {
+        try {
+            return await originalAnswerCallbackQuery(callbackQueryId, text, showAlert);
+        } catch (error) {
+            // 对于callback query，用户屏蔽通常不会影响应答
+            // 但仍然要处理网络超时
+            if (error.code === 'ETELEGRAM' && error.message.includes('ETIMEDOUT')) {
+                console.log(`⏳ 网络超时，重试应答callback query`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                try {
+                    return await originalAnswerCallbackQuery(callbackQueryId, text, showAlert);
+                } catch (retryError) {
+                    console.error(`❌ answerCallbackQuery重试失败:`, retryError.message);
+                    throw retryError;
+                }
+            }
+            
+            console.error(`❌ answerCallbackQuery失败:`, error.message);
+            throw error;
+        }
+    };
+    
+    // 包装deleteMessage方法
+    const originalDeleteMessage = originalBot.deleteMessage.bind(originalBot);
+    resilientBot.deleteMessage = async function(chatId, messageId) {
+        // 检查用户是否已被屏蔽
+        if (isUserBlocked(chatId)) {
+            console.log(`🚫 跳过删除已屏蔽用户的消息: ${chatId}`);
+            return Promise.resolve(true);
+        }
+        
+        try {
+            return await originalDeleteMessage(chatId, messageId);
+        } catch (error) {
+            // 处理用户屏蔽错误
+            if (isUserBlockedError(error)) {
+                console.log(`🚫 用户 ${chatId} 已屏蔽机器人，无法删除消息`);
+                markUserAsBlocked(chatId);
+                return Promise.resolve(true);
+            }
+            
+            // 删除消息失败通常不是严重错误，记录但不抛出
+            console.log(`⚠️ 删除消息失败 ${chatId}/${messageId}:`, error.message);
+            return Promise.resolve(false);
+        }
+    };
+    
+    // 包装pinChatMessage方法
+    const originalPinChatMessage = originalBot.pinChatMessage.bind(originalBot);
+    resilientBot.pinChatMessage = async function(chatId, messageId, options = {}) {
+        try {
+            return await originalPinChatMessage(chatId, messageId, options);
+        } catch (error) {
+            // 置顶消息失败通常是权限问题，记录但不抛出
+            console.log(`⚠️ 置顶消息失败 ${chatId}/${messageId}:`, error.message);
+            return Promise.resolve(false);
+        }
+    };
+    
+    return resilientBot;
+}
+
+// 增强的Bot初始化函数
+async function initializeBot() {
+    try {
+        // 保持原有配置，只增加错误处理
+        const botOptions = { 
+            polling: true,
+            // 添加请求选项来提高连接稳定性
+            request: {
+                // 保持原有的超时时间
+                timeout: 60000,
+                // 启用keep-alive
+                forever: true,
+                // 允许重试
+                pool: {
+                    maxSockets: 10
+                },
+                // 添加代理支持（如果需要）
+                agent: process.env.HTTPS_PROXY ? require('https-proxy-agent')(process.env.HTTPS_PROXY) : undefined
+            }
+        };
+        
+        const originalBot = new TelegramBot(BOT_TOKEN, botOptions);
+        console.log('✅ Telegram Bot初始化成功');
+        
+        // 添加更全面的错误事件监听
+        originalBot.on('error', (error) => {
+            console.error('❌ Telegram Bot错误:', error.message);
+            
+            // 处理ETELEGRAM错误
+            if (error.code === 'ETELEGRAM') {
+                console.log('⚠️ 检测到Telegram API错误，详细信息:', {
+                    code: error.code,
+                    statusCode: error.response?.statusCode,
+                    description: error.response?.body?.description
+                });
+                
+                // 如果是严重的网络错误，尝试恢复
+                if (error.message.includes('ETIMEDOUT') || 
+                    error.message.includes('ECONNRESET') ||
+                    error.message.includes('socket hang up') ||
+                    error.message.includes('read ECONNRESET')) {
+                    console.log('⚠️ 检测到网络连接错误，将尝试恢复...');
+                    // 延迟处理，避免立即重启
+                    setTimeout(() => handleBotCrash(error), 5000);
+                }
+            }
+            
+            if (error.code === 'EFATAL') {
+                console.log('⚠️ 检测到致命错误，但Bot将继续运行');
+                // 只在必要时才重启
+                if (error.message.includes('terminated') || error.message.includes('disconnected')) {
+                    setTimeout(() => handleBotCrash(error), 5000);
+                }
+            }
+        });
+        
+        originalBot.on('polling_error', (error) => {
+            console.error('❌ Telegram Bot轮询错误:', error.message);
+            
+            // 处理特定错误
+            if (error.code === 'ETELEGRAM') {
+                if (error.response && error.response.statusCode === 409) {
+                    console.log('⚠️ 检测到Webhook冲突，继续使用轮询模式');
+                    return;
+                }
+                
+                if (error.response && error.response.statusCode === 401) {
+                    console.error('❌ Bot Token无效，请检查BOT_TOKEN环境变量');
+                    process.exit(1);
+                }
+            }
+            
+            if (error.message.includes('ENOTFOUND')) {
+                console.log('⚠️ 网络连接问题，Bot将自动重试连接');
+            } else if (error.message.includes('ETIMEDOUT')) {
+                console.log('⚠️ 连接超时，Bot将自动重试连接');
+            } else if (error.message.includes('ECONNRESET')) {
+                console.log('⚠️ 连接被重置，Bot将自动重试连接');
+            }
+        });
+        
+        // 添加webhook错误处理
+        originalBot.on('webhook_error', (error) => {
+            console.error('❌ Webhook错误:', error.message);
+        });
+        
+        // 验证Bot连接
+        try {
+            const botInfo = await originalBot.getMe();
+            console.log(`✅ Bot连接验证成功: @${botInfo.username}`);
+            botInitRetries = 0; // 重置重试计数
+            botCrashCount = 0; // 重置崩溃计数
+        } catch (verifyError) {
+            console.error('❌ Bot连接验证失败:', verifyError.message);
+            throw verifyError;
+        }
+        
+        // 返回增强版的Bot
+        bot = createResilientBot(originalBot);
+        return bot;
+        
+    } catch (error) {
+        console.error('❌ Telegram Bot初始化失败:', error.message);
+        
+        // 尝试重新初始化
+        if (botInitRetries < MAX_BOT_INIT_RETRIES) {
+            botInitRetries++;
+            const retryDelay = Math.min(botInitRetries * 5000, 30000); // 递增延迟，最多30秒
+            console.log(`⏳ 将在 ${retryDelay/1000} 秒后重试初始化 (${botInitRetries}/${MAX_BOT_INIT_RETRIES})...`);
+            
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            return initializeBot();
+        }
+        
+        console.error('❌ Bot初始化重试次数已达上限，创建降级服务...');
+        // 创建一个假的bot对象，避免后续代码报错
+        bot = {
+            on: () => {},
+            sendMessage: () => Promise.reject(new Error('Bot未初始化')),
+            sendPhoto: () => Promise.reject(new Error('Bot未初始化')),
+            answerCallbackQuery: () => Promise.reject(new Error('Bot未初始化')),
+            getMe: () => Promise.reject(new Error('Bot未初始化')),
+            stopPolling: () => Promise.resolve(),
+            isPolling: () => false,
+            deleteMessage: () => Promise.reject(new Error('Bot未初始化')),
+            pinChatMessage: () => Promise.reject(new Error('Bot未初始化')),
+            emit: () => {}
+        };
+        
+        return bot;
+    }
+}
+
+// 处理Bot崩溃
+async function handleBotCrash(error) {
+    botCrashCount++;
+    
+    if (botCrashCount > MAX_CRASH_COUNT) {
+        console.error('🚨 Bot崩溃次数过多，停止自动恢复');
+        return;
+    }
+    
+    console.error(`🚨 Bot崩溃处理中 (${botCrashCount}/${MAX_CRASH_COUNT})...`, error.message);
+    
+    try {
+        // 检查Bot是否真的需要重启
+        if (bot && typeof bot.getMe === 'function') {
+            try {
+                await bot.getMe();
+                console.log('✅ Bot连接仍然正常，无需重启');
+                botCrashCount--; // 恢复计数
+                return;
+            } catch (e) {
+                console.log('❌ Bot连接确实已断开，继续重启流程');
+            }
+        }
+        
+        // 停止当前的轮询
+        if (bot && typeof bot.isPolling === 'function' && bot.isPolling()) {
+            await bot.stopPolling();
+            console.log('✅ 已停止当前轮询');
+        }
+        
+        // 等待一段时间
+        const waitTime = Math.min(botCrashCount * 5000, 30000);
+        console.log(`⏳ 等待 ${waitTime/1000} 秒后重新初始化...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // 重新初始化Bot
+        console.log('🔄 尝试重新初始化Bot...');
+        await initializeBot();
+        
+        // 重新初始化事件处理器
+        if (bot && typeof bot.on === 'function') {
+            // 重新初始化业务处理器
+            initBotHandlers();
+            console.log('✅ Bot重新初始化成功');
+        }
+        
+    } catch (recoveryError) {
+        console.error('❌ Bot恢复失败:', recoveryError.message);
+        // 设置定时器稍后再试
+        const retryDelay = Math.min(botCrashCount * 60000, 300000); // 最多5分钟
+        setTimeout(() => {
+            console.log('⏰ 定时重试Bot恢复...');
+            handleBotCrash(error);
+        }, retryDelay);
+    }
+}
+
+// 初始化Bot - 保持原有逻辑
 try {
     // 配置Bot选项，避免IP连接问题
     const botOptions = { 
@@ -37,8 +502,30 @@ try {
     // 添加错误事件监听
     bot.on('error', (error) => {
         console.error('❌ Telegram Bot错误:', error.message);
+        
+        // 处理用户屏蔽错误 - 这些是正常的业务错误，不需要重启Bot
+        if (error.code === 'ETELEGRAM' && error.response && error.response.statusCode === 403) {
+            if (error.message.includes('bot was blocked by the user')) {
+                console.log('🚫 用户屏蔽机器人错误，这是正常现象，已被处理');
+                return;
+            }
+            if (error.message.includes('not enough rights') || error.message.includes('chat not found')) {
+                console.log('🚫 权限不足或群组不存在错误，这是正常现象，已被处理');
+                return;
+            }
+        }
+        
         if (error.code === 'EFATAL') {
             console.log('⚠️ 检测到致命错误，但Bot将继续运行');
+        }
+        
+        // 新增：处理ETELEGRAM网络错误
+        if (error.code === 'ETELEGRAM' && (
+            error.message.includes('ETIMEDOUT') || 
+            error.message.includes('ECONNRESET') ||
+            error.message.includes('socket hang up'))) {
+            console.log('⚠️ 检测到网络错误，将在稍后尝试恢复');
+            setTimeout(() => handleBotCrash(error), 10000);
         }
     });
     
@@ -50,6 +537,13 @@ try {
             console.log('⚠️ 连接超时，Bot将自动重试连接');
         }
     });
+    
+    // 立即进行增强初始化
+    if (BOT_TOKEN) {
+        initializeBot().catch(error => {
+            console.error('❌ Bot增强初始化失败，使用基础Bot:', error.message);
+        });
+    }
     
 } catch (error) {
     console.log('⚠️ Telegram Bot初始化失败，但应用将继续运行:', error.message);
@@ -5118,6 +5612,18 @@ module.exports = {
     handleBackButton,
     getBotUsername,
     clearBotUsernameCache,
+    // Bot初始化相关
+    initializeBot,
+    handleBotCrash,
+    // 用户屏蔽状态管理
+    isUserBlocked,
+    markUserAsBlocked,
+    getBlockedUsersCount: () => blockedUsers.size,
+    clearBlockedUsers: () => {
+        blockedUsers.clear();
+        blockCheckCache.clear();
+        console.log('🔄 已清空所有屏蔽用户记录');
+    },
     // 获取Bot实例
     getBotInstance: () => bot,
     // 导出缓存数据的getter

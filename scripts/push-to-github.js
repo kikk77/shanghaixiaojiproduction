@@ -4,13 +4,14 @@ const fs = require('fs');
 
 /**
  * 推送代码到GitHub仓库的脚本
+ * 根据用户记忆，只能强制推送到上海仓库（生产环境）
  */
 
 // 配置
 const config = {
-    branch: 'clean-deploy-branch',  // 使用当前分支名
-    commitMessage: 'fix: 修复健康检查配置，确保Railway部署成功',
-    remote: 'clean-deploy'
+    branch: 'main',  // 使用main分支
+    commitMessage: 'fix: 修复Telegram Bot崩溃问题 - 增强用户屏蔽错误处理和网络容错能力',
+    remote: 'shanghaixiaojiproduction'  // 上海仓库（生产环境）
 };
 
 // 执行Git命令
@@ -33,6 +34,14 @@ async function main() {
     try {
         console.log('🚀 开始推送代码到正确的GitHub仓库...');
         
+        // 切换到main分支
+        try {
+            runGitCommand('git checkout main');
+            console.log('✅ 已切换到main分支');
+        } catch (error) {
+            console.log('⚠️ 切换分支失败，继续使用当前分支');
+        }
+        
         // 获取当前分支
         const currentBranch = runGitCommand('git rev-parse --abbrev-ref HEAD').trim();
         console.log(`📌 当前分支: ${currentBranch}`);
@@ -52,60 +61,42 @@ async function main() {
             console.log('✅ 工作区干净，无需提交');
         }
         
-        // 推送到远程仓库
-        console.log(`🔄 推送到远程仓库 ${config.remote}/${currentBranch}...`);
+        // 检查远程仓库是否存在
         try {
-            runGitCommand(`git push ${config.remote} ${currentBranch}`);
+            runGitCommand(`git remote get-url ${config.remote}`);
+            console.log(`✅ 远程仓库 ${config.remote} 已配置`);
         } catch (error) {
-            console.log('⚠️ 推送失败，尝试强制推送...');
-            runGitCommand(`git push -f ${config.remote} ${currentBranch}`);
+            console.log(`⚠️ 远程仓库 ${config.remote} 未配置，请手动添加`);
+            console.log(`💡 请运行: git remote add ${config.remote} <仓库URL>`);
+            throw new Error(`远程仓库 ${config.remote} 未配置`);
         }
         
+        // 强制推送到远程仓库（根据用户记忆，只能强制推送到上海仓库）
+        console.log(`🔄 强制推送到远程仓库 ${config.remote}/${config.branch}...`);
+        console.log('⚠️ 注意：根据用户要求，将进行强制推送');
+        runGitCommand(`git push -f ${config.remote} ${config.branch}`);
+        console.log('✅ 强制推送成功！')
+        
         console.log('✅ 代码已成功推送到GitHub!');
-        console.log(`🔗 远程仓库: ${config.remote}`);
-        console.log(`🔗 分支: ${currentBranch}`);
+        console.log(`🔗 远程仓库: ${config.remote} (上海仓库 - 生产环境)`);
+        console.log(`🔗 分支: ${config.branch}`);
         console.log(`📝 提交信息: ${config.commitMessage}`);
+        
+        console.log('\n🚀 部署说明:');
+        console.log('1. 代码已推送到上海仓库（生产环境）');
+        console.log('2. Railway会自动检测到更改并重新部署');
+        console.log('3. 新的错误处理机制将防止用户屏蔽导致的崩溃');
+        console.log('4. 监控日志中的 🚫 和 ❌ 标记来观察错误处理效果');
         
     } catch (error) {
         console.error('❌ 推送失败:', error.message);
+        console.log('\n💡 可能的解决方案:');
+        console.log('1. 检查网络连接');
+        console.log('2. 确认远程仓库配置正确');
+        console.log('3. 检查Git凭据是否有效');
         process.exit(1);
     }
 }
 
 // 执行主函数
-main().catch(console.error);
-
-async function pushToGithub() {
-  try {
-    console.log('开始强制推送到finalversion仓库...');
-    
-    // 检查远程仓库是否存在
-    try {
-      execSync('git remote get-url finalversion', { stdio: 'inherit' });
-    } catch (error) {
-      console.log('添加finalversion远程仓库...');
-      execSync('git remote add finalversion https://github.com/kikk77/06200217uploadfinalversion.git', { stdio: 'inherit' });
-    }
-    
-    // 确保我们在正确的分支上
-    execSync('git checkout main', { stdio: 'inherit' });
-    
-    // 添加所有更改
-    execSync('git add .', { stdio: 'inherit' });
-    
-    // 提交更改
-    const date = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-    execSync(`git commit -m "force push: 强制推送所有更改 - ${date}"`, { stdio: 'inherit' });
-    
-    // 强制推送到finalversion仓库
-    console.log('正在强制推送到finalversion仓库...');
-    execSync('git push -f finalversion main', { stdio: 'inherit' });
-    
-    console.log('✅ 成功推送到finalversion仓库！');
-  } catch (error) {
-    console.error('❌ 推送过程中发生错误：', error.message);
-    process.exit(1);
-  }
-}
-
-pushToGithub(); 
+main().catch(console.error); 

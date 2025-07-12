@@ -115,18 +115,28 @@ class ChannelBroadcastService {
             this.handleChannelMessage(msg);
         });
 
-        console.log(`📢 [播报服务] [${this.instanceId}] 频道播报监听器已初始化`);
+        // 🔥 新增：监听群组消息（报告区可能是群组）
+        this.bot.on('message', (msg) => {
+            // 只处理群组消息，跳过私聊消息
+            if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+                console.log(`📢 [播报服务] [${this.instanceId}] 收到群组消息: ${msg.chat.id} - ${msg.message_id}`);
+                this.handleChannelMessage(msg);
+            }
+        });
+
+        console.log(`📢 [播报服务] [${this.instanceId}] 播报监听器已初始化（支持频道和群组消息）`);
     }
 
     /**
-     * 处理频道消息
+     * 处理频道/群组消息
      */
     async handleChannelMessage(message) {
         try {
             const chatId = message.chat.id.toString();
             const messageKey = `${chatId}_${message.message_id}`;
+            const chatType = message.chat.type;
             
-            console.log(`📢 [播报服务] [${this.instanceId}] 收到频道消息: ${chatId} - ${message.message_id}`);
+            console.log(`📢 [播报服务] [${this.instanceId}] 收到${chatType}消息: ${chatId} - ${message.message_id}`);
             
             // 检查是否已处理过
             if (this.processedMessages.has(messageKey)) {
@@ -148,16 +158,17 @@ class ChannelBroadcastService {
             // 获取播报配置
             const broadcastConfig = await this.getBroadcastConfig(chatId);
             if (!broadcastConfig) {
-                console.log(`📢 [播报服务] [${this.instanceId}] 未找到频道 ${chatId} 的播报配置，跳过处理`);
+                console.log(`📢 [播报服务] [${this.instanceId}] 未找到${chatType} ${chatId} 的播报配置，跳过处理`);
                 return; // 没有配置
             }
             
             if (!broadcastConfig.enabled) {
-                console.log(`📢 [播报服务] [${this.instanceId}] 频道 ${chatId} 的播报配置已禁用，跳过处理`);
+                console.log(`📢 [播报服务] [${this.instanceId}] ${chatType} ${chatId} 的播报配置已禁用，跳过处理`);
                 return; // 配置已禁用
             }
             
             console.log(`📢 [播报服务] [${this.instanceId}] 找到有效播报配置:`, {
+                chatType: chatType,
                 channelId: chatId,
                 targetGroups: broadcastConfig.targetGroups,
                 enabled: broadcastConfig.enabled

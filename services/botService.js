@@ -4331,10 +4331,12 @@ async function getBroadcastTargetGroups(userId) {
         if (!levelSystemEnabled) {
             console.log('📢 等级系统已禁用，使用fallback群组进行播报');
             const fallbackGroupId = process.env.GROUP_CHAT_ID;
+            console.log(`📢 环境变量GROUP_CHAT_ID: ${fallbackGroupId || '未设置'}`);
             if (fallbackGroupId) {
                 console.log(`📢 使用fallback群组: ${fallbackGroupId}`);
                 return [fallbackGroupId];
             }
+            console.error('❌ GROUP_CHAT_ID环境变量未设置，无法进行播报');
             return [];
         }
         
@@ -4443,8 +4445,11 @@ async function handleRealBroadcast(userId, evaluationId, query) {
 
         // 发送到群组播报 - 根据用户所在群组进行播报
         const targetGroups = await getBroadcastTargetGroups(userId);
+        console.log(`📢 实名播报获取到的目标群组:`, targetGroups);
         if (!targetGroups || targetGroups.length === 0) {
             console.error('❌ 未找到用户所在的播报群组');
+            console.error('❌ 实名播报失败原因：targetGroups为空或未定义');
+            console.error('❌ 请检查环境变量GROUP_CHAT_ID是否正确设置');
             await sendMessageWithoutDelete(userId, '❌ 播报失败：未找到可播报的群组，请联系管理员。', {}, 'broadcast_error');
             return;
         }
@@ -4567,8 +4572,11 @@ async function handleAnonymousBroadcast(userId, evaluationId, query) {
 
         // 发送到群组播报 - 根据用户所在群组进行播报
         const targetGroups = await getBroadcastTargetGroups(userId);
+        console.log(`📢 匿名播报获取到的目标群组:`, targetGroups);
         if (!targetGroups || targetGroups.length === 0) {
             console.error('❌ 未找到用户所在的播报群组');
+            console.error('❌ 匿名播报失败原因：targetGroups为空或未定义');
+            console.error('❌ 请检查环境变量GROUP_CHAT_ID是否正确设置');
             await sendMessageWithoutDelete(userId, '❌ 播报失败：未找到可播报的群组，请联系管理员。', {}, 'broadcast_error');
             return;
         }

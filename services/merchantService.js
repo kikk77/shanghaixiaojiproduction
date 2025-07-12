@@ -265,9 +265,10 @@ class MerchantService {
 ${merchant.custom_content}`;
                 
                 return template;
-            } else {
-                // 标准模板：使用原有格式，始终显示价格
-                return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
+            }
+            
+            // 标准模板：使用原有格式，始终显示价格
+            return `地区：#${regionName}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
@@ -277,7 +278,6 @@ ${merchant.custom_content}`;
 👄吹:${merchant.skill_blow || '未填写'}
 ❤️做:${merchant.skill_do || '未填写'}
 🐍吻:${merchant.skill_kiss || '未填写'}`;
-            }
             
         } catch (error) {
             console.error('获取商家信息模板失败:', error);

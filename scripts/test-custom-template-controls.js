@@ -51,7 +51,12 @@ function testCustomTemplateControls() {
         
         const template1 = merchantService.getMerchantInfoTemplate({
             ...testMerchant,
-            ...updateData1,
+            template_type: 2,
+            custom_content: '🌟 专业服务介绍 🌟\n\n💎 高端定制服务\n🎯 个性化体验',
+            advantages: '测试优点：服务专业',
+            disadvantages: '测试缺点：稍微忙碌',
+            price1: 300,
+            price2: 500,
             show_price_in_custom_template: 1,
             show_advantages_in_custom_template: 1
         });
@@ -70,7 +75,12 @@ function testCustomTemplateControls() {
         
         const template2 = merchantService.getMerchantInfoTemplate({
             ...testMerchant,
-            ...updateData2,
+            template_type: 2,
+            custom_content: '🌟 专业服务介绍 🌟\n\n💎 高端定制服务\n🎯 个性化体验',
+            advantages: '测试优点：服务专业',
+            disadvantages: '测试缺点：稍微忙碌',
+            price1: 300,
+            price2: 500,
             show_price_in_custom_template: 1,
             show_advantages_in_custom_template: 0
         });
@@ -89,7 +99,12 @@ function testCustomTemplateControls() {
         
         const template3 = merchantService.getMerchantInfoTemplate({
             ...testMerchant,
-            ...updateData3,
+            template_type: 2,
+            custom_content: '🌟 专业服务介绍 🌟\n\n💎 高端定制服务\n🎯 个性化体验',
+            advantages: '测试优点：服务专业',
+            disadvantages: '测试缺点：稍微忙碌',
+            price1: 300,
+            price2: 500,
             show_price_in_custom_template: 0,
             show_advantages_in_custom_template: 1
         });
@@ -109,7 +124,12 @@ function testCustomTemplateControls() {
         
         const template4 = merchantService.getMerchantInfoTemplate({
             ...testMerchant,
-            ...updateData4,
+            template_type: 2,
+            custom_content: '🌟 专业服务介绍 🌟\n\n💎 高端定制服务\n🎯 个性化体验',
+            advantages: '测试优点：服务专业',
+            disadvantages: '测试缺点：稍微忙碌',
+            price1: 300,
+            price2: 500,
             show_price_in_custom_template: 0,
             show_advantages_in_custom_template: 0
         });
@@ -130,8 +150,11 @@ function testCustomTemplateControls() {
         
         const template5 = merchantService.getMerchantInfoTemplate({
             ...testMerchant,
-            ...updateData5,
             template_type: 1,
+            advantages: '测试优点：服务专业',
+            disadvantages: '测试缺点：稍微忙碌',
+            price1: 300,
+            price2: 500,
             show_price_in_custom_template: 0,
             show_advantages_in_custom_template: 0
         });

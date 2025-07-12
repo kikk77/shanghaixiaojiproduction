@@ -1858,11 +1858,11 @@
             document.getElementById('editCustomContent').value = merchant.custom_content || '';
             
             // 填充价格显示控制状态（默认为true显示价格）
-            const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== false;
+            const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== 0;
             document.getElementById('showPriceInCustomTemplate').checked = showPriceInCustomTemplate;
             
             // 填充优缺点显示控制状态（默认为true显示优缺点）
-            const showAdvantagesInCustomTemplate = merchant.show_advantages_in_custom_template !== false;
+            const showAdvantagesInCustomTemplate = merchant.show_advantages_in_custom_template !== 0;
             document.getElementById('showAdvantagesInCustomTemplate').checked = showAdvantagesInCustomTemplate;
             
             // 根据模板类型显示/隐藏相应区域

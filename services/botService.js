@@ -4316,7 +4316,7 @@ async function getBroadcastTargetGroups(userId) {
     try {
         // 获取等级系统数据库管理器
         const levelDbManager = require('../level/config/levelDatabase');
-        const db = levelDbManager.getDatabase();
+        const db = levelDbManager.getInstance().getDatabase();
         
         if (!db) {
             console.error('❌ 等级系统数据库不可用');

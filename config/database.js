@@ -468,7 +468,9 @@ class DatabaseManager {
                     if (column.startsWith('price') || column === 'channel_clicks' || column === 'template_type' || column === 'show_price_in_custom_template') {
                         if (column === 'template_type') {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
-                        } else if (column === 'show_price_in_custom_template' || column === 'show_advantages_in_custom_template') {
+                        } else if (column === 'show_price_in_custom_template') {
+                            this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
+                        } else if (column === 'show_advantages_in_custom_template') {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
                         } else {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);

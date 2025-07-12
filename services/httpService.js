@@ -2152,6 +2152,24 @@ function processWebhookUpdate(update) {
             });
         }
 
+        // 处理频道消息（重要：播报功能需要）
+        if (update.channel_post) {
+            console.log(`📢 [Webhook] 收到频道消息: ${update.channel_post.chat.id} - ${update.channel_post.message_id}`);
+            // 模拟bot.on('channel_post')事件
+            setImmediate(() => {
+                bs.bot.emit('channel_post', update.channel_post);
+            });
+        }
+
+        // 处理频道编辑消息
+        if (update.edited_channel_post) {
+            console.log(`📢 [Webhook] 收到频道编辑消息: ${update.edited_channel_post.chat.id} - ${update.edited_channel_post.message_id}`);
+            // 模拟bot.on('edited_channel_post')事件
+            setImmediate(() => {
+                bs.bot.emit('edited_channel_post', update.edited_channel_post);
+            });
+        }
+
         // 处理callback query
         if (update.callback_query) {
             // 模拟bot.on('callback_query')事件

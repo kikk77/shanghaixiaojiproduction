@@ -705,6 +705,7 @@ let channelCloneService = null;
 let messageQueueService = null;
 let channelConfigService = null;
 let contentFilterService = null;
+let channelBroadcastService = null;
 
 // 内存映射管理 - 添加自动清理机制
 // 用户绑定状态变量已移除（绑定流程已简化）

@@ -1576,7 +1576,18 @@ function initBotHandlers() {
         
         try {
             // 1. 立即响应callback query（必须 - 确保Loading立即消失）
-            await bot.answerCallbackQuery(queryId);
+            try {
+                await bot.answerCallbackQuery(queryId);
+            } catch (answerError) {
+                // 忽略过期或无效的callback query错误，不影响后续处理
+                if (answerError.message.includes('query is too old') || 
+                    answerError.message.includes('query ID is invalid') ||
+                    answerError.message.includes('response timeout expired')) {
+                    console.log(`⚠️ 回调查询已过期或无效，跳过响应: ${queryId}`);
+                } else {
+                    console.error('响应callback query失败:', answerError.message);
+                }
+            }
             
             // 2. 根据callback类型决定是否删除消息
             const isEvaluationClick = data.startsWith('eval_score_') || 

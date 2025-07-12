@@ -34,8 +34,9 @@ async function switchToWebhook() {
             pending_updates: currentWebhook.pending_update_count
         });
         
-        // 设置新的webhook
-        const webhookUrl = `${WEBHOOK_URL}/webhook`;
+        // 设置新的webhook - 修复双斜杠问题
+        const baseUrl = WEBHOOK_URL.endsWith('/') ? WEBHOOK_URL.slice(0, -1) : WEBHOOK_URL;
+        const webhookUrl = `${baseUrl}/webhook`;
         console.log(`🔗 设置Webhook URL: ${webhookUrl}`);
         
         await tempBot.setWebHook(webhookUrl, {

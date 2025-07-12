@@ -559,6 +559,16 @@
                         <!-- 描述信息 -->
                         <div class="card" style="margin-bottom: 20px;">
                             <h4>📝 描述信息</h4>
+                            
+                            <!-- 自定义模板优缺点显示控制 -->
+                            <div id="customAdvantagesDisplayControl" class="form-group" style="display: none; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="showAdvantagesInCustomTemplate" onchange="handleAdvantagesDisplayChange()" checked>
+                                    <span>在自定义模板中显示优缺点信息</span>
+                                </label>
+                                <small style="color: #666; margin-left: 24px;">取消勾选后，自定义模板将不显示优缺点，但标准模板仍会显示</small>
+                            </div>
+                            
                             <div class="form-group">
                                 <label>优点：</label>
                                 <textarea id="editAdvantages" rows="3" placeholder="请输入优点描述，支持文字、空格、emoji" oninput="previewMerchantInfo()"></textarea>
@@ -1851,6 +1861,10 @@
             const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== false;
             document.getElementById('showPriceInCustomTemplate').checked = showPriceInCustomTemplate;
             
+            // 填充优缺点显示控制状态（默认为true显示优缺点）
+            const showAdvantagesInCustomTemplate = merchant.show_advantages_in_custom_template !== false;
+            document.getElementById('showAdvantagesInCustomTemplate').checked = showAdvantagesInCustomTemplate;
+            
             // 根据模板类型显示/隐藏相应区域
             handleTemplateTypeChange();
             
@@ -2050,10 +2064,16 @@
             if (templateType === '2') {
                 // 自定义模板：基本信息 + 自定义内容替换基本功
                 const showPriceInCustomTemplate = document.getElementById('showPriceInCustomTemplate').checked;
+                const showAdvantagesInCustomTemplate = document.getElementById('showAdvantagesInCustomTemplate').checked;
                 
-                let basicInfo = `地区：#${regionName}              艺名：#${teacherName}
+                let basicInfo = `地区：#${regionName}              艺名：#${teacherName}`;
+                
+                // 根据设置决定是否显示优缺点
+                if (showAdvantagesInCustomTemplate) {
+                    basicInfo += `
 优点：${advantages}
 缺点：${disadvantages}`;
+                }
                 
                 // 根据设置决定是否显示价格
                 if (showPriceInCustomTemplate) {
@@ -2061,7 +2081,7 @@
 价格：${price1}p              ${price2}pp`;
                 }
                 
-                                 basicInfo += `
+                basicInfo += `
 
 `;
                 
@@ -2125,6 +2145,7 @@
             const templateType = parseInt(document.getElementById('editTemplateType').value);
             const customContent = document.getElementById('editCustomContent').value;
             const showPriceInCustomTemplate = document.getElementById('showPriceInCustomTemplate').checked;
+            const showAdvantagesInCustomTemplate = document.getElementById('showAdvantagesInCustomTemplate').checked;
 
             try {
                 showLoading();
@@ -2145,7 +2166,8 @@
                     imageData,
                     templateType,
                     customContent,
-                    showPriceInCustomTemplate
+                    showPriceInCustomTemplate,
+                    showAdvantagesInCustomTemplate
                 });
                 showAlert('商家信息模板更新成功');
                 closeMerchantEditModal();
@@ -3429,21 +3451,24 @@
             const templateType = document.getElementById('editTemplateType').value;
             const customContentSection = document.getElementById('customContentSection');
             const customPriceDisplayControl = document.getElementById('customPriceDisplayControl');
+            const customAdvantagesDisplayControl = document.getElementById('customAdvantagesDisplayControl');
             
             // 使用CSS类名来标识需要隐藏的标准模板区域
             const standardSections = document.querySelectorAll('.standard-template-section');
             
             if (templateType === '2') {
-                // 自定义模板：显示自定义内容区域和价格控制选项，隐藏标准模板相关区域（只有基本功）
+                // 自定义模板：显示自定义内容区域和控制选项，隐藏标准模板相关区域（只有基本功）
                 customContentSection.style.display = 'block';
                 customPriceDisplayControl.style.display = 'block';
+                customAdvantagesDisplayControl.style.display = 'block';
                 standardSections.forEach(section => {
                     section.style.display = 'none';
                 });
             } else {
-                // 标准模板：隐藏自定义内容区域和价格控制选项，显示标准模板相关区域
+                // 标准模板：隐藏自定义内容区域和控制选项，显示标准模板相关区域
                 customContentSection.style.display = 'none';
                 customPriceDisplayControl.style.display = 'none';
+                customAdvantagesDisplayControl.style.display = 'none';
                 standardSections.forEach(section => {
                     section.style.display = 'block';
                 });
@@ -3455,6 +3480,12 @@
 
         // 处理价格显示控制变化
         function handlePriceDisplayChange() {
+            // 实时更新预览
+            previewMerchantInfo();
+        }
+
+        // 处理优缺点显示控制变化
+        function handleAdvantagesDisplayChange() {
             // 实时更新预览
             previewMerchantInfo();
         }

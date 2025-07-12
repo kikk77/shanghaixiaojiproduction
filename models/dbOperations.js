@@ -535,7 +535,8 @@ const dbOperations = {
                     image_url = ?,
                     template_type = ?,
                     custom_content = ?,
-                    show_price_in_custom_template = ?
+                    show_price_in_custom_template = ?,
+                    show_advantages_in_custom_template = ?
                 WHERE id = ?
             `);
             
@@ -556,6 +557,7 @@ const dbOperations = {
                 data.templateType || 1,
                 data.customContent || null,
                 data.showPriceInCustomTemplate !== undefined ? (data.showPriceInCustomTemplate ? 1 : 0) : 1,
+                data.showAdvantagesInCustomTemplate !== undefined ? (data.showAdvantagesInCustomTemplate ? 1 : 0) : 1,
                 id
             );
             

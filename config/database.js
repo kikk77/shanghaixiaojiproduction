@@ -460,7 +460,7 @@ class DatabaseManager {
             const tableInfo = this.db.prepare("PRAGMA table_info(merchants)").all();
             const columnNames = tableInfo.map(col => col.name);
             
-            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url', 'template_type', 'custom_content', 'show_price_in_custom_template'];
+            const requiredColumns = ['advantages', 'disadvantages', 'price1', 'price2', 'skill_wash', 'skill_blow', 'skill_do', 'skill_kiss', 'channel_link', 'channel_clicks', 'image_url', 'template_type', 'custom_content', 'show_price_in_custom_template', 'show_advantages_in_custom_template'];
             
             for (const column of requiredColumns) {
                 if (!columnNames.includes(column)) {
@@ -468,7 +468,7 @@ class DatabaseManager {
                     if (column.startsWith('price') || column === 'channel_clicks' || column === 'template_type' || column === 'show_price_in_custom_template') {
                         if (column === 'template_type') {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
-                        } else if (column === 'show_price_in_custom_template') {
+                        } else if (column === 'show_price_in_custom_template' || column === 'show_advantages_in_custom_template') {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 1`);
                         } else {
                             this.db.exec(`ALTER TABLE merchants ADD COLUMN ${column} INTEGER DEFAULT 0`);

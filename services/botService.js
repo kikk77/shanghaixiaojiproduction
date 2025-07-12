@@ -22,6 +22,8 @@ const MAX_CRASH_COUNT = 10;
 // 用户屏蔽状态管理
 const blockedUsers = new Set();
 const blockCheckCache = new Map(); // 缓存屏蔽检查结果，避免重复检查
+const retryAttempts = new Map(); // 记录对屏蔽用户的重试次数
+const lastRetryTime = new Map(); // 记录最后一次重试时间
 
 // 检查是否为用户屏蔽错误
 function isUserBlockedError(error) {
@@ -46,8 +48,14 @@ function isGroupPermissionError(error) {
 
 // 记录被屏蔽的用户
 function markUserAsBlocked(chatId) {
-    blockedUsers.add(chatId.toString());
-    blockCheckCache.set(chatId.toString(), Date.now());
+    const chatIdStr = chatId.toString();
+    blockedUsers.add(chatIdStr);
+    blockCheckCache.set(chatIdStr, Date.now());
+    
+    // 重置重试计数，避免无限重试
+    retryAttempts.delete(chatIdStr);
+    lastRetryTime.delete(chatIdStr);
+    
     console.log(`📝 用户 ${chatId} 已被标记为屏蔽状态`);
 }
 
@@ -62,22 +70,81 @@ function clearUserBlockedStatus(chatId) {
     if (blockedUsers.has(chatIdStr)) {
         blockedUsers.delete(chatIdStr);
         blockCheckCache.delete(chatIdStr);
+        retryAttempts.delete(chatIdStr);
+        lastRetryTime.delete(chatIdStr);
         console.log(`🔄 用户 ${chatId} 重新交互，已清除屏蔽状态`);
         return true;
     }
     return false;
 }
 
+// 检查是否可以重试发送给屏蔽用户（限制重试次数和频率）
+function canRetryBlockedUser(chatId) {
+    const chatIdStr = chatId.toString();
+    
+    // 如果用户未被屏蔽，可以发送
+    if (!blockedUsers.has(chatIdStr)) {
+        return { canRetry: true, reason: '用户未被屏蔽' };
+    }
+    
+    const attempts = retryAttempts.get(chatIdStr) || 0;
+    const lastRetry = lastRetryTime.get(chatIdStr) || 0;
+    const now = Date.now();
+    
+    // 限制：最多重试1次，且间隔至少10分钟
+    const MAX_RETRY_ATTEMPTS = 1;
+    const RETRY_INTERVAL = 10 * 60 * 1000; // 10分钟
+    
+    if (attempts >= MAX_RETRY_ATTEMPTS) {
+        return { 
+            canRetry: false, 
+            reason: `已达到最大重试次数(${MAX_RETRY_ATTEMPTS})` 
+        };
+    }
+    
+    if (now - lastRetry < RETRY_INTERVAL) {
+        const remainingTime = Math.ceil((RETRY_INTERVAL - (now - lastRetry)) / 1000 / 60);
+        return { 
+            canRetry: false, 
+            reason: `重试间隔未到，还需等待${remainingTime}分钟` 
+        };
+    }
+    
+    return { canRetry: true, reason: '可以重试' };
+}
+
+// 记录重试尝试
+function recordRetryAttempt(chatId) {
+    const chatIdStr = chatId.toString();
+    const attempts = retryAttempts.get(chatIdStr) || 0;
+    retryAttempts.set(chatIdStr, attempts + 1);
+    lastRetryTime.set(chatIdStr, Date.now());
+    console.log(`📊 记录用户 ${chatId} 重试尝试，当前次数: ${attempts + 1}`);
+}
+
 // 清理过期的屏蔽缓存（24小时后重新尝试）
 setInterval(() => {
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneHourAgo = now - 60 * 60 * 1000;
     
+    // 清理过期的屏蔽状态
     for (const [chatId, timestamp] of blockCheckCache.entries()) {
         if (timestamp < oneDayAgo) {
             blockedUsers.delete(chatId);
             blockCheckCache.delete(chatId);
+            retryAttempts.delete(chatId);
+            lastRetryTime.delete(chatId);
             console.log(`🔄 用户 ${chatId} 的屏蔽状态已过期，将重新尝试`);
+        }
+    }
+    
+    // 清理过期的重试记录（1小时后清理）
+    for (const [chatId, timestamp] of lastRetryTime.entries()) {
+        if (timestamp < oneHourAgo) {
+            retryAttempts.delete(chatId);
+            lastRetryTime.delete(chatId);
+            console.log(`🧹 清理用户 ${chatId} 的过期重试记录`);
         }
     }
 }, 60 * 60 * 1000); // 每小时检查一次
@@ -123,10 +190,24 @@ function createResilientBot(originalBot) {
     // 包装sendMessage方法
     const originalSendMessage = originalBot.sendMessage.bind(originalBot);
     resilientBot.sendMessage = async function(chatId, text, options = {}) {
-        // 检查用户是否已被屏蔽，但允许重新尝试
+        // 检查是否可以向屏蔽用户发送消息
+        const retryCheck = canRetryBlockedUser(chatId);
+        
+        if (!retryCheck.canRetry) {
+            console.log(`🚫 跳过发送消息给用户 ${chatId}: ${retryCheck.reason}`);
+            return Promise.resolve({ 
+                message_id: 'blocked_user_' + Date.now(),
+                chat: { id: chatId },
+                text: text,
+                blocked: true,
+                reason: retryCheck.reason
+            });
+        }
+        
+        // 如果是屏蔽用户的重试，记录尝试
         if (isUserBlocked(chatId)) {
-            console.log(`⚠️ 用户 ${chatId} 之前被标记为屏蔽，但仍尝试发送消息`);
-            // 不直接跳过，而是尝试发送，如果成功则清除屏蔽状态
+            recordRetryAttempt(chatId);
+            console.log(`🔄 尝试向之前屏蔽的用户 ${chatId} 发送消息 (重试)`);
         }
         
         try {
@@ -185,15 +266,24 @@ function createResilientBot(originalBot) {
     // 包装sendPhoto方法
     const originalSendPhoto = originalBot.sendPhoto.bind(originalBot);
     resilientBot.sendPhoto = async function(chatId, photo, options = {}) {
-        // 检查用户是否已被屏蔽
-        if (isUserBlocked(chatId)) {
-            console.log(`🚫 跳过发送图片给已屏蔽用户: ${chatId}`);
+        // 检查是否可以向屏蔽用户发送图片
+        const retryCheck = canRetryBlockedUser(chatId);
+        
+        if (!retryCheck.canRetry) {
+            console.log(`🚫 跳过发送图片给用户 ${chatId}: ${retryCheck.reason}`);
             return Promise.resolve({ 
                 message_id: 'blocked_user_' + Date.now(),
                 chat: { id: chatId },
                 photo: [{ file_id: 'blocked' }],
-                blocked: true 
+                blocked: true,
+                reason: retryCheck.reason
             });
+        }
+        
+        // 如果是屏蔽用户的重试，记录尝试
+        if (isUserBlocked(chatId)) {
+            recordRetryAttempt(chatId);
+            console.log(`🔄 尝试向之前屏蔽的用户 ${chatId} 发送图片 (重试)`);
         }
         
         try {
@@ -310,7 +400,7 @@ async function initializeBot() {
         // 智能模式选择：根据webhook设置自动选择模式
         const isWebhookMode = process.env.WEBHOOK_URL && process.env.NODE_ENV === 'production';
         
-        const botOptions = { 
+    const botOptions = { 
             polling: !isWebhookMode, // 如果有webhook设置且是生产环境，则禁用polling
             // 添加请求选项来提高连接稳定性
             request: {
@@ -5654,11 +5744,16 @@ module.exports = {
     isUserBlocked,
     markUserAsBlocked,
     clearUserBlockedStatus,
+    canRetryBlockedUser,
+    recordRetryAttempt,
     getBlockedUsersCount: () => blockedUsers.size,
+    getRetryAttempts: () => retryAttempts.size,
     clearBlockedUsers: () => {
         blockedUsers.clear();
         blockCheckCache.clear();
-        console.log('🔄 已清空所有屏蔽用户记录');
+        retryAttempts.clear();
+        lastRetryTime.clear();
+        console.log('🔄 已清空所有屏蔽用户记录和重试记录');
     },
     // 获取Bot实例
     getBotInstance: () => bot,

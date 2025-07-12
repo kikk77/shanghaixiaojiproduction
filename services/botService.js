@@ -963,45 +963,70 @@ async function handleBackButton(userId, messageType, data = {}) {
 async function initializeChannelServices() {
     try {
         if (!bot) {
-            console.log('⚠️ Bot未初始化，跳过频道克隆服务初始化');
+            console.log('⚠️ Bot未初始化，跳过频道服务初始化');
             return;
         }
 
-        // 检查是否启用频道克隆功能
+        // 检查频道克隆功能和播报功能的启用状态
         const channelCloneEnabled = process.env.CHANNEL_CLONE_ENABLED === 'true';
-        if (!channelCloneEnabled) {
-            console.log('📺 频道克隆功能未启用，跳过初始化');
+        const channelBroadcastEnabled = process.env.CHANNEL_BROADCAST_ENABLED !== 'false'; // 默认启用播报功能
+        
+        console.log('📺 频道服务启用状态:');
+        console.log('   - 频道克隆功能:', channelCloneEnabled ? '✅ 启用' : '❌ 禁用');
+        console.log('   - 频道播报功能:', channelBroadcastEnabled ? '✅ 启用' : '❌ 禁用');
+
+        if (!channelCloneEnabled && !channelBroadcastEnabled) {
+            console.log('📺 频道克隆和播报功能均未启用，跳过初始化');
             return;
         }
 
-        console.log('📺 开始初始化频道克隆服务...');
+        console.log('📺 开始初始化频道服务...');
 
-        // 检查是否已经初始化过，避免重复初始化
-        if (channelCloneService && global.channelCloneListenerActive) {
-            console.log('📺 频道克隆服务已存在，跳过重复初始化');
-            return;
+        // 初始化配置服务（两个功能都需要）
+        if (!channelConfigService) {
+            channelConfigService = new ChannelConfigService();
+        }
+        
+        // 初始化内容过滤服务（两个功能都需要）
+        if (!contentFilterService) {
+            contentFilterService = new ContentFilterService();
         }
 
-        // 先重置全局状态，避免多实例冲突
-        const ChannelCloneService = require('./channelCloneService');
-        ChannelCloneService.resetGlobalState();
-
-        // 初始化配置服务
-        channelConfigService = new ChannelConfigService();
+        // 初始化频道克隆服务（仅在启用时）
+        if (channelCloneEnabled) {
+            // 检查是否已经初始化过，避免重复初始化
+            if (channelCloneService && global.channelCloneListenerActive) {
+                console.log('📺 频道克隆服务已存在，跳过重复初始化');
+            } else {
+                // 先重置全局状态，避免多实例冲突
+                const ChannelCloneService = require('./channelCloneService');
+                ChannelCloneService.resetGlobalState();
+                
+                // 初始化克隆服务
+                channelCloneService = new ChannelCloneService(bot);
+                
+                // 初始化消息队列服务
+                messageQueueService = new MessageQueueService(bot);
+                messageQueueService.start(); // 启动队列处理
+                
+                console.log('📺 [服务初始化] 频道克隆服务已初始化');
+            }
+        } else {
+            console.log('📺 频道克隆功能未启用，跳过克隆服务初始化');
+        }
         
-        // 初始化内容过滤服务
-        contentFilterService = new ContentFilterService();
-        
-        // 初始化克隆服务
-        channelCloneService = new ChannelCloneService(bot);
-        
-        // 初始化消息队列服务
-        messageQueueService = new MessageQueueService(bot);
-        messageQueueService.start(); // 启动队列处理
-        
-        // 初始化频道播报服务
-        channelBroadcastService = new ChannelBroadcastService(bot);
-        console.log('📢 [服务初始化] 频道播报服务已初始化');
+        // 初始化频道播报服务（仅在启用时）
+        if (channelBroadcastEnabled) {
+            // 检查是否已经初始化过，避免重复初始化
+            if (channelBroadcastService && global.channelBroadcastListenerActive) {
+                console.log('📢 频道播报服务已存在，跳过重复初始化');
+            } else {
+                channelBroadcastService = new ChannelBroadcastService(bot);
+                console.log('📢 [服务初始化] 频道播报服务已初始化');
+            }
+        } else {
+            console.log('📢 频道播报功能未启用，跳过播报服务初始化');
+        }
         
         // 验证所有服务是否正确初始化
         console.log('🔍 [服务初始化] 验证服务状态:');
@@ -1015,12 +1040,12 @@ async function initializeChannelServices() {
         // 获取启用的配置数量
         const enabledConfigs = await channelConfigService.getEnabledConfigs();
         
-        console.log(`✅ [服务初始化] 频道克隆服务初始化完成`);
+        console.log(`✅ [服务初始化] 频道服务初始化完成`);
         console.log(`📺 [服务初始化] 已启用 ${enabledConfigs.length} 个频道配置`);
         
         // 记录服务状态
         if (enabledConfigs.length > 0) {
-            console.log('📺 [服务初始化] 频道克隆服务正在监听以下配置:');
+            console.log('📺 [服务初始化] 频道服务正在监听以下配置:');
             for (const config of enabledConfigs) {
                 const configType = config.settings.broadcastEnabled ? '播报' : '克隆';
                 console.log(`   - ${config.name} (${configType}): ${config.sourceChannel.id} -> ${config.targetChannel.id}`);
@@ -1030,7 +1055,7 @@ async function initializeChannelServices() {
         }
 
     } catch (error) {
-        console.error('❌ 频道克隆服务初始化失败:', error);
+        console.error('❌ 频道服务初始化失败:', error);
         
         // 即使初始化失败，也要确保服务实例存在（避免后续调用报错）
         if (!channelConfigService) channelConfigService = new ChannelConfigService();

@@ -2820,18 +2820,46 @@
             
             const merchant = merchants.find(m => m.id == merchantId); // 已经使用松散比较
             if (merchant) {
-                // 使用与商家管理页面相同的格式
-                const previewText = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
+                // 使用与后端一致的模板生成逻辑
+                let previewText = '';
+                
+                if (merchant.template_type === 2 && merchant.custom_content) {
+                    // 自定义模板：基本信息 + 自定义内容替换基本功
+                    let basicInfo = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}`;
+                    
+                    // 检查是否在自定义模板中显示优缺点（默认显示）
+                    const showAdvantagesInCustomTemplate = merchant.show_advantages_in_custom_template !== 0;
+                    if (showAdvantagesInCustomTemplate) {
+                        basicInfo += `
+优点：${merchant.advantages || '未填写'}
+缺点：${merchant.disadvantages || '未填写'}`;
+                    }
+                    
+                    // 检查是否在自定义模板中显示价格（默认显示）
+                    const showPriceInCustomTemplate = merchant.show_price_in_custom_template !== 0;
+                    if (showPriceInCustomTemplate) {
+                        basicInfo += `
+价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp`;
+                    }
+                    
+                    basicInfo += `
+
+${merchant.custom_content}`;
+                    
+                    previewText = basicInfo;
+                } else {
+                    // 标准模板：使用原有格式，始终显示价格
+                    previewText = `地区：#${merchant.region_name || 'xx'}              艺名：#${merchant.teacher_name || '未填写'}
 优点：${merchant.advantages || '未填写'}
 缺点：${merchant.disadvantages || '未填写'}
 价格：${merchant.price1 || '未填写'}p              ${merchant.price2 || '未填写'}pp
-联系：${merchant.contact || '未填写'}
 
 老师💃自填基本功：
 💦洗:${merchant.skill_wash || '未填写'}
 👄吹:${merchant.skill_blow || '未填写'}
 ❤️做:${merchant.skill_do || '未填写'}
 🐍吻:${merchant.skill_kiss || '未填写'}`;
+                }
                 
                 content.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${previewText}</pre>`;
                 preview.style.display = 'block';

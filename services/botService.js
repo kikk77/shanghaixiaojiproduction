@@ -4314,12 +4314,31 @@ async function handleBroadcastChoice(userId, data, query) {
 // 获取用户的播报目标群组列表
 async function getBroadcastTargetGroups(userId) {
     try {
+        // 检查等级系统是否启用
+        const levelSystemEnabled = process.env.LEVEL_SYSTEM_ENABLED === 'true';
+        
+        if (!levelSystemEnabled) {
+            console.log('📢 等级系统已禁用，使用fallback群组进行播报');
+            const fallbackGroupId = process.env.GROUP_CHAT_ID;
+            if (fallbackGroupId) {
+                console.log(`📢 使用fallback群组: ${fallbackGroupId}`);
+                return [fallbackGroupId];
+            }
+            return [];
+        }
+        
         // 获取等级系统数据库管理器
         const levelDbManager = require('../level/config/levelDatabase');
         const db = levelDbManager.getInstance().getDatabase();
         
         if (!db) {
             console.error('❌ 等级系统数据库不可用');
+            // 回退到环境变量
+            const fallbackGroupId = process.env.GROUP_CHAT_ID;
+            if (fallbackGroupId) {
+                console.log(`📢 使用fallback群组: ${fallbackGroupId}`);
+                return [fallbackGroupId];
+            }
             return [];
         }
         

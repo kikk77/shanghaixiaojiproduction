@@ -2646,7 +2646,7 @@ class ApiService {
             });
 
             // 获取机器人用户名
-            const botUsername = 'xiaojisystem_bot'; // 固定使用这个用户名
+            const botUsername = 'xiaojisystembot'; // 固定使用这个用户名
 
             // 构建消息内容
             let message = `🔥 <b>${today} 当日热门老师 TOP${teachers.length}</b> 🔥\n\n`;

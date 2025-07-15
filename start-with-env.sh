@@ -14,10 +14,10 @@
 # PORT=3000
 # ===========================================
 
-# Telegram配置（广州仓库）
-export BOT_TOKEN="8154709069:AAHg_y0w9C9s8f3kMIZPoebYFkSDRcpOYbA"
-export BOT_USERNAME="xiaojisystem_bot"
-export GROUP_CHAT_ID=-1002556407210
+# Telegram配置（本地测试用）
+export BOT_TOKEN="8143755629:AAG38Qv-yuIw-hTsU6cAsfDw2w9QJeIRcr8"
+export BOT_USERNAME="xiaoji_daniao_bot"
+export GROUP_CHAT_ID=-1002793326688
 
 # 基础配置
 export NODE_ENV=development
@@ -32,8 +32,8 @@ echo "👥 群组ID: $GROUP_CHAT_ID"
 echo "🤖 Bot用户名: $BOT_USERNAME"
 echo ""
 echo "💡 Railway部署提醒:"
-echo "   1. 广州Bot: @xiaojisystem_bot (当前)"
-echo "   2. 上海Bot: @xiaojisystembot"
+echo "   1. 生产Bot: @xiaojisystembot"
+echo "   2. 测试Bot: @xiaoji_daniao_bot (当前)"
 echo "   3. 切换到生产环境时记得更新Railway Variables"
 echo ""
 

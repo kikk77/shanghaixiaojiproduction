@@ -893,17 +893,17 @@
                 if (response.ok) {
                     const data = await response.json();
                     // 兼容两种响应格式
-                    botUsername = data.username || data.data?.username || 'xiaojisystem_bot';
+                    botUsername = data.username || data.data?.username || 'xiaojisystembot';
                     window.BOT_USERNAME = botUsername; // 设置全局变量
                     console.log('Bot用户名加载成功:', botUsername);
                 } else {
                     console.error('获取Bot用户名失败:', response.status);
-                    botUsername = 'xiaojisystem_bot'; // 默认值
+                    botUsername = 'xiaojisystembot'; // 默认值
                     window.BOT_USERNAME = botUsername;
                 }
             } catch (error) {
                 console.error('加载Bot用户名失败:', error);
-                botUsername = 'xiaojisystem_bot'; // 默认值
+                botUsername = 'xiaojisystembot'; // 默认值
                 window.BOT_USERNAME = botUsername;
             }
         }
@@ -987,7 +987,7 @@
                     if (hostname.includes('staging') || hostname.includes('test')) {
                         window.BOT_USERNAME = 'xiaoji_daniao_bot'; // 测试环境
                     } else {
-                        window.BOT_USERNAME = 'xiaojisystem_bot'; // 广州环境
+                        window.BOT_USERNAME = 'xiaojisystembot'; // 生产环境
                     }
                 }
             } catch (error) {
@@ -997,7 +997,7 @@
                 if (hostname.includes('staging') || hostname.includes('test')) {
                     window.BOT_USERNAME = 'xiaoji_daniao_bot'; // 测试环境
                 } else {
-                    window.BOT_USERNAME = 'xiaojisystem_bot'; // 广州环境
+                    window.BOT_USERNAME = 'xiaojisystembot'; // 生产环境
                 }
             }
         }

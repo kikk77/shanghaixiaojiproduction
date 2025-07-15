@@ -1596,7 +1596,7 @@ async function processApiRequest(pathname, method, data) {
                 }
                 
                 // 添加"返回榜单"按钮
-                buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]);
+                buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji899' }]);
                 
                 sendOptions.reply_markup = {
                     inline_keyboard: buttons
@@ -1940,7 +1940,7 @@ async function processApiRequest(pathname, method, data) {
             console.warn('⚠️ Bot用户名获取失败，使用默认值');
             return {
                 success: true,
-                username: 'xiaojisystembot' // 默认值
+                username: 'xiaojisystem_bot' // 默认值
             };
             
         } catch (error) {
@@ -1948,7 +1948,7 @@ async function processApiRequest(pathname, method, data) {
             // 即使出错也返回默认值，确保前端能正常工作
             return {
                 success: true,
-                username: 'xiaojisystembot'
+                username: 'xiaojisystem_bot'
             };
         }
     }

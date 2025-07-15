@@ -1374,7 +1374,7 @@ function initBotHandlers() {
                     }
                     
                     // 添加返回榜单按钮
-                    buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]);
+                    buttons.push([{ text: '返回榜单', url: 'https://t.me/xiaoji899' }]);
                     
                     const options = {
                         reply_markup: {
@@ -1491,7 +1491,7 @@ function initBotHandlers() {
                 
                 const successMessage2 = `📌 请置顶🐥小鸡管家机器人
 ⚠️ 避免错过小鸡的客人通知哦～
-❓ 如有问题请从群内联系客服 @xiaoji57`;
+❓ 如有问题请从群内联系客服 @xiaoji779`;
                 
                 bot.sendMessage(chatId, successMessage1);
                 setTimeout(() => {
@@ -1827,7 +1827,7 @@ function initBotHandlers() {
                     inline_keyboard: [
                         [{ text: '打开频道', url: merchant.channel_link }],
                         [{ text: '预约上课', callback_data: `attack_${merchantId}` }],
-                        [{ text: '返回榜单', url: 'https://t.me/xiaoji233' }]
+                        [{ text: '返回榜单', url: 'https://t.me/xiaoji899' }]
                     ]
                 },
                 disable_web_page_preview: false

@@ -1,10 +1,10 @@
 # Railway部署配置
 # 
-# 🚀 Bot切换部署说明：
+# 🚀 广州仓库部署说明：
 # 在Railway Variables中设置以下变量：
-# BOT_TOKEN=6873045781:AAGNvdO8TaJbOhGo5v-4NQmSU4Sd1KdKbRo (生产Bot Token)
-# BOT_USERNAME=xiaojisystembot (生产Bot用户名)
-# GROUP_CHAT_ID=-1002793326688 (目标群组ID)
+# BOT_TOKEN=8154709069:AAHg_y0w9C9s8f3kMIZPoebYFkSDRcpOYbA (广州Bot Token)
+# BOT_USERNAME=xiaojisystem_bot (广州Bot用户名)
+# GROUP_CHAT_ID=-1002556407210 (广州群组ID)
 #
 # ⚠️ 重要：切换Bot前确保：
 # 1. 新Bot已添加到目标群组
